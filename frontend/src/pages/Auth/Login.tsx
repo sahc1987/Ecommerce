@@ -38,45 +38,45 @@ export default function Login() {
   return (
     <div className="min-h-screen flex">
       {/* Brand panel */}
-      <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-10 flex-col justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
+      <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-gray-900 p-10 flex-col justify-between">
+        <Link to="/" className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center shadow-md">
             <Store size={18} className="text-white" />
           </div>
-          <span className="font-bold text-xl text-white">ShopHub</span>
-        </div>
+          <span className="font-bold text-xl text-white tracking-tight">ShopHub</span>
+        </Link>
 
         <div>
           <h2 className="text-4xl font-bold text-white leading-tight mb-3">
             Welcome back to ShopHub
           </h2>
-          <p className="text-indigo-200 text-base leading-relaxed mb-8">
+          <p className="text-gray-400 text-base leading-relaxed mb-8">
             Thousands of products, curated for you. Sign in to continue your shopping journey.
           </p>
           <ul className="space-y-3">
             {perks.map((perk) => (
               <li key={perk} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <Check size={11} className="text-white" />
+                <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                  <Check size={11} className="text-gray-300" />
                 </div>
-                <span className="text-indigo-100 text-sm">{perk}</span>
+                <span className="text-gray-300 text-sm">{perk}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="text-indigo-400 text-xs">&copy; {new Date().getFullYear()} ShopHub. All rights reserved.</p>
+        <p className="text-gray-600 text-xs">&copy; {new Date().getFullYear()} ShopHub. All rights reserved.</p>
       </div>
 
       {/* Form panel */}
-      <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-12 bg-slate-50">
+      <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-12 bg-gray-50">
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
+          <Link to="/" className="flex items-center gap-2 mb-8 lg:hidden">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
               <Store size={15} className="text-white" />
             </div>
             <span className="font-bold text-lg text-gray-900">ShopHub</span>
-          </div>
+          </Link>
 
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900">Sign in to your account</h1>
@@ -88,7 +88,7 @@ export default function Login() {
             </p>
           </div>
 
-          <div className="card shadow-md">
+          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-1.5">
@@ -127,7 +127,11 @@ export default function Login() {
                   </button>
                 </div>
               </div>
-              <button type="submit" className="btn-primary w-full py-3 text-base" disabled={loading}>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 text-sm font-semibold bg-gray-900 hover:bg-gray-700 text-white rounded transition-colors disabled:opacity-60"
+              >
                 {loading ? 'Signing in…' : 'Sign in'}
               </button>
             </form>
