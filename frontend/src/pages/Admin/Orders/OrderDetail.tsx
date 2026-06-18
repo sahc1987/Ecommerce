@@ -1,23 +1,32 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import toast from 'react-hot-toast';
-import { ArrowLeft, Package } from 'lucide-react';
-import api from '../../../api';
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
+import { ArrowLeft, Package } from "lucide-react";
+import api from "../../../api";
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  paid: 'bg-blue-100 text-blue-800',
-  processing: 'bg-indigo-100 text-indigo-800',
-  shipped: 'bg-purple-100 text-purple-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
+  pending: "bg-yellow-100 text-yellow-800",
+  paid: "bg-blue-100 text-blue-800",
+  processing: "bg-indigo-100 text-indigo-800",
+  shipped: "bg-purple-100 text-purple-800",
+  delivered: "bg-green-100 text-green-800",
+  cancelled: "bg-red-100 text-red-800",
 };
 
-const STATUSES = ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'];
+const STATUSES = [
+  "pending",
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+];
 
-interface Props { isCustomer?: boolean; }
+interface Props {
+  isCustomer?: boolean;
+}
 
-export default function OrderDetail({ isCustomer }: Props) {
+export default function OrderDetail({ isCustomer }: Readonly<Props>) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<any>(null);
@@ -25,9 +34,12 @@ export default function OrderDetail({ isCustomer }: Props) {
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
-    api.get(`/orders/${id}`).then((res) => {
-      setOrder(res.data.order);
-    }).finally(() => setLoading(false));
+    api
+      .get(`/orders/${id}`)
+      .then((res) => {
+        setOrder(res.data.order);
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
   const handleStatusChange = async (status: string) => {
@@ -35,27 +47,32 @@ export default function OrderDetail({ isCustomer }: Props) {
     try {
       await api.put(`/orders/${id}/status`, { status });
       setOrder((prev: any) => ({ ...prev, status }));
-      toast.success('Status updated');
+      toast.success("Status updated");
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Update failed');
+      toast.error(err.response?.data?.error || "Update failed");
     } finally {
       setUpdatingStatus(false);
     }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
-  if (!order) return <p className="text-center text-gray-500 py-16">Order not found</p>;
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  if (!order)
+    return <p className="text-center text-gray-500 py-16">Order not found</p>;
 
   const addr = order.shipping_address;
 
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate(isCustomer ? '/orders' : '/admin/orders')} className="text-gray-400 hover:text-gray-600">
+        <button
+          onClick={() => navigate(isCustomer ? "/orders" : "/admin/orders")}
+          className="text-gray-400 hover:text-gray-600"
+        >
           <ArrowLeft size={20} />
         </button>
         <div>
@@ -66,7 +83,9 @@ export default function OrderDetail({ isCustomer }: Props) {
             Placed {new Date(order.created_at).toLocaleString()}
           </p>
         </div>
-        <span className={`badge ${statusColors[order.status] ?? 'bg-gray-100 text-gray-800'} ml-auto text-sm px-3 py-1`}>
+        <span
+          className={`badge ${statusColors[order.status] ?? "bg-gray-100 text-gray-800"} ml-auto text-sm px-3 py-1`}
+        >
           {order.status}
         </span>
       </div>
@@ -84,7 +103,7 @@ export default function OrderDetail({ isCustomer }: Props) {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                   order.status === s
                     ? `${statusColors[s]} border-transparent`
-                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50'
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                 }`}
               >
                 {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -107,11 +126,17 @@ export default function OrderDetail({ isCustomer }: Props) {
         {/* Shipping address */}
         {addr && (
           <div className="card">
-            <h2 className="font-semibold text-gray-900 mb-3">Shipping Address</h2>
+            <h2 className="font-semibold text-gray-900 mb-3">
+              Shipping Address
+            </h2>
             <p className="text-sm text-gray-700">{addr.name}</p>
             <p className="text-sm text-gray-700">{addr.line1}</p>
-            {addr.line2 && <p className="text-sm text-gray-700">{addr.line2}</p>}
-            <p className="text-sm text-gray-700">{addr.city}, {addr.state} {addr.zip}</p>
+            {addr.line2 && (
+              <p className="text-sm text-gray-700">{addr.line2}</p>
+            )}
+            <p className="text-sm text-gray-700">
+              {addr.city}, {addr.state} {addr.zip}
+            </p>
             <p className="text-sm text-gray-700">{addr.country}</p>
           </div>
         )}
@@ -127,16 +152,25 @@ export default function OrderDetail({ isCustomer }: Props) {
             <div key={item.id} className="flex items-center gap-4 px-6 py-4">
               <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                 {item.product_image ? (
-                  <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
+                  <img
+                    src={item.product_image}
+                    alt={item.product_name}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <Package size={20} className="m-auto text-gray-400 mt-3" />
                 )}
               </div>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">{item.product_name}</p>
-                <p className="text-sm text-gray-500">Qty: {item.quantity} × ${parseFloat(item.unit_price).toFixed(2)}</p>
+                <p className="text-sm text-gray-500">
+                  Qty: {item.quantity} × $
+                  {Number.parseFloat(item.unit_price).toFixed(2)}
+                </p>
               </div>
-              <p className="font-semibold text-gray-900">${parseFloat(item.total).toFixed(2)}</p>
+              <p className="font-semibold text-gray-900">
+                ${Number.parseFloat(item.total).toFixed(2)}
+              </p>
             </div>
           ))}
         </div>

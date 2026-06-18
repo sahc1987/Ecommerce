@@ -27,6 +27,7 @@ import CartPage from './pages/Shop/CartPage';
 import CheckoutPage from './pages/Shop/CheckoutPage';
 import OrderSuccess from './pages/Shop/OrderSuccess';
 import MyOrders from './pages/Shop/MyOrders';
+import NotFound from './pages/NotFound';
 
 export default function App() {
   const [setupChecked, setSetupChecked] = useState(false);
@@ -126,6 +127,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>
