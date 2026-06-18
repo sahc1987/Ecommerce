@@ -1,11 +1,17 @@
 const router = require('express').Router();
 const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
+const cache = require('../utils/cache');
+
+const TTL = { summary: 120, topProducts: 300, recentOrders: 60, salesChart: 300, pendingShipments: 60 };
 
 router.use(authenticate, requireRole('admin', 'staff'));
 
 // GET dashboard summary
 router.get('/summary', async (req, res) => {
+  const cached = await cache.get('dashboard:summary');
+  if (cached) return res.json(cached);
+
   try {
     const [revenue, orders, customers, products, pending, returns] = await Promise.all([
       db.query(`SELECT COALESCE(SUM(total),0) as total FROM orders WHERE status IN ('paid','processing','shipped','delivered')`),
@@ -16,14 +22,16 @@ router.get('/summary', async (req, res) => {
       db.query(`SELECT COUNT(*) FROM returns WHERE status = 'requested'`),
     ]);
 
-    res.json({
-      total_revenue: parseFloat(revenue.rows[0].total),
-      total_orders: parseInt(orders.rows[0].count),
-      total_customers: parseInt(customers.rows[0].count),
-      active_products: parseInt(products.rows[0].count),
-      pending_shipments: parseInt(pending.rows[0].count),
-      pending_returns: parseInt(returns.rows[0].count),
-    });
+    const data = {
+      total_revenue: Number.parseFloat(revenue.rows[0].total),
+      total_orders: Number.parseInt(orders.rows[0].count),
+      total_customers: Number.parseInt(customers.rows[0].count),
+      active_products: Number.parseInt(products.rows[0].count),
+      pending_shipments: Number.parseInt(pending.rows[0].count),
+      pending_returns: Number.parseInt(returns.rows[0].count),
+    };
+    await cache.set('dashboard:summary', data, TTL.summary);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -31,6 +39,9 @@ router.get('/summary', async (req, res) => {
 
 // GET top selling products
 router.get('/top-products', async (req, res) => {
+  const cached = await cache.get('dashboard:top-products');
+  if (cached) return res.json(cached);
+
   try {
     const result = await db.query(`
       SELECT
@@ -45,7 +56,9 @@ router.get('/top-products', async (req, res) => {
       ORDER BY units_sold DESC, revenue DESC
       LIMIT 10
     `);
-    res.json({ products: result.rows });
+    const data = { products: result.rows };
+    await cache.set('dashboard:top-products', data, TTL.topProducts);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -53,6 +66,9 @@ router.get('/top-products', async (req, res) => {
 
 // GET recent orders
 router.get('/recent-orders', async (req, res) => {
+  const cached = await cache.get('dashboard:recent-orders');
+  if (cached) return res.json(cached);
+
   try {
     const result = await db.query(`
       SELECT o.id, o.status, o.total, o.created_at, u.name as customer_name,
@@ -62,7 +78,9 @@ router.get('/recent-orders', async (req, res) => {
       ORDER BY o.created_at DESC
       LIMIT 10
     `);
-    res.json({ orders: result.rows });
+    const data = { orders: result.rows };
+    await cache.set('dashboard:recent-orders', data, TTL.recentOrders);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -70,6 +88,9 @@ router.get('/recent-orders', async (req, res) => {
 
 // GET sales chart (last 30 days)
 router.get('/sales-chart', async (req, res) => {
+  const cached = await cache.get('dashboard:sales-chart');
+  if (cached) return res.json(cached);
+
   try {
     const result = await db.query(`
       SELECT
@@ -82,7 +103,9 @@ router.get('/sales-chart', async (req, res) => {
       GROUP BY DATE_TRUNC('day', created_at)
       ORDER BY date ASC
     `);
-    res.json({ chart: result.rows });
+    const data = { chart: result.rows };
+    await cache.set('dashboard:sales-chart', data, TTL.salesChart);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -90,6 +113,9 @@ router.get('/sales-chart', async (req, res) => {
 
 // GET pending shipments
 router.get('/pending-shipments', async (req, res) => {
+  const cached = await cache.get('dashboard:pending-shipments');
+  if (cached) return res.json(cached);
+
   try {
     const result = await db.query(`
       SELECT o.*, u.name as customer_name, u.email as customer_email,
@@ -100,7 +126,9 @@ router.get('/pending-shipments', async (req, res) => {
       ORDER BY o.created_at ASC
       LIMIT 20
     `);
-    res.json({ orders: result.rows });
+    const data = { orders: result.rows };
+    await cache.set('dashboard:pending-shipments', data, TTL.pendingShipments);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

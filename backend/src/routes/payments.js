@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
+const cache = require('../utils/cache');
 
 router.post('/place-order', authenticate, async (req, res) => {
   const { items, shipping_address, shipping = 0, notes } = req.body;
@@ -10,6 +11,7 @@ router.post('/place-order', authenticate, async (req, res) => {
     let subtotal = 0;
     let discount = 0;
     const orderItems = [];
+    const affectedProductIds = [];
 
     for (const item of items) {
       const productRes = await db.query(
@@ -23,19 +25,19 @@ router.post('/place-order', authenticate, async (req, res) => {
         return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
 
       const now = new Date();
-      let effectivePrice = parseFloat(product.price);
+      let effectivePrice = Number.parseFloat(product.price);
       let itemDiscount = 0;
       if (product.discount_active && product.discount_percent > 0) {
         const start = product.discount_start ? new Date(product.discount_start) : null;
         const end = product.discount_end ? new Date(product.discount_end) : null;
         if ((!start || now >= start) && (!end || now <= end)) {
-          effectivePrice = effectivePrice * (1 - parseFloat(product.discount_percent) / 100);
-          itemDiscount = (parseFloat(product.price) - effectivePrice) * item.quantity;
+          effectivePrice = effectivePrice * (1 - Number.parseFloat(product.discount_percent) / 100);
+          itemDiscount = (Number.parseFloat(product.price) - effectivePrice) * item.quantity;
         }
       }
 
       const itemTotal = effectivePrice * item.quantity;
-      subtotal += parseFloat(product.price) * item.quantity;
+      subtotal += Number.parseFloat(product.price) * item.quantity;
       discount += itemDiscount;
       orderItems.push({
         product_id: product.id,
@@ -46,6 +48,7 @@ router.post('/place-order', authenticate, async (req, res) => {
         discount: itemDiscount,
         total: itemTotal,
       });
+      affectedProductIds.push({ id: product.id, slug: product.slug });
     }
 
     const settingsRes = await db.query('SELECT tax_rate, tax_enabled FROM store_settings LIMIT 1');
@@ -69,6 +72,23 @@ router.post('/place-order', authenticate, async (req, res) => {
       );
       await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.product_id]);
     }
+
+    // Invalidate caches affected by the new order
+    const productCacheKeys = affectedProductIds.flatMap(({ id, slug }) => [
+      `products:detail:${id}`,
+      `products:detail:${slug}`,
+    ]);
+    await Promise.all([
+      cache.del(...productCacheKeys),
+      cache.delByPattern('products:list:*'),
+      cache.del(
+        'dashboard:summary',
+        'dashboard:recent-orders',
+        'dashboard:top-products',
+        'dashboard:sales-chart',
+        'dashboard:pending-shipments',
+      ),
+    ]);
 
     res.json({ order_id: order.id });
   } catch (err) {

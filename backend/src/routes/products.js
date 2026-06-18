@@ -2,6 +2,9 @@ const router = require('express').Router();
 const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
+const cache = require('../utils/cache');
+
+const TTL = { list: 300, detail: 300 }; // seconds
 
 const slugify = (str) =>
   str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -19,25 +22,19 @@ const getEffectivePrice = (product) => {
 // GET all products (public, with filters)
 router.get('/', async (req, res) => {
   const { category, subcategory, search, discount, page = 1, limit = 20 } = req.query;
+  const cacheKey = cache.queryKey('products:list', req.query);
+
+  const cached = await cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
   const offset = (parseInt(page) - 1) * parseInt(limit);
   let conditions = ['p.is_active = TRUE'];
   const params = [];
 
-  if (category) {
-    params.push(category);
-    conditions.push(`p.category_id = $${params.length}`);
-  }
-  if (subcategory) {
-    params.push(subcategory);
-    conditions.push(`p.subcategory_id = $${params.length}`);
-  }
-  if (search) {
-    params.push(`%${search}%`);
-    conditions.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`);
-  }
-  if (discount === 'true') {
-    conditions.push('p.discount_active = TRUE');
-  }
+  if (category) { params.push(category); conditions.push(`p.category_id = $${params.length}`); }
+  if (subcategory) { params.push(subcategory); conditions.push(`p.subcategory_id = $${params.length}`); }
+  if (search) { params.push(`%${search}%`); conditions.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
+  if (discount === 'true') conditions.push('p.discount_active = TRUE');
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   params.push(parseInt(limit), offset);
@@ -59,18 +56,20 @@ router.get('/', async (req, res) => {
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    res.json({
+    const data = {
       products: result.rows,
       total: parseInt(countResult.rows[0].count),
       page: parseInt(page),
       pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit)),
-    });
+    };
+    await cache.set(cacheKey, data, TTL.list);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET all products for admin (includes inactive)
+// GET all products for admin (includes inactive — not cached)
 router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req, res) => {
   const { category, subcategory, search, page = 1, limit = 20 } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -115,6 +114,11 @@ router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req
 // GET single product by id or slug
 router.get('/:idOrSlug', async (req, res) => {
   const { idOrSlug } = req.params;
+  const cacheKey = `products:detail:${idOrSlug}`;
+
+  const cached = await cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
   const isUUID = /^[0-9a-f-]{36}$/.test(idOrSlug);
   try {
     const result = await db.query(
@@ -127,7 +131,9 @@ router.get('/:idOrSlug', async (req, res) => {
       [idOrSlug]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'Product not found' });
-    res.json({ product: result.rows[0] });
+    const data = { product: result.rows[0] };
+    await cache.set(cacheKey, data, TTL.detail);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -158,6 +164,7 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req, res) =
         stock || 0, sku || null, category_id || null, subcategory_id || null,
       ]
     );
+    await cache.delByPattern('products:list:*');
     res.status(201).json({ product: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -199,6 +206,10 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
         req.params.id,
       ]
     );
+    await Promise.all([
+      cache.delByPattern('products:list:*'),
+      cache.del(`products:detail:${req.params.id}`, `products:detail:${p.slug}`),
+    ]);
     res.json({ product: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -208,7 +219,12 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
 // DELETE product
 router.delete('/:id', authenticate, requireRole('admin'), async (req, res) => {
   try {
+    const current = await db.query('SELECT slug FROM products WHERE id = $1', [req.params.id]);
     await db.query('DELETE FROM products WHERE id = $1', [req.params.id]);
+    await Promise.all([
+      cache.delByPattern('products:list:*'),
+      cache.del(`products:detail:${req.params.id}`, `products:detail:${current.rows[0]?.slug}`),
+    ]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -232,6 +248,7 @@ router.post('/:id/images', authenticate, requireRole('admin', 'staff'), upload.a
       );
       images.push(result.rows[0]);
     }
+    await cache.del(`products:detail:${req.params.id}`);
     res.status(201).json({ images });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -253,6 +270,7 @@ router.delete('/:id/images/:imageId', authenticate, requireRole('admin', 'staff'
         [req.params.id]
       );
     }
+    await cache.del(`products:detail:${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -264,6 +282,7 @@ router.put('/:id/images/:imageId/primary', authenticate, requireRole('admin', 's
   try {
     await db.query('UPDATE product_images SET is_primary=FALSE WHERE product_id=$1', [req.params.id]);
     await db.query('UPDATE product_images SET is_primary=TRUE WHERE id=$1', [req.params.imageId]);
+    await cache.del(`products:detail:${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
