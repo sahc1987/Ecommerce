@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { createNotification, notifyAdmins } = require('../utils/notifications');
 
 // GET returns
 router.get('/', authenticate, async (req, res) => {
@@ -107,6 +108,25 @@ router.post('/', authenticate, async (req, res) => {
         );
       }
     }
+
+    // Notify the customer and all admins
+    const orderShort = order_id.slice(0, 8).toUpperCase();
+    await Promise.all([
+      createNotification(
+        req.user.id,
+        'return_request',
+        'Return Request Submitted',
+        `Your return request for order #${orderShort} has been received and is under review.`,
+        { return_id: ret.id, order_id }
+      ),
+      notifyAdmins(
+        'return_request',
+        'New Return Request',
+        `${req.user.name} requested a return for order #${orderShort}.`,
+        { return_id: ret.id, order_id, customer_name: req.user.name }
+      ),
+    ]);
+
     res.status(201).json({ return: ret });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -120,15 +140,43 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
   if (!validStatuses.includes(status))
     return res.status(400).json({ error: 'Invalid status' });
   try {
-    const ret = await db.query('SELECT * FROM returns WHERE id = $1', [req.params.id]);
-    if (!ret.rows[0]) return res.status(404).json({ error: 'Return not found' });
+    const existing = await db.query('SELECT * FROM returns WHERE id = $1', [req.params.id]);
+    if (!existing.rows[0]) return res.status(404).json({ error: 'Return not found' });
 
     const result = await db.query(
       `UPDATE returns SET status=$1, refund_amount=$2, admin_notes=$3, updated_at=NOW()
        WHERE id=$4 RETURNING *`,
       [status, refund_amount, admin_notes, req.params.id]
     );
-    res.json({ return: result.rows[0] });
+    const ret = result.rows[0];
+
+    // Notify the customer about the decision
+    if (ret.user_id) {
+      const orderShort = ret.order_id.slice(0, 8).toUpperCase();
+      let title, message;
+      if (status === 'approved') {
+        title = 'Return Approved';
+        message = `Your return request for order #${orderShort} has been approved.${admin_notes ? ` Note: ${admin_notes}` : ''}`;
+      } else if (status === 'rejected') {
+        title = 'Return Declined';
+        message = `Your return request for order #${orderShort} was not approved.${admin_notes ? ` Reason: ${admin_notes}` : ''}`;
+      } else {
+        const formatted = refund_amount
+          ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(refund_amount)
+          : 'your refund';
+        title = 'Refund Processed';
+        message = `${formatted} for order #${orderShort} has been processed.${admin_notes ? ` Note: ${admin_notes}` : ''}`;
+      }
+      await createNotification(
+        ret.user_id,
+        'return_response',
+        title,
+        message,
+        { return_id: ret.id, order_id: ret.order_id, status, refund_amount }
+      );
+    }
+
+    res.json({ return: ret });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

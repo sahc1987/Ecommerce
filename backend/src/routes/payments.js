@@ -2,6 +2,7 @@ const router = require('express').Router();
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const cache = require('../utils/cache');
+const { createNotification, notifyAdmins } = require('../utils/notifications');
 
 router.post('/place-order', authenticate, async (req, res) => {
   const { items, shipping_address, shipping = 0, notes } = req.body;
@@ -87,6 +88,26 @@ router.post('/place-order', authenticate, async (req, res) => {
         'dashboard:top-products',
         'dashboard:sales-chart',
         'dashboard:pending-shipments',
+      ),
+    ]);
+
+    // Send notifications
+    const orderShort = order.id.slice(0, 8).toUpperCase();
+    const currency = settings?.currency || 'USD';
+    const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(total);
+    await Promise.all([
+      createNotification(
+        req.user.id,
+        'new_order',
+        'Order Confirmed',
+        `Your order #${orderShort} for ${formattedTotal} has been placed successfully.`,
+        { order_id: order.id, order_total: total }
+      ),
+      notifyAdmins(
+        'new_order',
+        'New Order Received',
+        `${req.user.name} placed an order for ${formattedTotal}.`,
+        { order_id: order.id, order_total: total, customer_name: req.user.name }
       ),
     ]);
 

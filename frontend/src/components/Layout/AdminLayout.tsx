@@ -7,6 +7,7 @@ import {
   Users, Settings, LogOut, Store, Menu, X, ExternalLink,
 } from 'lucide-react';
 import { useState } from 'react';
+import NotificationBell from '../Notifications/NotificationBell';
 
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -128,17 +129,19 @@ export default function AdminLayout() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="lg:hidden bg-white border-b border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
+        <header className="bg-white border-b border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-gray-600 hover:text-gray-900"
+            className="lg:hidden text-gray-600 hover:text-gray-900"
           >
             <Menu size={20} />
           </button>
-          <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-md flex items-center justify-center">
+          <div className="lg:hidden w-6 h-6 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-md flex items-center justify-center">
             <Store size={12} className="text-white" />
           </div>
-          <span className="font-bold text-gray-800">Admin Panel</span>
+          <span className="lg:hidden font-bold text-gray-800">Admin Panel</span>
+          <div className="flex-1" />
+          <NotificationBell buttonClassName="text-gray-500 hover:text-gray-900" />
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           <Outlet />

@@ -5,6 +5,7 @@ import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { ShoppingCart, Store, LogOut, LayoutDashboard, Package, Search, ChevronDown } from 'lucide-react';
 import api from '../../api';
+import NotificationBell from '../Notifications/NotificationBell';
 
 export default function ShopLayout() {
   const dispatch = useDispatch();
@@ -74,6 +75,7 @@ export default function ShopLayout() {
                   </span>
                 )}
               </Link>
+              <NotificationBell />
 
               {user ? (
                 <div className="flex items-center gap-0.5 ml-1">
