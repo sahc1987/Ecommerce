@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Package, Lock } from "lucide-react";
+import { Package, Lock, MapPin, CheckCircle2, Loader2, X } from "lucide-react";
 import { RootState } from "../../store";
 import { clearCart } from "../../store/slices/cartSlice";
 import api from "../../api";
@@ -16,6 +16,24 @@ interface Address {
   zip: string;
   country: string;
 }
+
+interface NominatimResult {
+  place_id: number;
+  display_name: string;
+  address: {
+    house_number?: string;
+    road?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state?: string;
+    postcode?: string;
+    country_code?: string;
+  };
+}
+
+const SUPPORTED_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "MX", "BR"];
 
 export default function CheckoutPage() {
   const dispatch = useDispatch();
@@ -36,6 +54,13 @@ export default function CheckoutPage() {
     country: "US",
   });
 
+  const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [addressVerified, setAddressVerified] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     api.get("/setup/status").then((res) => {
       const s = res.data.store;
@@ -46,23 +71,85 @@ export default function CheckoutPage() {
     }).catch(() => {});
   }, []);
 
-  const subtotal = items.reduce(
-    (sum, i) => sum + i.effective_price * i.quantity,
-    0,
-  );
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const subtotal = items.reduce((sum, i) => sum + i.effective_price * i.quantity, 0);
   const tax = taxEnabled && taxRate > 0 ? Number.parseFloat((subtotal * taxRate / 100).toFixed(2)) : 0;
   const total = subtotal + tax;
 
+  const handleLine1Change = (value: string) => {
+    setAddress((prev) => ({ ...prev, line1: value }));
+    setAddressVerified(false);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (value.trim().length < 5) {
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setLoadingSuggestions(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&addressdetails=1&limit=6`,
+          { headers: { "Accept-Language": "en" } },
+        );
+        const data: NominatimResult[] = await res.json();
+        setSuggestions(data);
+        setSuggestionsOpen(data.length > 0);
+      } catch {
+        // network error — skip suggestions silently
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    }, 450);
+  };
+
+  const selectSuggestion = (result: NominatimResult) => {
+    const a = result.address;
+    const line1 =
+      [a.house_number, a.road].filter(Boolean).join(" ") ||
+      result.display_name.split(",")[0].trim();
+    const city = a.city || a.town || a.village || a.county || "";
+    const countryCode = (a.country_code || "US").toUpperCase();
+
+    setAddress((prev) => ({
+      ...prev,
+      line1,
+      city,
+      state: a.state || "",
+      zip: a.postcode || "",
+      country: SUPPORTED_COUNTRIES.includes(countryCode) ? countryCode : prev.country,
+    }));
+    setAddressVerified(true);
+    setSuggestionsOpen(false);
+    setSuggestions([]);
+  };
+
+  const clearLine1 = () => {
+    setAddress((prev) => ({ ...prev, line1: "" }));
+    setAddressVerified(false);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const res = await api.post("/payments/place-order", {
-        items: items.map((i) => ({
-          product_id: i.product_id,
-          quantity: i.quantity,
-        })),
+        items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
         shipping_address: address,
         shipping: 0,
       });
@@ -81,13 +168,11 @@ export default function CheckoutPage() {
     props?: React.InputHTMLAttributes<HTMLInputElement>,
   ) => (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
-      </label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <input
         className="input"
         value={address[key]}
-        onChange={(e) => setAddress({ ...address, [key]: e.target.value })}
+        onChange={(e) => setAddress((prev) => ({ ...prev, [key]: e.target.value }))}
         {...props}
       />
     </div>
@@ -101,37 +186,109 @@ export default function CheckoutPage() {
           <div className="lg:col-span-2 space-y-6">
             <div className="card space-y-4">
               <h2 className="font-semibold text-gray-900">Shipping Address</h2>
-              {field("Full Name", "name", {
-                required: true,
-                placeholder: "John Doe",
-              })}
-              {field("Address Line 1", "line1", {
-                required: true,
-                placeholder: "123 Main St",
-              })}
-              {field("Address Line 2", "line2", {
-                placeholder: "Apt, Suite, etc. (optional)",
-              })}
+
+              {field("Full Name", "name", { required: true, placeholder: "John Doe" })}
+
+              {/* Address Line 1 with autocomplete */}
+              <div className="relative" ref={suggestionsRef}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Address Line 1
+                </label>
+                <div className="relative">
+                  <input
+                    className="input pr-20"
+                    value={address.line1}
+                    onChange={(e) => handleLine1Change(e.target.value)}
+                    onFocus={() => suggestions.length > 0 && setSuggestionsOpen(true)}
+                    required
+                    placeholder="123 Main St"
+                    autoComplete="off"
+                  />
+                  <div className="absolute inset-y-0 right-2 flex items-center gap-1.5 pointer-events-none">
+                    {loadingSuggestions && (
+                      <Loader2 size={15} className="text-gray-400 animate-spin pointer-events-none" />
+                    )}
+                    {addressVerified && !loadingSuggestions && (
+                      <CheckCircle2 size={16} className="text-emerald-500 pointer-events-none" />
+                    )}
+                    {address.line1 && !loadingSuggestions && (
+                      <button
+                        type="button"
+                        onClick={clearLine1}
+                        className="pointer-events-auto text-gray-400 hover:text-gray-600 p-0.5"
+                        tabIndex={-1}
+                        aria-label="Clear address"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Suggestions dropdown */}
+                {suggestionsOpen && suggestions.length > 0 && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-gray-50">
+                      Suggestions
+                    </p>
+                    <ul>
+                      {suggestions.map((s) => {
+                        const a = s.address;
+                        const line1Part =
+                          [a.house_number, a.road].filter(Boolean).join(" ") ||
+                          s.display_name.split(",")[0].trim();
+                        const rest = s.display_name
+                          .replace(line1Part, "")
+                          .replace(/^,\s*/, "");
+                        return (
+                          <li key={s.place_id}>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => selectSuggestion(s)}
+                              className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 transition-colors flex items-start gap-2.5 border-b border-gray-50 last:border-0"
+                            >
+                              <MapPin size={14} className="text-indigo-400 mt-0.5 shrink-0" />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-gray-800 truncate">
+                                  {line1Part}
+                                </span>
+                                <span className="block text-xs text-gray-500 truncate">{rest}</span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {addressVerified && (
+                  <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
+                    <CheckCircle2 size={11} />
+                    Address verified
+                  </p>
+                )}
+              </div>
+
+              {field("Address Line 2", "line2", { placeholder: "Apt, Suite, etc. (optional)" })}
+
               <div className="grid grid-cols-2 gap-4">
                 {field("City", "city", { required: true })}
                 {field("State / Province", "state", { required: true })}
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 {field("ZIP / Postal Code", "zip", { required: true })}
                 <div>
-                  <label
-                    htmlFor="country"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
+                  <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
                     Country
                   </label>
                   <select
                     id="country"
                     className="input"
                     value={address.country}
-                    onChange={(e) =>
-                      setAddress({ ...address, country: e.target.value })
-                    }
+                    onChange={(e) => setAddress((prev) => ({ ...prev, country: e.target.value }))}
                   >
                     <option value="US">United States</option>
                     <option value="CA">Canada</option>
@@ -157,10 +314,7 @@ export default function CheckoutPage() {
                   readOnly
                   className="text-blue-600"
                 />
-                <label
-                  htmlFor="cod"
-                  className="text-sm text-gray-700 font-medium"
-                >
+                <label htmlFor="cod" className="text-sm text-gray-700 font-medium">
                   Cash on Delivery
                 </label>
               </div>
@@ -169,33 +323,20 @@ export default function CheckoutPage() {
 
           <div>
             <div className="card sticky top-24">
-              <h2 className="font-bold text-gray-900 text-lg mb-4">
-                Order Summary
-              </h2>
+              <h2 className="font-bold text-gray-900 text-lg mb-4">Order Summary</h2>
               <div className="space-y-2 mb-4">
                 {items.map((item) => (
                   <div key={item.product_id} className="flex gap-3">
                     <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                       {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
-                        <Package
-                          size={16}
-                          className="m-auto text-gray-300 mt-2.5"
-                        />
+                        <Package size={16} className="m-auto text-gray-300 mt-2.5" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800 truncate">
-                        {item.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Qty: {item.quantity}
-                      </p>
+                      <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                      <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                     </div>
                     <p className="text-sm font-medium text-gray-900">
                       ${(item.effective_price * item.quantity).toFixed(2)}
@@ -229,9 +370,7 @@ export default function CheckoutPage() {
                 disabled={loading}
               >
                 <Lock size={14} />
-                {loading
-                  ? "Processing..."
-                  : `Place Order — $${total.toFixed(2)}`}
+                {loading ? "Processing..." : `Place Order — $${total.toFixed(2)}`}
               </button>
             </div>
           </div>
