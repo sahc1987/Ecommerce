@@ -7,10 +7,16 @@ A full-stack e-commerce application featuring a customer-facing storefront and a
 - User authentication with JWT (registration and login)
 - Product catalog with categories and image uploads
 - Shopping experience: browse products, place orders, and process payments
-- Order management and returns handling
+- Order management with order tracking (tracking number and carrier)
+- Returns handling with a configurable return window
+- Product search and category filtering in the storefront
+- Address autocomplete and verification at checkout
+- Configurable tax applied to cart and order totals
+- In-app notifications for users
 - Admin dashboard with sales analytics and charts
 - User management
 - Guided first-run setup flow for initial configuration
+- Redis-backed caching for improved performance
 - Containerized deployment via Docker Compose
 
 ## Tech Stack
@@ -26,6 +32,7 @@ A full-stack e-commerce application featuring a customer-facing storefront and a
 **Backend**
 - Node.js with Express
 - PostgreSQL (via the `pg` driver)
+- Redis for caching
 - JWT authentication and bcrypt password hashing
 - Multer for file/image uploads
 
@@ -42,7 +49,8 @@ A full-stack e-commerce application featuring a customer-facing storefront and a
 │       ├── config/
 │       ├── db/
 │       ├── middleware/
-│       └── routes/
+│       ├── routes/
+│       └── utils/    # caching, notifications helpers
 ├── frontend/       # React + TypeScript app
 │   └── src/
 │       ├── api/
@@ -116,6 +124,7 @@ The backend exposes a REST API under `/api`:
 - `/api/returns` — returns
 - `/api/dashboard` — admin analytics
 - `/api/users` — user management
+- `/api/notifications` — user notifications
 - `/api/health` — health check
 
 ## Local Development
