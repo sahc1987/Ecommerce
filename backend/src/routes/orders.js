@@ -6,7 +6,7 @@ const { createNotification } = require("../utils/notifications");
 // GET orders (admin: all, customer: own)
 router.get("/", authenticate, async (req, res) => {
   const { status, page = 1, limit = 20 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const offset = (Number.parseInt(page) - 1) * Number.parseInt(limit);
   const isAdmin = ["admin", "staff"].includes(req.user.role);
 
   let conditions = [];
@@ -83,7 +83,7 @@ router.put(
   authenticate,
   requireRole("admin", "staff"),
   async (req, res) => {
-    const { status } = req.body;
+    const { status, tracking_number, carrier } = req.body;
     const validStatuses = [
       "pending",
       "paid",
@@ -95,9 +95,18 @@ router.put(
     if (!validStatuses.includes(status))
       return res.status(400).json({ error: "Invalid status" });
     try {
+      const params = [status];
+      let setClause = "status=$1, updated_at=NOW()";
+
+      if (status === "shipped") {
+        params.push(tracking_number || null, carrier || null);
+        setClause += `, tracking_number=$${params.length - 1}, carrier=$${params.length}`;
+      }
+
+      params.push(req.params.id);
       const result = await db.query(
-        "UPDATE orders SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING *",
-        [status, req.params.id],
+        `UPDATE orders SET ${setClause} WHERE id=$${params.length} RETURNING *`,
+        params,
       );
       if (!result.rows[0])
         return res.status(404).json({ error: "Order not found" });
@@ -113,12 +122,18 @@ router.put(
           delivered: "delivered",
           cancelled: "cancelled",
         };
+        let message = `Your order #${orderShort} is now ${statusLabels[status] || status}.`;
+        if (status === "shipped" && (order.carrier || order.tracking_number)) {
+          const carrierPart = order.carrier ? `Carrier: ${order.carrier}.` : "";
+          const trackingPart = order.tracking_number ? ` Tracking number: ${order.tracking_number}.` : "";
+          message += ` ${carrierPart}${trackingPart}`;
+        }
         await createNotification(
           order.user_id,
           "order_status",
-          "Order Status Updated",
-          `Your order #${orderShort} is now ${statusLabels[status] || status}.`,
-          { order_id: order.id, status },
+          status === "shipped" ? "Your Order Has Shipped!" : "Order Status Updated",
+          message,
+          { order_id: order.id, status, tracking_number: order.tracking_number, carrier: order.carrier },
         );
       }
 

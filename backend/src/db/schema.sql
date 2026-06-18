@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS orders (
   total DECIMAL(10,2) NOT NULL,
   shipping_address JSONB,
   notes TEXT,
+  tracking_number VARCHAR(100),
+  carrier VARCHAR(100),
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, Package, RotateCcw } from "lucide-react";
+import { ArrowLeft, Package, RotateCcw, Truck } from "lucide-react";
 import api from "../../../api";
 
 const statusColors: Record<string, string> = {
@@ -39,6 +39,9 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showShipModal, setShowShipModal] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [carrier, setCarrier] = useState('');
   const [returnRequest, setReturnRequest] = useState<any>(null);
   const [returnWindowDays, setReturnWindowDays] = useState(30);
   const [showReturnForm, setShowReturnForm] = useState(false);
@@ -77,11 +80,32 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
   };
 
   const handleStatusChange = async (status: string) => {
+    if (status === 'shipped') {
+      setTrackingNumber(order.tracking_number || '');
+      setCarrier(order.carrier || '');
+      setShowShipModal(true);
+      return;
+    }
     setUpdatingStatus(true);
     try {
       await api.put(`/orders/${id}/status`, { status });
       setOrder((prev: any) => ({ ...prev, status }));
       toast.success("Status updated");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Update failed");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleShipSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUpdatingStatus(true);
+    try {
+      const res = await api.put(`/orders/${id}/status`, { status: 'shipped', tracking_number: trackingNumber, carrier });
+      setOrder(res.data.order);
+      setShowShipModal(false);
+      toast.success("Order marked as shipped");
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Update failed");
     } finally {
@@ -240,10 +264,73 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         </div>
       </div>
 
+      {/* Tracking info */}
+      {(order.tracking_number || order.carrier) && order.status !== 'cancelled' && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-3">
+            <Truck size={18} className="text-purple-500" />
+            <h2 className="font-semibold text-gray-900">Shipment Tracking</h2>
+          </div>
+          {order.carrier && (
+            <p className="text-sm text-gray-700"><span className="font-medium">Carrier:</span> {order.carrier}</p>
+          )}
+          {order.tracking_number && (
+            <p className="text-sm text-gray-700 mt-1"><span className="font-medium">Tracking #:</span> {order.tracking_number}</p>
+          )}
+        </div>
+      )}
+
       {order.notes && (
         <div className="card">
           <h2 className="font-semibold text-gray-900 mb-2">Notes</h2>
           <p className="text-sm text-gray-600">{order.notes}</p>
+        </div>
+      )}
+
+      {/* Shipment modal */}
+      {showShipModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Truck size={20} className="text-purple-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Ship Order</h2>
+            </div>
+            <form onSubmit={handleShipSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Parcel Service / Carrier
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="e.g. UPS, FedEx, USPS, DHL"
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tracking Number
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Enter tracking number"
+                  value={trackingNumber}
+                  onChange={(e) => setTrackingNumber(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-gray-400">Both fields are optional but recommended. The customer will be notified.</p>
+              <div className="flex gap-3 pt-1">
+                <button type="submit" className="btn-primary" disabled={updatingStatus}>
+                  {updatingStatus ? 'Saving...' : 'Confirm Shipment'}
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => setShowShipModal(false)} disabled={updatingStatus}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
