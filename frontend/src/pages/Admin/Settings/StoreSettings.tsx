@@ -7,7 +7,7 @@ export default function StoreSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<any>(null);
-  const [form, setForm] = useState({ name: '', description: '', currency: 'USD', email: '', phone: '', address: '', tax_rate: '0', tax_enabled: false });
+  const [form, setForm] = useState({ name: '', description: '', currency: 'USD', email: '', phone: '', address: '', tax_rate: '0', tax_enabled: false, return_window_days: '30' });
   const fileRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
@@ -18,7 +18,7 @@ export default function StoreSettings() {
       const s = res.data.store;
       if (s) {
         setStore(s);
-        setForm({ name: s.name, description: s.description || '', currency: s.currency, email: s.email || '', phone: s.phone || '', address: s.address || '', tax_rate: String(s.tax_rate ?? 0), tax_enabled: !!s.tax_enabled });
+        setForm({ name: s.name, description: s.description || '', currency: s.currency, email: s.email || '', phone: s.phone || '', address: s.address || '', tax_rate: String(s.tax_rate ?? 0), tax_enabled: !!s.tax_enabled, return_window_days: String(s.return_window_days ?? 30) });
         if (s.logo_url) setLogoPreview(s.logo_url);
       }
     }).finally(() => setLoading(false));
@@ -153,6 +153,31 @@ export default function StoreSettings() {
               </p>
             </div>
           )}
+        </div>
+
+        <div className="border-t border-gray-100 pt-5 space-y-4">
+          <h2 className="font-semibold text-gray-900">Return Policy</h2>
+          <div>
+            <label htmlFor="return_window_days" className="block text-sm font-medium text-gray-700 mb-1">
+              Return Window (days)
+            </label>
+            <div className="relative max-w-xs">
+              <input
+                id="return_window_days"
+                type="number"
+                className="input pr-14"
+                value={form.return_window_days}
+                min="1"
+                max="365"
+                step="1"
+                onChange={(e) => setForm({ ...form, return_window_days: e.target.value })}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">days</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Customers can request a return within this many days of placing the order.
+            </p>
+          </div>
         </div>
 
         <button type="submit" className="btn-primary" disabled={saving}>

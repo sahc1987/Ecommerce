@@ -4,7 +4,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 
 // GET returns
 router.get('/', authenticate, async (req, res) => {
-  const { status, page = 1, limit = 20 } = req.query;
+  const { status, order_id, page = 1, limit = 20 } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const isAdmin = ['admin', 'staff'].includes(req.user.role);
 
@@ -12,6 +12,7 @@ router.get('/', authenticate, async (req, res) => {
   const params = [];
   if (!isAdmin) { params.push(req.user.id); conditions.push(`r.user_id = $${params.length}`); }
   if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
+  if (order_id) { params.push(order_id); conditions.push(`r.order_id = $${params.length}`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   params.push(parseInt(limit), offset);
@@ -77,6 +78,20 @@ router.post('/', authenticate, async (req, res) => {
     if (!order.rows[0]) return res.status(404).json({ error: 'Order not found' });
     if (!['delivered', 'paid'].includes(order.rows[0].status))
       return res.status(400).json({ error: 'Order is not eligible for return' });
+
+    const existingReturn = await db.query('SELECT id FROM returns WHERE order_id = $1', [order_id]);
+    if (existingReturn.rows[0])
+      return res.status(400).json({ error: 'A return request already exists for this order' });
+
+    const settings = await db.query('SELECT return_window_days FROM store_settings LIMIT 1');
+    const windowDays = settings.rows[0]?.return_window_days ?? 30;
+    const orderDate = new Date(order.rows[0].created_at);
+    const diffDays = Math.floor((Date.now() - orderDate.getTime()) / 86400000);
+    if (diffDays > windowDays)
+      return res.status(400).json({
+        error: `Return window has expired. Returns must be requested within ${windowDays} days of the order date.`,
+        expired: true,
+      });
 
     const returnRes = await db.query(
       'INSERT INTO returns (order_id, user_id, reason) VALUES ($1,$2,$3) RETURNING *',

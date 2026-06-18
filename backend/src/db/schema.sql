@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS store_settings (
   address TEXT,
   tax_rate DECIMAL(5,2) DEFAULT 0,
   tax_enabled BOOLEAN DEFAULT FALSE,
+  return_window_days INTEGER DEFAULT 30,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS store_settings (
 -- Migration: add tax columns to existing store_settings tables
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS tax_rate DECIMAL(5,2) DEFAULT 0;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS tax_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS return_window_days INTEGER DEFAULT 30;
 
 -- Users
 CREATE TABLE IF NOT EXISTS users (

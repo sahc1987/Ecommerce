@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, Package } from "lucide-react";
+import { ArrowLeft, Package, RotateCcw } from "lucide-react";
 import api from "../../../api";
 
 const statusColors: Record<string, string> = {
@@ -11,6 +11,13 @@ const statusColors: Record<string, string> = {
   shipped: "bg-purple-100 text-purple-800",
   delivered: "bg-green-100 text-green-800",
   cancelled: "bg-red-100 text-red-800",
+};
+
+const returnStatusColors: Record<string, string> = {
+  requested: "bg-yellow-100 text-yellow-800",
+  approved: "bg-blue-100 text-blue-800",
+  rejected: "bg-red-100 text-red-800",
+  refunded: "bg-green-100 text-green-800",
 };
 
 const STATUSES = [
@@ -32,15 +39,42 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [returnRequest, setReturnRequest] = useState<any>(null);
+  const [returnWindowDays, setReturnWindowDays] = useState(30);
+  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
 
   useEffect(() => {
-    api
-      .get(`/orders/${id}`)
-      .then((res) => {
-        setOrder(res.data.order);
-      })
-      .finally(() => setLoading(false));
+    const loadOrder = api.get(`/orders/${id}`).then((res) => setOrder(res.data.order));
+    if (isCustomer) {
+      Promise.all([
+        loadOrder,
+        api.get('/setup/status').then((res) => setReturnWindowDays(res.data.store?.return_window_days ?? 30)),
+        api.get('/returns', { params: { order_id: id, limit: 1 } }).then((res) => {
+          if (res.data.returns.length > 0) setReturnRequest(res.data.returns[0]);
+        }),
+      ]).finally(() => setLoading(false));
+    } else {
+      loadOrder.finally(() => setLoading(false));
+    }
   }, [id]);
+
+  const handleReturnSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingReturn(true);
+    try {
+      const res = await api.post('/returns', { order_id: id, reason: returnReason });
+      setReturnRequest(res.data.return);
+      setShowReturnForm(false);
+      setReturnReason('');
+      toast.success('Return request submitted');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to submit return request');
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
 
   const handleStatusChange = async (status: string) => {
     setUpdatingStatus(true);
@@ -212,6 +246,81 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           <p className="text-sm text-gray-600">{order.notes}</p>
         </div>
       )}
+
+      {/* Return & Refund (customer only, eligible orders) */}
+      {isCustomer && ['delivered', 'paid'].includes(order.status) && (() => {
+        const daysSince = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 86400000);
+        const withinWindow = daysSince <= returnWindowDays;
+        const daysLeft = returnWindowDays - daysSince;
+
+        return (
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <RotateCcw size={18} className="text-gray-500" />
+              <h2 className="font-semibold text-gray-900">Return & Refund</h2>
+            </div>
+
+            {returnRequest ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Status:</span>
+                  <span className={`badge ${returnStatusColors[returnRequest.status] ?? 'bg-gray-100 text-gray-800'}`}>
+                    {returnRequest.status}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Reason:</span> {returnRequest.reason}
+                </p>
+                {returnRequest.refund_amount && (
+                  <p className="text-sm text-green-700 font-medium">
+                    Refund amount: ${parseFloat(returnRequest.refund_amount).toFixed(2)}
+                  </p>
+                )}
+                {returnRequest.admin_notes && (
+                  <p className="text-sm text-gray-500">
+                    <span className="font-medium">Store note:</span> {returnRequest.admin_notes}
+                  </p>
+                )}
+              </div>
+            ) : !withinWindow ? (
+              <p className="text-sm text-red-600">
+                The return window for this order has expired. Returns must be requested within {returnWindowDays} days of the order date.
+              </p>
+            ) : showReturnForm ? (
+              <form onSubmit={handleReturnSubmit} className="space-y-3">
+                <p className="text-xs text-gray-400">{daysLeft} day{daysLeft === 1 ? '' : 's'} remaining to request a return.</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason for return</label>
+                  <textarea
+                    className="input resize-none h-24"
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    placeholder="Please describe the reason for your return..."
+                    required
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button type="submit" className="btn-primary" disabled={submittingReturn}>
+                    {submittingReturn ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={() => setShowReturnForm(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div>
+                <p className="text-sm text-gray-500 mb-3">
+                  {daysLeft} day{daysLeft === 1 ? '' : 's'} remaining to request a return.
+                </p>
+                <button onClick={() => setShowReturnForm(true)} className="btn-secondary flex items-center gap-2">
+                  <RotateCcw size={15} /> Request Return
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
