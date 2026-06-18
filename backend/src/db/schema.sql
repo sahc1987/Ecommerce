@@ -8,9 +8,15 @@ CREATE TABLE IF NOT EXISTS store_settings (
   email VARCHAR(255),
   phone VARCHAR(50),
   address TEXT,
+  tax_rate DECIMAL(5,2) DEFAULT 0,
+  tax_enabled BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Migration: add tax columns to existing store_settings tables
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS tax_rate DECIMAL(5,2) DEFAULT 0;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS tax_enabled BOOLEAN DEFAULT FALSE;
 
 -- Users
 CREATE TABLE IF NOT EXISTS users (

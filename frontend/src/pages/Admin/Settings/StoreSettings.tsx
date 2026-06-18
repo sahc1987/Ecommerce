@@ -7,7 +7,7 @@ export default function StoreSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<any>(null);
-  const [form, setForm] = useState({ name: '', description: '', currency: 'USD', email: '', phone: '', address: '' });
+  const [form, setForm] = useState({ name: '', description: '', currency: 'USD', email: '', phone: '', address: '', tax_rate: '0', tax_enabled: false });
   const fileRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
@@ -18,7 +18,7 @@ export default function StoreSettings() {
       const s = res.data.store;
       if (s) {
         setStore(s);
-        setForm({ name: s.name, description: s.description || '', currency: s.currency, email: s.email || '', phone: s.phone || '', address: s.address || '' });
+        setForm({ name: s.name, description: s.description || '', currency: s.currency, email: s.email || '', phone: s.phone || '', address: s.address || '', tax_rate: String(s.tax_rate ?? 0), tax_enabled: !!s.tax_enabled });
         if (s.logo_url) setLogoPreview(s.logo_url);
       }
     }).finally(() => setLoading(false));
@@ -114,6 +114,47 @@ export default function StoreSettings() {
           <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
           <textarea className="input resize-none h-20" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </div>
+        <div className="border-t border-gray-100 pt-5 space-y-4">
+          <h2 className="font-semibold text-gray-900">Tax Configuration</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Enable Tax</p>
+              <p className="text-xs text-gray-400 mt-0.5">Apply sales tax to all orders</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, tax_enabled: !form.tax_enabled })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.tax_enabled ? 'bg-blue-600' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.tax_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          {form.tax_enabled && (
+            <div>
+              <label htmlFor="tax_rate" className="block text-sm font-medium text-gray-700 mb-1">
+                Tax Rate (%)
+              </label>
+              <div className="relative max-w-xs">
+                <input
+                  id="tax_rate"
+                  type="number"
+                  className="input pr-8"
+                  value={form.tax_rate}
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  onChange={(e) => setForm({ ...form, tax_rate: e.target.value })}
+                  placeholder="e.g. 8.5"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Tax is applied on the order subtotal after discounts.
+              </p>
+            </div>
+          )}
+        </div>
+
         <button type="submit" className="btn-primary" disabled={saving}>
           {saving ? 'Saving...' : 'Save Settings'}
         </button>

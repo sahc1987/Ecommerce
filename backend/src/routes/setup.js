@@ -13,22 +13,23 @@ router.get('/status', async (req, res) => {
 });
 
 router.post('/complete', authenticate, requireRole('admin'), async (req, res) => {
-  const { name, description, currency, email, phone, address } = req.body;
+  const { name, description, currency, email, phone, address, tax_rate, tax_enabled } = req.body;
   if (!name) return res.status(400).json({ error: 'Store name required' });
+  const parsedTaxRate = Math.min(Math.max(Number.parseFloat(tax_rate) || 0, 0), 100);
   try {
     const existing = await db.query('SELECT id FROM store_settings LIMIT 1');
     let result;
     if (existing.rows.length) {
       result = await db.query(
         `UPDATE store_settings SET name=$1, description=$2, currency=$3, email=$4,
-         phone=$5, address=$6, updated_at=NOW() WHERE id=$7 RETURNING *`,
-        [name, description, currency || 'USD', email, phone, address, existing.rows[0].id]
+         phone=$5, address=$6, tax_rate=$7, tax_enabled=$8, updated_at=NOW() WHERE id=$9 RETURNING *`,
+        [name, description, currency || 'USD', email, phone, address, parsedTaxRate, !!tax_enabled, existing.rows[0].id]
       );
     } else {
       result = await db.query(
-        `INSERT INTO store_settings (name, description, currency, email, phone, address)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [name, description, currency || 'USD', email, phone, address]
+        `INSERT INTO store_settings (name, description, currency, email, phone, address, tax_rate, tax_enabled)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [name, description, currency || 'USD', email, phone, address, parsedTaxRate, !!tax_enabled]
       );
     }
     res.json({ store: result.rows[0] });

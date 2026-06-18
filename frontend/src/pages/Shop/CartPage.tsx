@@ -1,8 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { useEffect, useState } from 'react';
 import { ShoppingBag, Trash2, Plus, Minus, ArrowRight, Package } from 'lucide-react';
 import { RootState } from '../../store';
 import { removeItem, updateQuantity } from '../../store/slices/cartSlice';
+import api from '../../api';
 
 export default function CartPage() {
   const dispatch = useDispatch();
@@ -10,9 +12,24 @@ export default function CartPage() {
   const { items } = useSelector((s: RootState) => s.cart);
   const { user } = useSelector((s: RootState) => s.auth);
 
+  const [taxRate, setTaxRate] = useState(0);
+  const [taxEnabled, setTaxEnabled] = useState(false);
+
+  useEffect(() => {
+    api.get('/setup/status').then((res) => {
+      const s = res.data.store;
+      if (s?.tax_enabled) {
+        setTaxEnabled(true);
+        setTaxRate(Number.parseFloat(s.tax_rate) || 0);
+      }
+    }).catch(() => {});
+  }, []);
+
   const subtotal = items.reduce((sum, i) => sum + i.effective_price * i.quantity, 0);
   const savings = items.reduce((sum, i) => sum + (i.price - i.effective_price) * i.quantity, 0);
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
+  const tax = taxEnabled && taxRate > 0 ? Number.parseFloat((subtotal * taxRate / 100).toFixed(2)) : 0;
+  const total = subtotal + tax;
 
   if (items.length === 0) {
     return (
@@ -123,11 +140,17 @@ export default function CartPage() {
                 <span>Shipping</span>
                 <span className="text-emerald-600 font-medium">Free</span>
               </div>
+              {tax > 0 && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Tax ({taxRate}%)</span>
+                  <span className="font-medium text-gray-900">${tax.toFixed(2)}</span>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-100 mt-4 pt-4 flex justify-between font-bold text-base text-gray-900">
               <span>Total</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>${total.toFixed(2)}</span>
             </div>
 
             <button

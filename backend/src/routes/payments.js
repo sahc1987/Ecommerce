@@ -48,8 +48,11 @@ router.post('/place-order', authenticate, async (req, res) => {
       });
     }
 
-    const tax = 0;
-    const total = subtotal - discount + tax + parseFloat(shipping);
+    const settingsRes = await db.query('SELECT tax_rate, tax_enabled FROM store_settings LIMIT 1');
+    const settings = settingsRes.rows[0];
+    const taxRate = settings?.tax_enabled ? Number.parseFloat(settings.tax_rate) || 0 : 0;
+    const tax = taxRate > 0 ? Number.parseFloat(((subtotal - discount) * taxRate / 100).toFixed(2)) : 0;
+    const total = subtotal - discount + tax + Number.parseFloat(shipping);
 
     const orderRes = await db.query(
       `INSERT INTO orders (user_id, subtotal, discount, tax, shipping, total, shipping_address, notes)

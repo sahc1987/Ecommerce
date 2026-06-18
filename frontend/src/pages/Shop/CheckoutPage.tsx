@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -24,6 +24,8 @@ export default function CheckoutPage() {
   const { user } = useSelector((s: RootState) => s.auth);
 
   const [loading, setLoading] = useState(false);
+  const [taxRate, setTaxRate] = useState(0);
+  const [taxEnabled, setTaxEnabled] = useState(false);
   const [address, setAddress] = useState<Address>({
     name: user?.name || "",
     line1: "",
@@ -34,10 +36,23 @@ export default function CheckoutPage() {
     country: "US",
   });
 
+  useEffect(() => {
+    api.get("/setup/status").then((res) => {
+      const s = res.data.store;
+      if (s?.tax_enabled) {
+        setTaxEnabled(true);
+        setTaxRate(Number.parseFloat(s.tax_rate) || 0);
+      }
+    }).catch(() => {});
+  }, []);
+
   const subtotal = items.reduce(
     (sum, i) => sum + i.effective_price * i.quantity,
     0,
   );
+  const tax = taxEnabled && taxRate > 0 ? Number.parseFloat((subtotal * taxRate / 100).toFixed(2)) : 0;
+  const total = subtotal + tax;
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,9 +212,15 @@ export default function CheckoutPage() {
                   <span>Shipping</span>
                   <span>Free</span>
                 </div>
+                {tax > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Tax ({taxRate}%)</span>
+                    <span>${tax.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-base text-gray-900 border-t border-gray-200 pt-2 mt-2">
                   <span>Total</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>${total.toFixed(2)}</span>
                 </div>
               </div>
               <button
@@ -210,7 +231,7 @@ export default function CheckoutPage() {
                 <Lock size={14} />
                 {loading
                   ? "Processing..."
-                  : `Place Order — $${subtotal.toFixed(2)}`}
+                  : `Place Order — $${total.toFixed(2)}`}
               </button>
             </div>
           </div>
