@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, Package, RotateCcw, Truck } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Package, RotateCcw, Truck } from "lucide-react";
 import api from "../../../api";
 
 const statusColors: Record<string, string> = {
@@ -28,6 +28,22 @@ const STATUSES = [
   "delivered",
   "cancelled",
 ];
+
+const STEPS = [
+  { label: 'Order Placed', reach: ['pending', 'paid', 'processing', 'shipped', 'delivered'] },
+  { label: 'Processing',   reach: ['paid', 'processing', 'shipped', 'delivered'] },
+  { label: 'Shipped',      reach: ['shipped', 'delivered'] },
+  { label: 'Delivered',    reach: ['delivered'] },
+];
+
+function getTrackingUrl(carrier: string, trackingNumber: string): string {
+  const c = carrier.toLowerCase();
+  if (c.includes('ups'))   return `https://www.ups.com/track?tracknum=${encodeURIComponent(trackingNumber)}`;
+  if (c.includes('fedex')) return `https://www.fedex.com/apps/fedextrack/?tracknumbers=${encodeURIComponent(trackingNumber)}`;
+  if (c.includes('usps'))  return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}`;
+  if (c.includes('dhl'))   return `https://www.dhl.com/us-en/home/tracking/tracking-freight.html?submit=1&tracking-id=${encodeURIComponent(trackingNumber)}`;
+  return `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackingNumber)}`;
+}
 
 interface Props {
   isCustomer?: boolean;
@@ -147,6 +163,36 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           {order.status}
         </span>
       </div>
+
+      {/* Shipment progress (customer view, non-cancelled) */}
+      {isCustomer && order.status !== 'cancelled' && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-5">Order Progress</h2>
+          <div className="flex items-center">
+            {STEPS.map((step, i) => {
+              const done = step.reach.includes(order.status);
+              const lineActive = i < STEPS.length - 1 && STEPS[i + 1].reach.includes(order.status);
+              return (
+                <Fragment key={step.label}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                    {done ? <Check size={15} /> : <span className="text-xs font-medium">{i + 1}</span>}
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <div className={`flex-1 h-0.5 transition-colors ${lineActive ? 'bg-green-400' : 'bg-gray-200'}`} />
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+          <div className="flex justify-between mt-2.5">
+            {STEPS.map((step) => (
+              <span key={step.label} className={`text-xs text-center flex-1 leading-tight ${step.reach.includes(order.status) ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+                {step.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Status changer (admin only) */}
       {!isCustomer && (
@@ -275,7 +321,19 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             <p className="text-sm text-gray-700"><span className="font-medium">Carrier:</span> {order.carrier}</p>
           )}
           {order.tracking_number && (
-            <p className="text-sm text-gray-700 mt-1"><span className="font-medium">Tracking #:</span> {order.tracking_number}</p>
+            <p className="text-sm text-gray-700 mt-1 font-mono">
+              <span className="font-sans font-medium">Tracking #:</span> {order.tracking_number}
+            </p>
+          )}
+          {order.tracking_number && (
+            <a
+              href={getTrackingUrl(order.carrier ?? '', order.tracking_number)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-2 btn-primary text-sm"
+            >
+              Track Package <ExternalLink size={14} />
+            </a>
           )}
         </div>
       )}
