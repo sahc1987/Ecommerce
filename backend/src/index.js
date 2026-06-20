@@ -5,6 +5,9 @@ const path = require('path');
 
 const app = express();
 
+// ponytail: trust the single nginx proxy so req.ip is the real client (rate limiting needs it).
+app.set('trust proxy', 1);
+
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

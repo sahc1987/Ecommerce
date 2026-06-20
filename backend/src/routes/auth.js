@@ -1,13 +1,24 @@
 const router = require('express').Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
+
+// ponytail: per-IP throttle on credential endpoints — blunts brute force / signup spam.
+// 10 req / 15 min is generous for real users; tighten if abuse shows up.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts, try again later.' },
+});
 
 const generateToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password)
     return res.status(400).json({ error: 'All fields required' });
@@ -28,7 +39,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
     return res.status(400).json({ error: 'Email and password required' });
