@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
+const safeErr = require('../utils/safeErr');
 
 // ponytail: per-IP throttle on credential endpoints — blunts brute force / signup spam.
 // 10 req / 15 min is generous for real users; tighten if abuse shows up.
@@ -27,7 +28,7 @@ router.post('/register', authLimiter, async (req, res) => {
     if (existing.rows.length) return res.status(400).json({ error: 'Email already in use' });
     const hash = await bcrypt.hash(password, 10);
     const countRes = await db.query('SELECT COUNT(*) FROM users');
-    const role = parseInt(countRes.rows[0].count) === 0 ? 'admin' : 'customer';
+    const role = Number.parseInt(countRes.rows[0].count) === 0 ? 'admin' : 'customer';
     const result = await db.query(
       'INSERT INTO users (name, email, password_hash, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
       [name, email, hash, role]
@@ -35,7 +36,7 @@ router.post('/register', authLimiter, async (req, res) => {
     const user = result.rows[0];
     res.status(201).json({ token: generateToken(user.id), user });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -51,7 +52,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const { password_hash, ...userData } = user;
     res.json({ token: generateToken(user.id), user: userData });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 

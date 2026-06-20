@@ -2,26 +2,54 @@ const router = require('express').Router();
 const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { createNotification, notifyAdmins } = require('../utils/notifications');
+const safeErr = require('../utils/safeErr');
+
+const MAX_LIMIT = 100;
+
+function buildReturnNotification(status, orderShort, refund_amount, admin_notes) {
+  const note = admin_notes ? ` Note: ${admin_notes}` : '';
+  const reason = admin_notes ? ` Reason: ${admin_notes}` : '';
+  if (status === 'approved') {
+    return {
+      title: 'Return Approved',
+      message: `Your return request for order #${orderShort} has been approved.${note}`,
+    };
+  }
+  if (status === 'rejected') {
+    return {
+      title: 'Return Declined',
+      message: `Your return request for order #${orderShort} was not approved.${reason}`,
+    };
+  }
+  const formatted = refund_amount
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(refund_amount)
+    : 'your refund';
+  return {
+    title: 'Refund Processed',
+    message: `${formatted} for order #${orderShort} has been processed.${note}`,
+  };
+}
 
 // GET returns
 router.get('/', authenticate, async (req, res) => {
-  const { status, order_id, page = 1, limit = 20 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { status, order_id, page = 1 } = req.query;
+  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
+  const offset = (Number.parseInt(page) - 1) * limit;
   const isAdmin = ['admin', 'staff'].includes(req.user.role);
 
-  let conditions = [];
+  const conditions = [];
   const params = [];
   if (!isAdmin) { params.push(req.user.id); conditions.push(`r.user_id = $${params.length}`); }
   if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
   if (order_id) { params.push(order_id); conditions.push(`r.order_id = $${params.length}`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(parseInt(limit), offset);
+  params.push(limit, offset);
 
   try {
     const countResult = await db.query(
       `SELECT COUNT(*) FROM returns r ${where}`,
-      params.slice(0, params.length - 2)
+      params.slice(0, -2)
     );
     const result = await db.query(
       `SELECT r.*, u.name as customer_name, u.email as customer_email, o.total as order_total
@@ -33,14 +61,15 @@ router.get('/', authenticate, async (req, res) => {
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
+    const total = Number.parseInt(countResult.rows[0].count);
     res.json({
       returns: result.rows,
-      total: parseInt(countResult.rows[0].count),
-      page: parseInt(page),
-      pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit)),
+      total,
+      page: Number.parseInt(page),
+      pages: Math.ceil(total / limit),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -63,7 +92,7 @@ router.get('/:id', authenticate, async (req, res) => {
     );
     res.json({ return: { ...ret, items: items.rows } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -109,7 +138,6 @@ router.post('/', authenticate, async (req, res) => {
       }
     }
 
-    // Notify the customer and all admins
     const orderShort = order_id.slice(0, 8).toUpperCase();
     await Promise.all([
       createNotification(
@@ -129,7 +157,7 @@ router.post('/', authenticate, async (req, res) => {
 
     res.status(201).json({ return: ret });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -150,23 +178,9 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
     );
     const ret = result.rows[0];
 
-    // Notify the customer about the decision
     if (ret.user_id) {
       const orderShort = ret.order_id.slice(0, 8).toUpperCase();
-      let title, message;
-      if (status === 'approved') {
-        title = 'Return Approved';
-        message = `Your return request for order #${orderShort} has been approved.${admin_notes ? ` Note: ${admin_notes}` : ''}`;
-      } else if (status === 'rejected') {
-        title = 'Return Declined';
-        message = `Your return request for order #${orderShort} was not approved.${admin_notes ? ` Reason: ${admin_notes}` : ''}`;
-      } else {
-        const formatted = refund_amount
-          ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(refund_amount)
-          : 'your refund';
-        title = 'Refund Processed';
-        message = `${formatted} for order #${orderShort} has been processed.${admin_notes ? ` Note: ${admin_notes}` : ''}`;
-      }
+      const { title, message } = buildReturnNotification(status, orderShort, refund_amount, admin_notes);
       await createNotification(
         ret.user_id,
         'return_response',
@@ -178,7 +192,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
 
     res.json({ return: ret });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 

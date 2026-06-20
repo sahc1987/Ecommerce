@@ -2,23 +2,27 @@ const router = require('express').Router();
 const bcrypt = require('bcrypt');
 const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
+const safeErr = require('../utils/safeErr');
+
+const MAX_LIMIT = 100;
 
 router.use(authenticate, requireRole('admin'));
 
 // GET all users
 router.get('/', async (req, res) => {
-  const { role, search, page = 1, limit = 20 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
-  let conditions = [];
+  const { role, search, page = 1 } = req.query;
+  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
+  const offset = (Number.parseInt(page) - 1) * limit;
+  const conditions = [];
   const params = [];
   if (role) { params.push(role); conditions.push(`role = $${params.length}`); }
   if (search) { params.push(`%${search}%`); conditions.push(`(name ILIKE $${params.length} OR email ILIKE $${params.length})`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(parseInt(limit), offset);
+  params.push(limit, offset);
 
   try {
-    const countResult = await db.query(`SELECT COUNT(*) FROM users ${where}`, params.slice(0, params.length - 2));
+    const countResult = await db.query(`SELECT COUNT(*) FROM users ${where}`, params.slice(0, -2));
     const result = await db.query(
       `SELECT id, name, email, role, is_active, created_at,
         (SELECT COUNT(*) FROM orders WHERE user_id = users.id) as order_count
@@ -26,14 +30,15 @@ router.get('/', async (req, res) => {
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
+    const total = Number.parseInt(countResult.rows[0].count);
     res.json({
       users: result.rows,
-      total: parseInt(countResult.rows[0].count),
-      page: parseInt(page),
-      pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit)),
+      total,
+      page: Number.parseInt(page),
+      pages: Math.ceil(total / limit),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -47,7 +52,7 @@ router.get('/:id', async (req, res) => {
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json({ user: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -66,7 +71,7 @@ router.put('/:id', async (req, res) => {
     );
     res.json({ user: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -78,7 +83,7 @@ router.delete('/:id', async (req, res) => {
     await db.query('UPDATE users SET is_active=FALSE WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 

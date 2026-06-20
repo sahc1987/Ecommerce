@@ -3,32 +3,25 @@ const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const cache = require('../utils/cache');
+const safeErr = require('../utils/safeErr');
 
 const TTL = { list: 300, detail: 300 }; // seconds
+const MAX_LIMIT = 100;
 
 const slugify = (str) =>
   str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-const getEffectivePrice = (product) => {
-  if (!product.discount_active || !product.discount_percent) return product.price;
-  const now = new Date();
-  const start = product.discount_start ? new Date(product.discount_start) : null;
-  const end = product.discount_end ? new Date(product.discount_end) : null;
-  if (start && now < start) return product.price;
-  if (end && now > end) return product.price;
-  return parseFloat(product.price) * (1 - parseFloat(product.discount_percent) / 100);
-};
-
 // GET all products (public, with filters)
 router.get('/', async (req, res) => {
-  const { category, subcategory, search, discount, page = 1, limit = 20 } = req.query;
+  const { category, subcategory, search, discount, page = 1 } = req.query;
+  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
   const cacheKey = cache.queryKey('products:list', req.query);
 
   const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
-  const offset = (parseInt(page) - 1) * parseInt(limit);
-  let conditions = ['p.is_active = TRUE'];
+  const offset = (Number.parseInt(page) - 1) * limit;
+  const conditions = ['p.is_active = TRUE'];
   const params = [];
 
   if (category) { params.push(category); conditions.push(`p.category_id = $${params.length}`); }
@@ -37,12 +30,12 @@ router.get('/', async (req, res) => {
   if (discount === 'true') conditions.push('p.discount_active = TRUE');
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(parseInt(limit), offset);
+  params.push(limit, offset);
 
   try {
     const countResult = await db.query(
       `SELECT COUNT(*) FROM products p ${where}`,
-      params.slice(0, params.length - 2)
+      params.slice(0, -2)
     );
     const result = await db.query(
       `SELECT p.*, c.name as category_name, s.name as subcategory_name,
@@ -56,24 +49,26 @@ router.get('/', async (req, res) => {
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
+    const total = Number.parseInt(countResult.rows[0].count);
     const data = {
       products: result.rows,
-      total: parseInt(countResult.rows[0].count),
-      page: parseInt(page),
-      pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit)),
+      total,
+      page: Number.parseInt(page),
+      pages: Math.ceil(total / limit),
     };
     await cache.set(cacheKey, data, TTL.list);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
 // GET all products for admin (includes inactive — not cached)
 router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req, res) => {
-  const { category, subcategory, search, page = 1, limit = 20 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
-  let conditions = [];
+  const { category, subcategory, search, page = 1 } = req.query;
+  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
+  const offset = (Number.parseInt(page) - 1) * limit;
+  const conditions = [];
   const params = [];
 
   if (category) { params.push(category); conditions.push(`p.category_id = $${params.length}`); }
@@ -81,12 +76,12 @@ router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req
   if (search) { params.push(`%${search}%`); conditions.push(`p.name ILIKE $${params.length}`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(parseInt(limit), offset);
+  params.push(limit, offset);
 
   try {
     const countResult = await db.query(
       `SELECT COUNT(*) FROM products p ${where}`,
-      params.slice(0, params.length - 2)
+      params.slice(0, -2)
     );
     const result = await db.query(
       `SELECT p.*, c.name as category_name, s.name as subcategory_name,
@@ -100,14 +95,15 @@ router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
+    const total = Number.parseInt(countResult.rows[0].count);
     res.json({
       products: result.rows,
-      total: parseInt(countResult.rows[0].count),
-      page: parseInt(page),
-      pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit)),
+      total,
+      page: Number.parseInt(page),
+      pages: Math.ceil(total / limit),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -135,7 +131,7 @@ router.get('/:idOrSlug', async (req, res) => {
     await cache.set(cacheKey, data, TTL.detail);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -167,7 +163,7 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req, res) =
     await cache.delByPattern('products:list:*');
     res.status(201).json({ product: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -193,16 +189,16 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
         name ? slugify(name) : p.slug,
         description ?? p.description,
         price ?? p.price,
-        compare_at_price !== undefined ? compare_at_price : p.compare_at_price,
-        discount_percent !== undefined ? discount_percent : p.discount_percent,
-        discount_active !== undefined ? discount_active : p.discount_active,
-        discount_start !== undefined ? discount_start : p.discount_start,
-        discount_end !== undefined ? discount_end : p.discount_end,
-        stock !== undefined ? stock : p.stock,
-        sku !== undefined ? sku : p.sku,
-        category_id !== undefined ? category_id : p.category_id,
-        subcategory_id !== undefined ? subcategory_id : p.subcategory_id,
-        is_active !== undefined ? is_active : p.is_active,
+        compare_at_price === undefined ? p.compare_at_price : compare_at_price,
+        discount_percent === undefined ? p.discount_percent : discount_percent,
+        discount_active === undefined ? p.discount_active : discount_active,
+        discount_start === undefined ? p.discount_start : discount_start,
+        discount_end === undefined ? p.discount_end : discount_end,
+        stock === undefined ? p.stock : stock,
+        sku === undefined ? p.sku : sku,
+        category_id === undefined ? p.category_id : category_id,
+        subcategory_id === undefined ? p.subcategory_id : subcategory_id,
+        is_active === undefined ? p.is_active : is_active,
         req.params.id,
       ]
     );
@@ -212,7 +208,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
     ]);
     res.json({ product: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -227,7 +223,7 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res) => {
     ]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -251,7 +247,7 @@ router.post('/:id/images', authenticate, requireRole('admin', 'staff'), upload.a
     await cache.del(`products:detail:${req.params.id}`);
     res.status(201).json({ images });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -273,7 +269,7 @@ router.delete('/:id/images/:imageId', authenticate, requireRole('admin', 'staff'
     await cache.del(`products:detail:${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -285,7 +281,7 @@ router.put('/:id/images/:imageId/primary', authenticate, requireRole('admin', 's
     await cache.del(`products:detail:${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 

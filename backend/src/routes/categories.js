@@ -3,6 +3,7 @@ const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const cache = require('../utils/cache');
+const safeErr = require('../utils/safeErr');
 
 const TTL = { list: 600, sub: 600 }; // 10 minutes
 
@@ -25,7 +26,7 @@ router.get('/', async (req, res) => {
     await cache.set('categories:list', data, TTL.list);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -44,7 +45,7 @@ router.get('/:id/subcategories', async (req, res) => {
     await cache.set(cacheKey, data, TTL.sub);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -63,7 +64,7 @@ router.post('/', authenticate, requireRole('admin', 'staff'), upload.single('ima
     res.status(201).json({ category: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Category already exists' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -81,14 +82,14 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), upload.single('i
         slugify(name || current.rows[0].name),
         description ?? current.rows[0].description,
         image_url,
-        is_active !== undefined ? is_active : current.rows[0].is_active,
+        is_active === undefined ? current.rows[0].is_active : is_active,
         req.params.id,
       ]
     );
     await cache.del('categories:list');
     res.json({ category: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -99,7 +100,7 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res) => {
     await cache.del('categories:list');
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -120,7 +121,7 @@ router.post('/:categoryId/subcategories', authenticate, requireRole('admin', 'st
     res.status(201).json({ subcategory: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Subcategory already exists' });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -136,7 +137,7 @@ router.put('/subcategories/:id', authenticate, requireRole('admin', 'staff'), as
         name || current.rows[0].name,
         slugify(name || current.rows[0].name),
         description ?? current.rows[0].description,
-        is_active !== undefined ? is_active : current.rows[0].is_active,
+        is_active === undefined ? current.rows[0].is_active : is_active,
         req.params.id,
       ]
     );
@@ -146,7 +147,7 @@ router.put('/subcategories/:id', authenticate, requireRole('admin', 'staff'), as
     ]);
     res.json({ subcategory: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -161,7 +162,7 @@ router.delete('/subcategories/:id', authenticate, requireRole('admin'), async (r
     ]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 

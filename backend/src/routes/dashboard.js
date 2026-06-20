@@ -2,6 +2,7 @@ const router = require('express').Router();
 const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const cache = require('../utils/cache');
+const safeErr = require('../utils/safeErr');
 
 const TTL = { summary: 120, topProducts: 300, recentOrders: 60, salesChart: 300, pendingShipments: 60 };
 
@@ -33,7 +34,7 @@ router.get('/summary', async (req, res) => {
     await cache.set('dashboard:summary', data, TTL.summary);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -60,7 +61,7 @@ router.get('/top-products', async (req, res) => {
     await cache.set('dashboard:top-products', data, TTL.topProducts);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -82,7 +83,7 @@ router.get('/recent-orders', async (req, res) => {
     await cache.set('dashboard:recent-orders', data, TTL.recentOrders);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -107,7 +108,7 @@ router.get('/sales-chart', async (req, res) => {
     await cache.set('dashboard:sales-chart', data, TTL.salesChart);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -130,7 +131,7 @@ router.get('/pending-shipments', async (req, res) => {
     await cache.set('dashboard:pending-shipments', data, TTL.pendingShipments);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 

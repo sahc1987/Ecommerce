@@ -2,14 +2,40 @@ const router = require("express").Router();
 const db = require("../config/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { createNotification } = require("../utils/notifications");
+const safeErr = require("../utils/safeErr");
+
+const MAX_LIMIT = 100;
+
+const STATUS_LABELS = {
+  pending: "pending review",
+  paid: "paid",
+  processing: "being processed",
+  shipped: "shipped",
+  delivered: "delivered",
+  cancelled: "cancelled",
+};
+
+function buildStatusMessage(order, status) {
+  const orderShort = order.id.slice(0, 8).toUpperCase();
+  let message = `Your order #${orderShort} is now ${STATUS_LABELS[status] || status}.`;
+  if (status === "shipped" && (order.carrier || order.tracking_number)) {
+    const carrierPart = order.carrier ? `Carrier: ${order.carrier}.` : "";
+    const trackingPart = order.tracking_number
+      ? ` Tracking number: ${order.tracking_number}.`
+      : "";
+    message += ` ${carrierPart}${trackingPart}`;
+  }
+  return message;
+}
 
 // GET orders (admin: all, customer: own)
 router.get("/", authenticate, async (req, res) => {
-  const { status, page = 1, limit = 20 } = req.query;
-  const offset = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+  const { status, page = 1 } = req.query;
+  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
+  const offset = (Number.parseInt(page) - 1) * limit;
   const isAdmin = ["admin", "staff"].includes(req.user.role);
 
-  let conditions = [];
+  const conditions = [];
   const params = [];
   if (!isAdmin) {
     params.push(req.user.id);
@@ -21,12 +47,12 @@ router.get("/", authenticate, async (req, res) => {
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  params.push(Number.parseInt(limit), offset);
+  params.push(limit, offset);
 
   try {
     const countResult = await db.query(
       `SELECT COUNT(*) FROM orders o ${where}`,
-      params.slice(0, params.length - 2),
+      params.slice(0, -2),
     );
     const result = await db.query(
       `SELECT o.*, u.name as customer_name, u.email as customer_email,
@@ -38,16 +64,15 @@ router.get("/", authenticate, async (req, res) => {
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params,
     );
+    const total = Number.parseInt(countResult.rows[0].count);
     res.json({
       orders: result.rows,
-      total: Number.parseInt(countResult.rows[0].count),
+      total,
       page: Number.parseInt(page),
-      pages: Math.ceil(
-        Number.parseInt(countResult.rows[0].count) / Number.parseInt(limit),
-      ),
+      pages: Math.ceil(total / limit),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -73,7 +98,7 @@ router.get("/:id", authenticate, async (req, res) => {
     );
     res.json({ order: { ...order, items: items.rows } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -113,33 +138,19 @@ router.put(
 
       const order = result.rows[0];
       if (order.user_id) {
-        const orderShort = order.id.slice(0, 8).toUpperCase();
-        const statusLabels = {
-          pending: "pending review",
-          paid: "paid",
-          processing: "being processed",
-          shipped: "shipped",
-          delivered: "delivered",
-          cancelled: "cancelled",
-        };
-        let message = `Your order #${orderShort} is now ${statusLabels[status] || status}.`;
-        if (status === "shipped" && (order.carrier || order.tracking_number)) {
-          const carrierPart = order.carrier ? `Carrier: ${order.carrier}.` : "";
-          const trackingPart = order.tracking_number ? ` Tracking number: ${order.tracking_number}.` : "";
-          message += ` ${carrierPart}${trackingPart}`;
-        }
+        const title = status === "shipped" ? "Your Order Has Shipped!" : "Order Status Updated";
         await createNotification(
           order.user_id,
           "order_status",
-          status === "shipped" ? "Your Order Has Shipped!" : "Order Status Updated",
-          message,
+          title,
+          buildStatusMessage(order, status),
           { order_id: order.id, status, tracking_number: order.tracking_number, carrier: order.carrier },
         );
       }
 
       res.json({ order });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErr(err) });
     }
   },
 );

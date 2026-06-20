@@ -1,19 +1,49 @@
 const router = require('express').Router();
+const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const cache = require('../utils/cache');
 const { createNotification, notifyAdmins } = require('../utils/notifications');
+const safeErr = require('../utils/safeErr');
 
-router.post('/place-order', authenticate, async (req, res) => {
+// Prevent authenticated users from flooding the order endpoint
+const orderLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many order attempts, please slow down.' },
+});
+
+function computeEffectivePrice(product) {
+  if (!product.discount_active || product.discount_percent <= 0) {
+    return Number.parseFloat(product.price);
+  }
+  const now = new Date();
+  const start = product.discount_start ? new Date(product.discount_start) : null;
+  const end = product.discount_end ? new Date(product.discount_end) : null;
+  if ((!start || now >= start) && (!end || now <= end)) {
+    return Number.parseFloat(product.price) * (1 - Number.parseFloat(product.discount_percent) / 100);
+  }
+  return Number.parseFloat(product.price);
+}
+
+async function fetchLockedProduct(client, productId) {
+  const res = await client.query(
+    `SELECT p.*, (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image
+     FROM products p WHERE p.id = $1 AND p.is_active = TRUE FOR UPDATE OF p`,
+    [productId]
+  );
+  return res.rows[0] || null;
+}
+
+router.post('/place-order', authenticate, orderLimiter, async (req, res) => {
   const { items, shipping_address, notes } = req.body;
   if (!items?.length) return res.status(400).json({ error: 'Cart is empty' });
 
-  // ponytail: shipping is server-controlled, never from the client (clients could send a negative
-  // value to lower their total). No rate config exists yet, so it's flat 0 — compute it here when one does.
+  // Shipping is server-controlled — never trusted from the client
   const shipping = 0;
 
-  // ponytail: one transaction with row locks so concurrent orders can't oversell.
-  // SELECT ... FOR UPDATE OF p makes Postgres serialize buyers competing for the same product.
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -23,32 +53,21 @@ router.post('/place-order', authenticate, async (req, res) => {
     const affectedProductIds = [];
 
     for (const item of items) {
-      const productRes = await client.query(
-        `SELECT p.*, (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image
-         FROM products p WHERE p.id = $1 AND p.is_active = TRUE FOR UPDATE OF p`,
-        [item.product_id]
-      );
-      const product = productRes.rows[0];
-      if (!product) { await client.query('ROLLBACK'); return res.status(400).json({ error: `Product not found: ${item.product_id}` }); }
+      const product = await fetchLockedProduct(client, item.product_id);
+      if (!product) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Product not found: ${item.product_id}` });
+      }
       if (product.stock < item.quantity) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
       }
 
-      const now = new Date();
-      let effectivePrice = Number.parseFloat(product.price);
-      let itemDiscount = 0;
-      if (product.discount_active && product.discount_percent > 0) {
-        const start = product.discount_start ? new Date(product.discount_start) : null;
-        const end = product.discount_end ? new Date(product.discount_end) : null;
-        if ((!start || now >= start) && (!end || now <= end)) {
-          effectivePrice = effectivePrice * (1 - Number.parseFloat(product.discount_percent) / 100);
-          itemDiscount = (Number.parseFloat(product.price) - effectivePrice) * item.quantity;
-        }
-      }
+      const basePrice = Number.parseFloat(product.price);
+      const effectivePrice = computeEffectivePrice(product);
+      const itemDiscount = (basePrice - effectivePrice) * item.quantity;
 
-      const itemTotal = effectivePrice * item.quantity;
-      subtotal += Number.parseFloat(product.price) * item.quantity;
+      subtotal += basePrice * item.quantity;
       discount += itemDiscount;
       orderItems.push({
         product_id: product.id,
@@ -57,7 +76,7 @@ router.post('/place-order', authenticate, async (req, res) => {
         unit_price: effectivePrice,
         quantity: item.quantity,
         discount: itemDiscount,
-        total: itemTotal,
+        total: effectivePrice * item.quantity,
       });
       affectedProductIds.push({ id: product.id, slug: product.slug });
     }
@@ -86,7 +105,6 @@ router.post('/place-order', authenticate, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Invalidate caches affected by the new order
     const productCacheKeys = affectedProductIds.flatMap(({ id, slug }) => [
       `products:detail:${id}`,
       `products:detail:${slug}`,
@@ -103,7 +121,6 @@ router.post('/place-order', authenticate, async (req, res) => {
       ),
     ]);
 
-    // Send notifications
     const orderShort = order.id.slice(0, 8).toUpperCase();
     const currency = settings?.currency || 'USD';
     const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(total);
@@ -126,7 +143,7 @@ router.post('/place-order', authenticate, async (req, res) => {
     res.json({ order_id: order.id });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   } finally {
     client.release();
   }

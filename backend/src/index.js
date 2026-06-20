@@ -1,13 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const helmet = require('helmet');
+const path = require('node:path');
 
 const app = express();
 
 // ponytail: trust the single nginx proxy so req.ip is the real client (rate limiting needs it).
 app.set('trust proxy', 1);
 
+app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -32,7 +34,8 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  const msg = process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message;
+  res.status(500).json({ error: msg });
 });
 
 const PORT = process.env.PORT || 5000;

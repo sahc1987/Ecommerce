@@ -1,11 +1,15 @@
 const router = require("express").Router();
 const db = require("../config/database");
 const { authenticate } = require("../middleware/auth");
+const safeErr = require("../utils/safeErr");
+
+const MAX_LIMIT = 100;
 
 // GET notifications for current user
 router.get("/", authenticate, async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
-  const offset = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+  const { page = 1 } = req.query;
+  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
+  const offset = (Number.parseInt(page) - 1) * limit;
   try {
     const [countRes, unreadRes, listRes] = await Promise.all([
       db.query("SELECT COUNT(*) FROM notifications WHERE user_id = $1", [
@@ -17,7 +21,7 @@ router.get("/", authenticate, async (req, res) => {
       ),
       db.query(
         "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-        [req.user.id, Number.parseInt(limit), offset],
+        [req.user.id, limit, offset],
       ),
     ]);
     res.json({
@@ -26,7 +30,7 @@ router.get("/", authenticate, async (req, res) => {
       unread: Number.parseInt(unreadRes.rows[0].count),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -39,7 +43,7 @@ router.put("/read-all", authenticate, async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -54,7 +58,7 @@ router.put("/:id/read", authenticate, async (req, res) => {
       return res.status(404).json({ error: "Notification not found" });
     res.json({ notification: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
@@ -69,7 +73,7 @@ router.delete("/:id", authenticate, async (req, res) => {
       return res.status(404).json({ error: "Notification not found" });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeErr(err) });
   }
 });
 
