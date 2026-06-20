@@ -53,8 +53,33 @@ function withMagicBytes(multerHandler) {
   };
 }
 
+// Wraps a multer multi-field handler with magic-byte verification
+function withMagicBytesArray(multerHandler) {
+  return (req, res, next) => {
+    multerHandler(req, res, async (err) => {
+      if (err) return next(err);
+      if (!req.files || !req.files.length) return next();
+
+      try {
+        for (const file of req.files) {
+          const detected = await fileTypeFromFile(file.path);
+          if (!detected || !ALLOWED_MIME_TYPES.has(detected.mime)) {
+            fs.unlink(file.path, () => {});
+            return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.' });
+          }
+        }
+      } catch {
+        req.files.forEach((f) => fs.unlink(f.path, () => {}));
+        return res.status(400).json({ error: 'Could not verify file types.' });
+      }
+      next();
+    });
+  };
+}
+
 const upload = {
   single: (field) => withMagicBytes(multerUpload.single(field)),
+  array: (field, maxCount) => withMagicBytesArray(multerUpload.array(field, maxCount)),
 };
 
 module.exports = upload;
