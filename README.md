@@ -25,8 +25,12 @@ It's built as two apps that work together: a **React + TypeScript** frontend for
 - **Guided first-run setup** to get the store ready quickly
 
 ### ⚙️ Under the hood
-- **Secure authentication** with JWT and hashed passwords
-- **Fast responses** thanks to Redis caching
+- **Cookie-based authentication** with JWT stored in a secure, `httpOnly` cookie and bcrypt-hashed passwords
+- **Hardened security** with Helmet HTTP headers and per-IP rate limiting on auth endpoints to blunt brute-force attacks
+- **Validated image uploads** — magic-byte verification restricts uploads to real JPEG, PNG, GIF, and WebP files (max 5 MB)
+- **Safe, consistent ordering** — order placement runs in a single transaction with row locks so concurrent buyers can't oversell stock
+- **Production-safe error handling** that hides internal error details outside development
+- **Fast responses** thanks to Redis caching, backed by database indexes on common query paths
 - **One-command deployment** with Docker Compose
 
 ---
@@ -53,7 +57,10 @@ It's built as two apps that work together: a **React + TypeScript** frontend for
 | **PostgreSQL** (\`pg\` driver) | Storing products, orders, users, and more |
 | **Redis** | Caching to keep things fast |
 | **JWT + bcrypt** | Authentication and secure password storage |
-| **Multer** | Handling file and image uploads |
+| **Multer** + **file-type** | Handling image uploads with magic-byte type validation |
+| **Helmet** | Security-focused HTTP response headers |
+| **express-rate-limit** | Throttling auth endpoints against brute-force attacks |
+| **cookie-parser** | Reading the JWT auth cookie |
 
 ### Infrastructure — how it runs
 | Technology | What it's used for |
@@ -116,6 +123,7 @@ Once it's running, the services will be available at:
 | 🖥️ Frontend | http://localhost |
 | 🔌 Backend API | http://localhost:5000 |
 | 🗄️ PostgreSQL | localhost:5432 |
+| ⚡ Redis | localhost:6379 |
 
 ---
 
@@ -129,6 +137,7 @@ Configuration is managed through a `.env` file (see `.env.example`):
 | `DB_USER` | Database user | `ecommerce_user` |
 | `DB_PASSWORD` | Database password | `ecommerce_pass` |
 | `DB_PORT` | Database port | `5432` |
+| `REDIS_PASSWORD` | Password for the Redis cache | `change_this_redis_password` |
 | `BACKEND_PORT` | Backend server port | `5000` |
 | `NODE_ENV` | Node environment | `production` |
 | `JWT_SECRET` | Secret for signing JWTs (use 32+ chars) | – |
