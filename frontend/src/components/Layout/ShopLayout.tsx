@@ -21,7 +21,8 @@ export default function ShopLayout() {
     api.get('/categories').then((res) => setCategories(res.data.categories)).catch(() => {});
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await api.post('/auth/logout'); } catch {}
     dispatch(logout());
     navigate('/login');
   };

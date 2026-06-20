@@ -19,6 +19,14 @@ const authLimiter = rateLimit({
 const generateToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+const COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+};
+
 router.post('/register', authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password)
@@ -34,7 +42,8 @@ router.post('/register', authLimiter, async (req, res) => {
       [name, email, hash, role]
     );
     const user = result.rows[0];
-    res.status(201).json({ token: generateToken(user.id), user });
+    res.cookie('token', generateToken(user.id), COOKIE_OPTS);
+    res.status(201).json({ user });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -50,10 +59,16 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password_hash)))
       return res.status(401).json({ error: 'Invalid credentials' });
     const { password_hash, ...userData } = user;
-    res.json({ token: generateToken(user.id), user: userData });
+    res.cookie('token', generateToken(user.id), COOKIE_OPTS);
+    res.json({ user: userData });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
+});
+
+router.post('/logout', (req, res) => {
+  res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' });
+  res.json({ success: true });
 });
 
 router.get('/me', authenticate, (req, res) => {

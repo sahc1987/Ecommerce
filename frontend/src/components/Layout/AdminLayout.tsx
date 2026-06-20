@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import { RootState } from '../../store';
+import api from '../../api';
 import {
   LayoutDashboard, Package, Tag, ShoppingCart, RotateCcw,
   Users, Settings, LogOut, Store, Menu, X, ExternalLink,
@@ -94,7 +95,8 @@ export default function AdminLayout() {
   const { user } = useSelector((s: RootState) => s.auth);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await api.post('/auth/logout'); } catch {}
     dispatch(logout());
     navigate('/login');
   };
