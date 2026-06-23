@@ -33,7 +33,7 @@ interface NominatimResult {
   };
 }
 
-const SUPPORTED_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "MX", "BR"];
+const SUPPORTED_COUNTRIES = new Set(["US", "CA", "GB", "AU", "DE", "FR", "MX", "BR"]);
 
 export default function CheckoutPage() {
   const dispatch = useDispatch();
@@ -130,7 +130,7 @@ export default function CheckoutPage() {
       city,
       state: a.state || "",
       zip: a.postcode || "",
-      country: SUPPORTED_COUNTRIES.includes(countryCode) ? countryCode : prev.country,
+      country: SUPPORTED_COUNTRIES.has(countryCode) ? countryCode : prev.country,
     }));
     setAddressVerified(true);
     setSuggestionsOpen(false);
@@ -180,7 +180,12 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Checkout</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
+        <Link to="/cart" className="ml-auto text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
+          ← Back to Cart
+        </Link>
+      </div>
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
@@ -191,11 +196,12 @@ export default function CheckoutPage() {
 
               {/* Address Line 1 with autocomplete */}
               <div className="relative" ref={suggestionsRef}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="line1" className="block text-sm font-medium text-gray-700 mb-1">
                   Address Line 1
                 </label>
                 <div className="relative">
                   <input
+                    id="line1"
                     className="input pr-20"
                     value={address.line1}
                     onChange={(e) => handleLine1Change(e.target.value)}
@@ -305,18 +311,14 @@ export default function CheckoutPage() {
 
             <div className="card space-y-4">
               <h2 className="font-semibold text-gray-900">Payment Method</h2>
-              <div className="flex items-center gap-3 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                <input
-                  type="radio"
-                  id="cod"
-                  name="payment"
-                  defaultChecked
-                  readOnly
-                  className="text-blue-600"
-                />
-                <label htmlFor="cod" className="text-sm text-gray-700 font-medium">
-                  Cash on Delivery
-                </label>
+              <div className="flex items-center gap-3 p-3.5 border border-indigo-200 rounded-lg bg-indigo-50">
+                <div className="w-4 h-4 rounded-full border-2 border-indigo-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-2 h-2 rounded-full bg-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Cash on Delivery</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Pay when your order arrives</p>
+                </div>
               </div>
             </div>
           </div>

@@ -102,6 +102,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       setShowShipModal(true);
       return;
     }
+    if (status === 'cancelled' && !window.confirm('Cancel this order? This cannot be undone.')) return;
     setUpdatingStatus(true);
     try {
       await api.put(`/orders/${id}/status`, { status });

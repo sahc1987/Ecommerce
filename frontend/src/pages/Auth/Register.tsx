@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
-import { Store, Check } from 'lucide-react';
+import { Store, Check, Eye, EyeOff } from 'lucide-react';
 import api from '../../api';
 import { setCredentials } from '../../store/slices/authSlice';
 
@@ -16,6 +16,8 @@ export default function Register() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,27 +98,74 @@ export default function Register() {
 
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
             <form onSubmit={handleSubmit} className="space-y-5">
-              {[
-                { id: 'name', label: 'Full Name', key: 'name', type: 'text', placeholder: 'John Doe' },
-                { id: 'email', label: 'Email address', key: 'email', type: 'email', placeholder: 'you@example.com' },
-                { id: 'password', label: 'Password', key: 'password', type: 'password', placeholder: '••••••••' },
-                { id: 'confirmPassword', label: 'Confirm Password', key: 'confirmPassword', type: 'password', placeholder: '••••••••' },
-              ].map(({ id, label, key, type, placeholder }) => (
-                <div key={key}>
-                  <label htmlFor={id} className="block text-sm font-semibold text-gray-700 mb-1.5">
-                    {label}
-                  </label>
+              <div>
+                <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-1.5">Full Name</label>
+                <input
+                  id="name"
+                  type="text"
+                  className="input"
+                  placeholder="John Doe"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-1.5">Email address</label>
+                <input
+                  id="email"
+                  type="email"
+                  className="input"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+                <div className="relative">
                   <input
-                    id={id}
-                    type={type}
-                    className="input"
-                    placeholder={placeholder}
-                    value={form[key as keyof typeof form]}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                    id="password"
+                    type={showPw ? 'text' : 'password'}
+                    className="input pr-11"
+                    placeholder="••••••••"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
                     required
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    onClick={() => setShowPw(!showPw)}
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                  >
+                    {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
-              ))}
+              </div>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-700 mb-1.5">Confirm Password</label>
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    type={showConfirmPw ? 'text' : 'password'}
+                    className="input pr-11"
+                    placeholder="••••••••"
+                    value={form.confirmPassword}
+                    onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    onClick={() => setShowConfirmPw(!showConfirmPw)}
+                    aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
               <button
                 type="submit"
                 disabled={loading}

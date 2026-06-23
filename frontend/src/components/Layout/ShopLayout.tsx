@@ -1,9 +1,9 @@
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
-import { ShoppingCart, Store, LogOut, LayoutDashboard, Package, Search, ChevronDown } from 'lucide-react';
+import { ShoppingCart, Store, LogOut, LayoutDashboard, Package, Search } from 'lucide-react';
 import api from '../../api';
 import NotificationBell from '../Notifications/NotificationBell';
 
@@ -16,9 +16,21 @@ export default function ShopLayout() {
   );
   const [categories, setCategories] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.get('/categories').then((res) => setCategories(res.data.categories)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleLogout = async () => {
@@ -79,33 +91,47 @@ export default function ShopLayout() {
               <NotificationBell />
 
               {user ? (
-                <div className="flex items-center gap-0.5 ml-1">
-                  {['admin', 'staff'].includes(user.role) && (
-                    <Link
-                      to="/admin"
-                      className="hidden sm:flex items-center gap-1.5 text-gray-300 hover:text-white text-sm font-medium px-3 py-2 rounded hover:bg-gray-700 transition-colors"
-                    >
-                      <LayoutDashboard size={15} />
-                      Admin
-                    </Link>
-                  )}
-                  <Link
-                    to="/orders"
-                    className="hidden sm:flex items-center gap-1.5 text-gray-300 hover:text-white text-sm font-medium px-3 py-2 rounded hover:bg-gray-700 transition-colors"
-                  >
-                    <Package size={15} />
-                    Orders
-                  </Link>
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold ml-2">
-                    {user.name[0].toUpperCase()}
-                  </div>
+                <div className="relative ml-1" ref={userMenuRef}>
                   <button
-                    onClick={handleLogout}
-                    className="p-2 text-gray-400 hover:text-rose-400 hover:bg-gray-800 rounded transition-all"
-                    title="Sign out"
+                    onClick={() => setUserMenuOpen((o) => !o)}
+                    className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold hover:ring-2 hover:ring-indigo-400 transition-all"
+                    aria-label="Account menu"
                   >
-                    <LogOut size={15} />
+                    {user.name[0].toUpperCase()}
                   </button>
+
+                  {userMenuOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50">
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
+                        <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                      </div>
+                      <Link
+                        to="/orders"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Package size={15} className="text-gray-400" /> My Orders
+                      </Link>
+                      {['admin', 'staff'].includes(user.role) && (
+                        <Link
+                          to="/admin"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <LayoutDashboard size={15} className="text-gray-400" /> Admin Panel
+                        </Link>
+                      )}
+                      <div className="border-t border-gray-100 mt-1 pt-1">
+                        <button
+                          onClick={handleLogout}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-500 hover:bg-rose-50 transition-colors w-full text-left"
+                        >
+                          <LogOut size={15} /> Sign out
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 ml-2">
@@ -141,10 +167,9 @@ export default function ShopLayout() {
                 <Link
                   key={cat.id}
                   to={`/?category=${cat.id}`}
-                  className="flex-shrink-0 text-gray-300 hover:text-white text-sm font-medium px-4 py-3 hover:bg-gray-700 transition-colors whitespace-nowrap flex items-center gap-1"
+                  className="flex-shrink-0 text-gray-300 hover:text-white text-sm font-medium px-4 py-3 hover:bg-gray-700 transition-colors whitespace-nowrap"
                 >
                   {cat.name}
-                  <ChevronDown size={11} className="opacity-50" />
                 </Link>
               ))}
             </div>

@@ -12,6 +12,15 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800",
 };
 
+const statusLabels: Record<string, string> = {
+  pending: "Order Placed",
+  paid: "Payment Confirmed",
+  processing: "Being Prepared",
+  shipped: "On the Way",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
 export default function MyOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +66,7 @@ export default function MyOrders() {
                 <span
                   className={`badge ${statusColors[o.status] ?? "bg-gray-100 text-gray-800"}`}
                 >
-                  {o.status}
+                  {statusLabels[o.status] ?? o.status}
                 </span>
               </div>
               <div className="flex items-center justify-between">
