@@ -7,7 +7,7 @@ import api from '../../api';
 import { addItem } from '../../store/slices/cartSlice';
 
 interface Product {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   price: string;
@@ -22,7 +22,7 @@ interface Product {
 }
 
 interface Category {
-  id: number;
+  id: string;
   name: string;
 }
 
@@ -245,7 +245,7 @@ export default function HomePage() {
       name: p.name,
       price: Number.parseFloat(p.price),
       effective_price: effectivePrice,
-      image: p.primary_image,
+      image: p.primary_image ?? undefined,
       quantity: 1,
       stock: p.stock,
     }));
@@ -272,12 +272,7 @@ export default function HomePage() {
     ? products.filter((p) => p.id !== featuredProduct.id)
     : products;
 
-  const activeCategoryName = categories.find((c) => String(c.id) === urlCategory)?.name;
-
-  const getSectionTitle = () => {
-    if (urlSearch) return `Results for "${urlSearch}"`;
-    return activeCategoryName ?? 'All Products';
-  };
+  const sectionTitle: string = urlSearch ? `Results for "${urlSearch}"` : (categories.find((c) => String(c.id) === urlCategory)?.name || 'All Products');
 
   const renderContent = () => {
     if (loading) {
@@ -310,7 +305,7 @@ export default function HomePage() {
     }
     return (
       <>
-        <SectionHeader title={getSectionTitle()} count={total} />
+        <SectionHeader title={sectionTitle} count={total} />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} onAddToCart={handleAddToCart} />
@@ -328,7 +323,7 @@ export default function HomePage() {
         {categories.map((c) => (
           <Link
             key={c.id}
-            to={urlCategory === String(c.id) ? '/' : `/?category=${c.id}`}
+            to={urlCategory === String(c.id) ? '/' : `/?category=${String(c.id)}`}
             className={`px-3.5 py-1.5 text-xs font-semibold transition-all border ${
               urlCategory === String(c.id)
                 ? 'bg-gray-900 text-white border-gray-900'

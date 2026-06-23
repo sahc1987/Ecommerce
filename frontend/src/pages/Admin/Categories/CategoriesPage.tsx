@@ -25,6 +25,14 @@ interface Subcategory {
   description: string;
 }
 
+type EditingItem = Category | Subcategory | null;
+
+interface ModalState {
+  type: "category" | "subcategory";
+  editing: EditingItem;
+  categoryId?: number;
+}
+
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -34,11 +42,7 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
 
   // Modal state
-  const [modal, setModal] = useState<{
-    type: "category" | "subcategory";
-    editing: Category | Subcategory | null;
-    categoryId?: number;
-  } | null>(null);
+  const [modal, setModal] = useState<ModalState | null>(null);
   const [form, setForm] = useState({ name: "", description: "" });
   const [saving, setSaving] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -67,7 +71,7 @@ export default function CategoriesPage() {
 
   const openModal = (
     type: "category" | "subcategory",
-    editing: Category | Subcategory | null = null,
+    editing: EditingItem = null,
     categoryId?: number,
   ) => {
     setModal({ type, editing, categoryId });
@@ -105,7 +109,7 @@ export default function CategoriesPage() {
           setSubcategories((prev) => ({
             ...prev,
             [modal.categoryId!]: prev[modal.categoryId!].map((s) =>
-              s.id === modal.editing.id ? res.data.subcategory : s,
+              s.id === modal.editing!.id ? res.data.subcategory : s,
             ),
           }));
           toast.success("Subcategory updated");
@@ -253,10 +257,7 @@ export default function CategoriesPage() {
                         )}
                       </div>
                       <button
-                        onClick={() => {
-                          toggleExpand(cat.id);
-                          openModal("subcategory", sub, cat.id);
-                        }}
+                        onClick={() => openModal("subcategory", sub, cat.id)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                       >
                         <Pencil size={13} />

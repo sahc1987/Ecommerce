@@ -180,12 +180,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
-        <Link to="/cart" className="ml-auto text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
-          ← Back to Cart
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Checkout</h1>
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">

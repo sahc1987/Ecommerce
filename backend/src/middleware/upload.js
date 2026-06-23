@@ -30,12 +30,17 @@ const multerUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+function multerErrResponse(err) {
+  if (err.code === 'LIMIT_FILE_SIZE') return 'File too large. Maximum size is 5MB.';
+  return err.message || 'Invalid file.';
+}
+
 // Wraps a multer single-field handler with a magic-byte verification step so
 // clients cannot bypass the MIME check by spoofing Content-Type headers.
 function withMagicBytes(multerHandler) {
   return (req, res, next) => {
     multerHandler(req, res, async (err) => {
-      if (err) return next(err);
+      if (err) return res.status(400).json({ error: multerErrResponse(err) });
       if (!req.file) return next();
 
       try {
@@ -63,7 +68,7 @@ const cleanupFiles = (files) => {
 function withMagicBytesArray(multerHandler) {
   return (req, res, next) => {
     multerHandler(req, res, async (err) => {
-      if (err) return next(err);
+      if (err) return res.status(400).json({ error: multerErrResponse(err) });
       if (!req.files?.length) return next();
 
       try {

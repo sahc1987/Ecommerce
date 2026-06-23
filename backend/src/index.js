@@ -36,6 +36,8 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+  if (err.name === 'MulterError') return res.status(400).json({ error: err.message });
   const msg = process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message;
   res.status(500).json({ error: msg });
 });
