@@ -36,7 +36,7 @@ export default function CategoriesPage() {
   // Modal state
   const [modal, setModal] = useState<{
     type: "category" | "subcategory";
-    editing: any;
+    editing: Category | Subcategory | null;
     categoryId?: number;
   } | null>(null);
   const [form, setForm] = useState({ name: "", description: "" });
@@ -67,7 +67,7 @@ export default function CategoriesPage() {
 
   const openModal = (
     type: "category" | "subcategory",
-    editing: any = null,
+    editing: Category | Subcategory | null = null,
     categoryId?: number,
   ) => {
     setModal({ type, editing, categoryId });

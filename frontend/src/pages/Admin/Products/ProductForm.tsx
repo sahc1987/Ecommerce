@@ -4,6 +4,22 @@ import toast from "react-hot-toast";
 import { ArrowLeft, Upload, X, Star } from "lucide-react";
 import api from "../../../api";
 
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface Subcategory {
+  id: number;
+  name: string;
+}
+
+interface ProductImage {
+  id: string;
+  url: string;
+  is_primary: boolean;
+}
+
 export default function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -12,9 +28,9 @@ export default function ProductForm() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [subcategories, setSubcategories] = useState<any[]>([]);
-  const [images, setImages] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [images, setImages] = useState<ProductImage[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
 
   const [form, setForm] = useState({

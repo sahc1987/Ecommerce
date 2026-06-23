@@ -15,6 +15,29 @@ interface Summary {
   pending_returns: number;
 }
 
+interface TopProduct {
+  id: number;
+  name: string;
+  image: string | null;
+  units_sold: number;
+  revenue: string;
+}
+
+interface RecentOrder {
+  id: number;
+  customer_name: string | null;
+  item_count: number;
+  created_at: string;
+  total: string;
+  status: string;
+}
+
+interface ChartPoint {
+  date: string;
+  revenue: number;
+  orders: number;
+}
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   paid: 'bg-blue-100 text-blue-800',
@@ -26,9 +49,9 @@ const statusColors: Record<string, string> = {
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [topProducts, setTopProducts] = useState<any[]>([]);
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +65,7 @@ export default function Dashboard() {
       setTopProducts(p.data.products);
       setRecentOrders(o.data.orders);
       setChartData(
-        c.data.chart.map((d: any) => ({
+        c.data.chart.map((d: { date: string; revenue: string; orders: string }) => ({
           date: new Date(d.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }),
           revenue: parseFloat(d.revenue),
           orders: parseInt(d.orders),

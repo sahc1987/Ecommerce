@@ -41,11 +41,11 @@ function withMagicBytes(multerHandler) {
       try {
         const detected = await fileTypeFromFile(req.file.path);
         if (!detected || !ALLOWED_MIME_TYPES.has(detected.mime)) {
-          fs.unlink(req.file.path, () => {});
+          fs.unlink(req.file.path, (e) => { if (e) console.warn('upload cleanup failed:', e.message); });
           return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.' });
         }
       } catch {
-        fs.unlink(req.file.path, () => {});
+        fs.unlink(req.file.path, (e) => { if (e) console.warn('upload cleanup failed:', e.message); });
         return res.status(400).json({ error: 'Could not verify file type.' });
       }
       next();
@@ -54,22 +54,28 @@ function withMagicBytes(multerHandler) {
 }
 
 // Wraps a multer multi-field handler with magic-byte verification
+const cleanupFiles = (files) => {
+  for (const f of files) {
+    fs.unlink(f.path, (e) => { if (e) console.warn('upload cleanup failed:', e.message); });
+  }
+};
+
 function withMagicBytesArray(multerHandler) {
   return (req, res, next) => {
     multerHandler(req, res, async (err) => {
       if (err) return next(err);
-      if (!req.files || !req.files.length) return next();
+      if (!req.files?.length) return next();
 
       try {
         for (const file of req.files) {
           const detected = await fileTypeFromFile(file.path);
           if (!detected || !ALLOWED_MIME_TYPES.has(detected.mime)) {
-            fs.unlink(file.path, () => {});
+            cleanupFiles(req.files);
             return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.' });
           }
         }
       } catch {
-        req.files.forEach((f) => fs.unlink(f.path, () => {}));
+        cleanupFiles(req.files);
         return res.status(400).json({ error: 'Could not verify file types.' });
       }
       next();

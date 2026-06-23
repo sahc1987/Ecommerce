@@ -6,7 +6,27 @@ import { ShoppingCart, Tag, Package, X } from 'lucide-react';
 import api from '../../api';
 import { addItem } from '../../store/slices/cartSlice';
 
-const getEffectivePrice = (p: any): number => {
+interface Product {
+  id: number;
+  name: string;
+  slug: string;
+  price: string;
+  compare_at_price: string | null;
+  stock: number;
+  primary_image: string | null;
+  discount_active: boolean;
+  discount_percent: string | null;
+  discount_start: string | null;
+  discount_end: string | null;
+  category_name: string | null;
+}
+
+interface Category {
+  id: number;
+  name: string;
+}
+
+const getEffectivePrice = (p: Product): number => {
   if (!p.discount_active || !p.discount_percent) return Number.parseFloat(p.price);
   const now = new Date();
   if (p.discount_start && new Date(p.discount_start) > now) return Number.parseFloat(p.price);
@@ -14,7 +34,7 @@ const getEffectivePrice = (p: any): number => {
   return Number.parseFloat(p.price) * (1 - Number.parseFloat(p.discount_percent) / 100);
 };
 
-const hasActiveDiscount = (p: any): boolean => {
+const hasActiveDiscount = (p: Product): boolean => {
   if (!p.discount_active || !p.discount_percent) return false;
   const now = new Date();
   if (p.discount_start && new Date(p.discount_start) > now) return false;
@@ -33,7 +53,7 @@ function SectionHeader({ title, count }: Readonly<{ title: string; count?: numbe
   );
 }
 
-function ProductCard({ product: p, onAddToCart }: Readonly<{ product: any; onAddToCart: (p: any) => void }>) {
+function ProductCard({ product: p, onAddToCart }: Readonly<{ product: Product; onAddToCart: (p: Product) => void }>) {
   const effectivePrice = getEffectivePrice(p);
   const discounted = hasActiveDiscount(p);
 
@@ -96,7 +116,7 @@ function ProductCard({ product: p, onAddToCart }: Readonly<{ product: any; onAdd
   );
 }
 
-function FeaturedCard({ product: p, onAddToCart }: Readonly<{ product: any; onAddToCart: (p: any) => void }>) {
+function FeaturedCard({ product: p, onAddToCart }: Readonly<{ product: Product; onAddToCart: (p: Product) => void }>) {
   const effectivePrice = getEffectivePrice(p);
   const discounted = hasActiveDiscount(p);
 
@@ -177,8 +197,8 @@ export default function HomePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -218,7 +238,7 @@ export default function HomePage() {
     api.get('/categories').then((res) => setCategories(res.data.categories)).catch(() => {});
   }, []);
 
-  const handleAddToCart = (p: any) => {
+  const handleAddToCart = (p: Product) => {
     const effectivePrice = getEffectivePrice(p);
     dispatch(addItem({
       product_id: p.id,
