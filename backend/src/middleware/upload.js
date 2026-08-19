@@ -2,7 +2,9 @@ const multer = require('multer');
 const path = require('node:path');
 const fs = require('node:fs');
 const { v4 } = require('uuid');
-const { fileTypeFromFile } = require('file-type');
+// file-type v16 is the last CommonJS-compatible major; its API is `fromFile`.
+// (`fileTypeFromFile` only exists in the ESM-only v17+.)
+const { fromFile: fileTypeFromFile } = require('file-type');
 const { isConfigured: cloudinaryEnabled, uploadToCloudinary } = require('../config/cloudinary');
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);

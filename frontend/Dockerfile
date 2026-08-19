@@ -13,6 +13,8 @@ RUN npm run build
 
 FROM nginx:alpine
 
+USER nginx:nginx
+
 RUN apk add --no-cache curl
 
 COPY --from=builder /app/dist /usr/share/nginx/html
