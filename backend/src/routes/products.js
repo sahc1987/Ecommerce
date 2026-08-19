@@ -240,7 +240,7 @@ router.post('/:id/images', authenticate, requireRole('admin', 'staff'), upload.a
       const isPrimary = hasPrimary.rows.length === 0 && i === 0;
       const result = await db.query(
         'INSERT INTO product_images (product_id, url, is_primary, sort_order) VALUES ($1,$2,$3,$4) RETURNING *',
-        [req.params.id, `/uploads/${req.files[i].filename}`, isPrimary, i]
+        [req.params.id, req.files[i].url, isPrimary, i]
       );
       images.push(result.rows[0]);
     }

@@ -54,7 +54,7 @@ router.post('/', authenticate, requireRole('admin', 'staff'), upload.single('ima
   const { name, description } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const slug = slugify(name);
-  const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+  const image_url = req.file ? req.file.url : null;
   try {
     const result = await db.query(
       'INSERT INTO categories (name, slug, description, image_url) VALUES ($1,$2,$3,$4) RETURNING *',
@@ -74,7 +74,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), upload.single('i
   try {
     const current = await db.query('SELECT * FROM categories WHERE id = $1', [req.params.id]);
     if (!current.rows[0]) return res.status(404).json({ error: 'Category not found' });
-    const image_url = req.file ? `/uploads/${req.file.filename}` : current.rows[0].image_url;
+    const image_url = req.file ? req.file.url : current.rows[0].image_url;
     const result = await db.query(
       `UPDATE categories SET name=$1, slug=$2, description=$3, image_url=$4, is_active=$5 WHERE id=$6 RETURNING *`,
       [

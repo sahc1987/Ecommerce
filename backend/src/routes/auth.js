@@ -19,13 +19,18 @@ const authLimiter = rateLimit({
 const generateToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-const COOKIE_OPTS = {
+// Cross-site cookies are required when the frontend and backend are served from
+// different domains (e.g. Cloudflare Pages + Render). Browsers only accept
+// SameSite=None when the cookie is also Secure (HTTPS), so force secure on.
+const crossSite = process.env.CROSS_SITE_COOKIES === 'true';
+const COOKIE_BASE = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  secure: crossSite || process.env.NODE_ENV === 'production',
+  sameSite: crossSite ? 'none' : 'strict',
   path: '/',
 };
+
+const COOKIE_OPTS = { ...COOKIE_BASE, maxAge: 7 * 24 * 60 * 60 * 1000 };
 
 router.post('/register', authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
@@ -67,7 +72,7 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' });
+  res.clearCookie('token', COOKIE_BASE);
   res.json({ success: true });
 });
 

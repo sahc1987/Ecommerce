@@ -135,8 +135,8 @@ export default function ProductForm() {
       const res = await api.post(`/products/${id}/images`, formData);
       setImages((prev) => [...prev, ...res.data.images]);
       toast.success("Images uploaded");
-    } catch {
-      toast.error("Upload failed");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Upload failed");
     } finally {
       setUploadingImages(false);
       if (fileRef.current) fileRef.current.value = "";

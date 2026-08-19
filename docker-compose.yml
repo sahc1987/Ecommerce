@@ -68,15 +68,16 @@ services:
       - ecommerce
     security_opt:
       - no-new-privileges:true
+    user: root
     command: >
-      sh -c "node src/db/init.js && node src/index.js"
+      sh -c "chown -R nodejs:nodejs /app/uploads && su-exec nodejs sh -c 'node src/db/init.js && node src/index.js'"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_API_URL: ${VITE_API_URL:-/api}
     container_name: ecommerce_frontend
     restart: unless-stopped
     depends_on:

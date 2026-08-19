@@ -52,7 +52,7 @@ router.post('/complete', authenticate, requireRole('admin'), async (req, res) =>
 
 router.post('/logo', authenticate, requireRole('admin'), upload.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const url = `/uploads/${req.file.filename}`;
+  const url = req.file.url;
   try {
     await db.query(
       'UPDATE store_settings SET logo_url=$1, updated_at=NOW() WHERE id=(SELECT id FROM store_settings LIMIT 1)',

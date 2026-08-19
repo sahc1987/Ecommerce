@@ -3,6 +3,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { v4 } = require('uuid');
 const { fileTypeFromFile } = require('file-type');
+const { isConfigured: cloudinaryEnabled, uploadToCloudinary } = require('../config/cloudinary');
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
@@ -35,6 +36,18 @@ function multerErrResponse(err) {
   return err.message || 'Invalid file.';
 }
 
+// After a file passes verification, set `file.url` to its permanent public URL.
+// When Cloudinary is configured the temp file is uploaded there and removed from
+// local disk; otherwise the local `/uploads/<name>` path is used (dev fallback).
+async function finalizeFile(file) {
+  if (cloudinaryEnabled) {
+    file.url = await uploadToCloudinary(file.path);
+    fs.unlink(file.path, (e) => { if (e) console.warn('upload temp cleanup failed:', e.message); });
+  } else {
+    file.url = `/uploads/${file.filename}`;
+  }
+}
+
 // Wraps a multer single-field handler with a magic-byte verification step so
 // clients cannot bypass the MIME check by spoofing Content-Type headers.
 function withMagicBytes(multerHandler) {
@@ -49,6 +62,7 @@ function withMagicBytes(multerHandler) {
           fs.unlink(req.file.path, (e) => { if (e) console.warn('upload cleanup failed:', e.message); });
           return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.' });
         }
+        await finalizeFile(req.file);
       } catch {
         fs.unlink(req.file.path, (e) => { if (e) console.warn('upload cleanup failed:', e.message); });
         return res.status(400).json({ error: 'Could not verify file type.' });
@@ -78,6 +92,9 @@ function withMagicBytesArray(multerHandler) {
             cleanupFiles(req.files);
             return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.' });
           }
+        }
+        for (const file of req.files) {
+          await finalizeFile(file);
         }
       } catch {
         cleanupFiles(req.files);
