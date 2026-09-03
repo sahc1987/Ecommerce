@@ -32,6 +32,12 @@ const COOKIE_BASE = {
 
 const COOKIE_OPTS = { ...COOKIE_BASE, maxAge: 7 * 24 * 60 * 60 * 1000 };
 
+// Native clients (React Native) have no reliable cookie jar, so they opt in with
+// `X-Client: mobile` and receive the JWT in the response body to keep in SecureStore.
+// Web clients see the unchanged cookie-only response.
+const authPayload = (req, user, token) =>
+  req.get('X-Client') === 'mobile' ? { user, token } : { user };
+
 router.post('/register', authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password)
@@ -47,8 +53,9 @@ router.post('/register', authLimiter, async (req, res) => {
       [name, email, hash, role]
     );
     const user = result.rows[0];
-    res.cookie('token', generateToken(user.id), COOKIE_OPTS);
-    res.status(201).json({ user });
+    const token = generateToken(user.id);
+    res.cookie('token', token, COOKIE_OPTS);
+    res.status(201).json(authPayload(req, user, token));
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -64,8 +71,9 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password_hash)))
       return res.status(401).json({ error: 'Invalid credentials' });
     const { password_hash, ...userData } = user;
-    res.cookie('token', generateToken(user.id), COOKIE_OPTS);
-    res.json({ user: userData });
+    const token = generateToken(user.id);
+    res.cookie('token', token, COOKIE_OPTS);
+    res.json(authPayload(req, userData, token));
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }

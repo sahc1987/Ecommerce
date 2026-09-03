@@ -1,8 +1,17 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
+// Web clients send the JWT in an httpOnly cookie; native clients (React Native)
+// cannot rely on a cookie jar, so they send it as `Authorization: Bearer <token>`.
+const extractToken = (req) => {
+  if (req.cookies?.token) return req.cookies.token;
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) return header.slice(7);
+  return null;
+};
+
 const authenticate = async (req, res, next) => {
-  const token = req.cookies?.token;
+  const token = extractToken(req);
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
   }
@@ -27,4 +36,4 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, requireRole };
+module.exports = { authenticate, requireRole, extractToken };
