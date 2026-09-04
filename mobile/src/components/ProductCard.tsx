@@ -3,6 +3,7 @@ import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {colors, font, radius, shadow, spacing} from '../theme';
 import {effectivePrice, formatMoney, isDiscounted} from '../utils/format';
 import type {Product} from '../types';
+import {mediaUrl} from '../utils/media';
 
 export const ProductCard = ({
   product,
@@ -22,7 +23,7 @@ export const ProductCard = ({
       style={({pressed}) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.imageWrap}>
         {image ? (
-          <Image source={{uri: image}} style={styles.image} resizeMode="cover" />
+          <Image source={{uri: mediaUrl(image)}} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={[styles.image, styles.imageFallback]}>
             <Text style={styles.imageFallbackText}>No image</Text>

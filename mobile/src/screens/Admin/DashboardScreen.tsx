@@ -22,6 +22,7 @@ import {
 import {colors, font, radius, spacing} from '../../theme';
 import {formatDate, formatMoney, shortId} from '../../utils/format';
 import type {AdminStackParams} from '../../navigation/types';
+import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'Dashboard'>;
 
@@ -227,7 +228,7 @@ const DashboardScreen = ({navigation}: Props) => {
               key={product.id}
               style={[styles.row, index > 0 && styles.rowBordered]}>
               {product.image ? (
-                <Image source={{uri: product.image}} style={styles.thumb} />
+                <Image source={{uri: mediaUrl(product.image)}} style={styles.thumb} />
               ) : (
                 <View style={[styles.thumb, styles.thumbFallback]}>
                   <Icon name="image-outline" size={16} color={colors.textFaint} />

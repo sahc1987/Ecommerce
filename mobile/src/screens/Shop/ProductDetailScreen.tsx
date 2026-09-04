@@ -19,6 +19,7 @@ import {effectivePrice, formatMoney, isDiscounted} from '../../utils/format';
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
 import {addItem} from '../../store/slices/cartSlice';
 import type {ShopStackParams} from '../../navigation/types';
+import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<ShopStackParams, 'ProductDetail'>;
 
@@ -69,7 +70,7 @@ const ProductDetailScreen = ({route}: Props) => {
         {images.length > 0 ? (
           <>
             <Image
-              source={{uri: images[activeImage]?.url}}
+              source={{uri: mediaUrl(images[activeImage]?.url)}}
               style={styles.hero}
               resizeMode="cover"
             />
@@ -81,7 +82,7 @@ const ProductDetailScreen = ({route}: Props) => {
                 {images.map((img, index) => (
                   <Pressable key={img.id} onPress={() => setActiveImage(index)}>
                     <Image
-                      source={{uri: img.url}}
+                      source={{uri: mediaUrl(img.url)}}
                       style={[
                         styles.thumb,
                         index === activeImage && styles.thumbActive,

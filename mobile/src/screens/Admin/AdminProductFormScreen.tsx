@@ -27,6 +27,7 @@ import {
 import {colors, font, radius, spacing} from '../../theme';
 import type {Category, Product, ProductImage, Subcategory} from '../../types';
 import type {AdminStackParams} from '../../navigation/types';
+import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminProductForm'>;
 
@@ -414,7 +415,7 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
                   contentContainerStyle={styles.imageRow}>
                   {images.map(img => (
                     <View key={img.id} style={styles.imageCell}>
-                      <Image source={{uri: img.url}} style={styles.image} />
+                      <Image source={{uri: mediaUrl(img.url)}} style={styles.image} />
                       {img.is_primary ? (
                         <View style={styles.primaryTag}>
                           <Text style={styles.primaryText}>Primary</Text>

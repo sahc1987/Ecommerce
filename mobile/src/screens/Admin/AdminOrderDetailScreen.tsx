@@ -29,6 +29,7 @@ import {colors, font, radius, spacing} from '../../theme';
 import {formatDateTime, formatMoney, shortId} from '../../utils/format';
 import type {OrderStatus} from '../../types';
 import type {AdminStackParams} from '../../navigation/types';
+import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminOrderDetail'>;
 
@@ -138,7 +139,7 @@ const AdminOrderDetailScreen = ({route}: Props) => {
           {(order.items ?? []).map((item, index) => (
             <View key={item.id} style={[styles.item, index > 0 && styles.itemBordered]}>
               {item.product_image ? (
-                <Image source={{uri: item.product_image}} style={styles.thumb} />
+                <Image source={{uri: mediaUrl(item.product_image)}} style={styles.thumb} />
               ) : (
                 <View style={[styles.thumb, styles.thumbFallback]}>
                   <Icon name="image-outline" size={18} color={colors.textFaint} />

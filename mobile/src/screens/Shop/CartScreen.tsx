@@ -12,6 +12,7 @@ import {
   setQuantity,
 } from '../../store/slices/cartSlice';
 import type {CartStackParams} from '../../navigation/types';
+import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<CartStackParams, 'Cart'>;
 
@@ -50,7 +51,7 @@ const CartScreen = ({navigation}: Props) => {
         renderItem={({item}) => (
           <View style={styles.item}>
             {item.image ? (
-              <Image source={{uri: item.image}} style={styles.image} />
+              <Image source={{uri: mediaUrl(item.image)}} style={styles.image} />
             ) : (
               <View style={[styles.image, styles.imageFallback]}>
                 <Icon name="image-outline" size={20} color={colors.textFaint} />

@@ -18,6 +18,7 @@ import {colors, font, radius, spacing} from '../../theme';
 import {formatMoney} from '../../utils/format';
 import {useAppSelector} from '../../store/hooks';
 import type {AdminStackParams} from '../../navigation/types';
+import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminProducts'>;
 
@@ -86,7 +87,7 @@ const AdminProductsScreen = ({navigation}: Props) => {
             style={styles.card}
             onPress={() => navigation.navigate('AdminProductForm', {id: item.id})}>
             {item.primary_image ? (
-              <Image source={{uri: item.primary_image}} style={styles.thumb} />
+              <Image source={{uri: mediaUrl(item.primary_image)}} style={styles.thumb} />
             ) : (
               <View style={[styles.thumb, styles.thumbFallback]}>
                 <Icon name="image-outline" size={18} color={colors.textFaint} />

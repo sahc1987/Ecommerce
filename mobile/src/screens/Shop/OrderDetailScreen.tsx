@@ -17,6 +17,7 @@ import {colors, font, radius, spacing} from '../../theme';
 import {formatDateTime, formatMoney, shortId} from '../../utils/format';
 import {useAppSelector} from '../../store/hooks';
 import type {OrdersStackParams} from '../../navigation/types';
+import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<OrdersStackParams, 'OrderDetail'>;
 
@@ -88,7 +89,7 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
             key={item.id}
             style={[styles.item, index > 0 && styles.itemBordered]}>
             {item.product_image ? (
-              <Image source={{uri: item.product_image}} style={styles.image} />
+              <Image source={{uri: mediaUrl(item.product_image)}} style={styles.image} />
             ) : (
               <View style={[styles.image, styles.imageFallback]}>
                 <Icon name="image-outline" size={18} color={colors.textFaint} />

@@ -18,6 +18,7 @@ import {Button, EmptyState, ErrorState, Field, Icon, Loading} from '../../compon
 import {colors, font, radius, spacing} from '../../theme';
 import {useAppSelector} from '../../store/hooks';
 import type {Category, Subcategory} from '../../types';
+import {mediaUrl} from '../../utils/media';
 
 const AdminCategoriesScreen = () => {
   const isAdmin = useAppSelector(s => s.auth.user?.role === 'admin');
@@ -168,7 +169,7 @@ const AdminCategoriesScreen = () => {
           <View style={styles.card}>
             <Pressable style={styles.cardHead} onPress={() => toggle(item)}>
               {item.image_url ? (
-                <Image source={{uri: item.image_url}} style={styles.thumb} />
+                <Image source={{uri: mediaUrl(item.image_url)}} style={styles.thumb} />
               ) : (
                 <View style={[styles.thumb, styles.thumbFallback]}>
                   <Icon name="shape-outline" size={18} color={colors.textFaint} />
@@ -302,7 +303,7 @@ const AdminCategoriesScreen = () => {
               {image?.uri ? (
                 <Image source={{uri: image.uri}} style={styles.pickedImage} />
               ) : editing?.image_url ? (
-                <Image source={{uri: editing.image_url}} style={styles.pickedImage} />
+                <Image source={{uri: mediaUrl(editing.image_url)}} style={styles.pickedImage} />
               ) : (
                 <Icon name="image-plus" size={24} color={colors.textFaint} />
               )}
