@@ -50,7 +50,7 @@ const NotificationsScreen = () => {
       );
       notificationsApi.markRead(item.id).catch(() => refresh());
     }
-    const orderId = item.data?.order_id as string | undefined;
+    const orderId = item.metadata?.order_id as string | undefined;
     if (orderId) {
       // @ts-expect-error — cross-tab navigation is untyped here
       navigation.navigate('OrdersTab', {

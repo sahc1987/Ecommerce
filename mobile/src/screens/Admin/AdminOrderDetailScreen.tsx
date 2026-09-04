@@ -150,7 +150,7 @@ const AdminOrderDetailScreen = ({route}: Props) => {
                   {item.product_name}
                 </Text>
                 <Text style={styles.itemMeta}>
-                  {item.quantity} × {formatMoney(item.price)}
+                  {item.quantity} × {formatMoney(item.unit_price)}
                 </Text>
               </View>
               <Text style={styles.itemTotal}>{formatMoney(item.total)}</Text>

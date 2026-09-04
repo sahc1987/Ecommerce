@@ -111,7 +111,7 @@ const RequestReturnScreen = ({route, navigation}: Props) => {
                     {item.product_name}
                   </Text>
                   <Text style={styles.itemMeta}>
-                    {item.quantity} × {formatMoney(item.price)}
+                    {item.quantity} × {formatMoney(item.unit_price)}
                   </Text>
                 </View>
               </Pressable>

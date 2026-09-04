@@ -80,7 +80,7 @@ const CheckoutScreen = ({navigation}: Props) => {
         notes: notes.trim() || undefined,
       });
       dispatch(clearCart());
-      navigation.replace('OrderSuccess', {orderId: data.order.id});
+      navigation.replace('OrderSuccess', {orderId: data.order_id});
     } catch (err) {
       setError(errorMessage(err, 'Could not place your order'));
     } finally {

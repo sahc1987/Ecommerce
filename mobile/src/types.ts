@@ -86,8 +86,10 @@ export interface OrderItem {
   product_id: string | null;
   product_name: string;
   product_image: string | null;
-  price: string;
+  /** Column is `unit_price` in the order_items table, not `price`. */
+  unit_price: string;
   quantity: number;
+  discount: string;
   total: string;
 }
 
@@ -135,7 +137,8 @@ export interface AppNotification {
   type: string;
   title: string;
   message: string;
-  data: Record<string, unknown> | null;
+  /** Column is `metadata` in the notifications table, not `data`. */
+  metadata: Record<string, unknown> | null;
   is_read: boolean;
   created_at: string;
 }

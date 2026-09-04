@@ -104,11 +104,12 @@ export const ordersApi = {
 };
 
 export const paymentsApi = {
+  // The endpoint returns only the new order's id, not the whole order.
   placeOrder: (payload: {
     items: {product_id: string; quantity: number}[];
     shipping_address: ShippingAddress;
     notes?: string;
-  }) => api.post<{order: Order}>('/payments/place-order', payload),
+  }) => api.post<{order_id: string}>('/payments/place-order', payload),
 };
 
 export const returnsApi = {
