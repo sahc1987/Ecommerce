@@ -38,10 +38,27 @@ const COOKIE_OPTS = { ...COOKIE_BASE, maxAge: 7 * 24 * 60 * 60 * 1000 };
 const authPayload = (req, user, token) =>
   req.get('X-Client') === 'mobile' ? { user, token } : { user };
 
+// Linear-time shape check (local@domain.tld); the length cap above bounds it.
+const isEmail = (s) => {
+  const at = s.indexOf('@');
+  if (at < 1 || at !== s.lastIndexOf('@')) return false;
+  const domain = s.slice(at + 1);
+  const dot = domain.lastIndexOf('.');
+  return dot > 0 && dot < domain.length - 1 && !/\s/.test(s);
+};
+const MIN_PASSWORD = 8;
+const MAX_PASSWORD = 72; // bcrypt silently truncates beyond this
+
 router.post('/register', authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
-  if (!name || !email || !password)
+  if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' || !name.trim() || !email || !password)
     return res.status(400).json({ error: 'All fields required' });
+  if (name.trim().length > 100)
+    return res.status(400).json({ error: 'Name is too long' });
+  if (email.length > 255 || !isEmail(email))
+    return res.status(400).json({ error: 'Enter a valid email address' });
+  if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD)
+    return res.status(400).json({ error: `Password must be ${MIN_PASSWORD}-${MAX_PASSWORD} characters` });
   try {
     const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length) return res.status(400).json({ error: 'Email already in use' });

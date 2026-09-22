@@ -1,7 +1,7 @@
 import React from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {colors, font, radius, shadow, spacing} from '../theme';
-import {effectivePrice, formatMoney, isDiscounted} from '../utils/format';
+import {effectivePrice, formatMoney, isDiscounted, sellableStock} from '../utils/format';
 import type {Product} from '../types';
 import {mediaUrl} from '../utils/media';
 
@@ -15,7 +15,7 @@ export const ProductCard = ({
   const price = effectivePrice(product);
   const discounted = isDiscounted(product);
   const image = product.primary_image ?? product.images?.[0]?.url ?? null;
-  const outOfStock = product.stock <= 0;
+  const outOfStock = sellableStock(product) <= 0;
 
   return (
     <Pressable

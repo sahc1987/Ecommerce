@@ -5,7 +5,8 @@ const upload = require('../middleware/upload');
 const cache = require('../utils/cache');
 const safeErr = require('../utils/safeErr');
 
-const TTL = { list: 300, detail: 300 }; // seconds
+// Short TTLs: responses include live availability (stock minus active cart holds)
+const TTL = { list: 30, detail: 30 }; // seconds
 const MAX_LIMIT = 100;
 
 const slugify = (str) =>
@@ -39,6 +40,8 @@ router.get('/', async (req, res) => {
     );
     const result = await db.query(
       `SELECT p.*, c.name as category_name, s.name as subcategory_name,
+        (SELECT COALESCE(SUM(r.quantity), 0) FROM stock_reservations r WHERE r.product_id = p.id AND r.expires_at > NOW())::int as reserved_stock,
+        GREATEST(p.stock - (SELECT COALESCE(SUM(r.quantity), 0) FROM stock_reservations r WHERE r.product_id = p.id AND r.expires_at > NOW()), 0)::int as available_stock,
         (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image,
         (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images
        FROM products p
@@ -85,6 +88,8 @@ router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req
     );
     const result = await db.query(
       `SELECT p.*, c.name as category_name, s.name as subcategory_name,
+        (SELECT COALESCE(SUM(r.quantity), 0) FROM stock_reservations r WHERE r.product_id = p.id AND r.expires_at > NOW())::int as reserved_stock,
+        GREATEST(p.stock - (SELECT COALESCE(SUM(r.quantity), 0) FROM stock_reservations r WHERE r.product_id = p.id AND r.expires_at > NOW()), 0)::int as available_stock,
         (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image,
         (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images
        FROM products p
@@ -119,6 +124,8 @@ router.get('/:idOrSlug', async (req, res) => {
   try {
     const result = await db.query(
       `SELECT p.*, c.name as category_name, s.name as subcategory_name,
+        (SELECT COALESCE(SUM(r.quantity), 0) FROM stock_reservations r WHERE r.product_id = p.id AND r.expires_at > NOW())::int as reserved_stock,
+        GREATEST(p.stock - (SELECT COALESCE(SUM(r.quantity), 0) FROM stock_reservations r WHERE r.product_id = p.id AND r.expires_at > NOW()), 0)::int as available_stock,
         (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id

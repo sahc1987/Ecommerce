@@ -29,6 +29,23 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// Like authenticate, but guests pass through with req.user unset.
+const optionalAuth = async (req, res, next) => {
+  const token = extractToken(req);
+  if (!token) return next();
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const result = await db.query(
+      'SELECT id, name, email, role FROM users WHERE id = $1 AND is_active = TRUE',
+      [decoded.userId]
+    );
+    if (result.rows[0]) req.user = result.rows[0];
+  } catch {
+    // invalid/expired token: treat as guest
+  }
+  next();
+};
+
 const requireRole = (...roles) => (req, res, next) => {
   if (!req.user || !roles.includes(req.user.role)) {
     return res.status(403).json({ error: 'Insufficient permissions' });
@@ -36,4 +53,4 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, requireRole, extractToken };
+module.exports = { authenticate, optionalAuth, requireRole, extractToken };

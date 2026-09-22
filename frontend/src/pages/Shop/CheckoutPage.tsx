@@ -6,6 +6,9 @@ import { Package, Lock, MapPin, CheckCircle2, Loader2, X } from "lucide-react";
 import { RootState } from "../../store";
 import { clearCart } from "../../store/slices/cartSlice";
 import api from "../../api";
+import HoldBanner from "../../components/Shop/HoldBanner";
+import { lineStatus, useReservations } from "../../hooks/useReservations";
+import { newIdempotencyKey } from "../../utils/cartToken";
 
 interface Address {
   name: string;
@@ -38,8 +41,22 @@ const SUPPORTED_COUNTRIES = new Set(["US", "CA", "GB", "AU", "DE", "FR", "MX", "
 export default function CheckoutPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { items } = useSelector((s: RootState) => s.cart);
+  const { items, reservations, holdStatus } = useSelector((s: RootState) => s.cart);
   const { user } = useSelector((s: RootState) => s.auth);
+  const { renew, sync, signature } = useReservations();
+  const blocked = items.some((i) => lineStatus(i, reservations[i.product_id], holdStatus) !== "ok");
+
+  // One key per checkout attempt: retries reuse it (server de-duplicates), a
+  // changed cart gets a new one because the request body would differ.
+  const idempotencyKey = useRef(newIdempotencyKey());
+  useEffect(() => { idempotencyKey.current = newIdempotencyKey(); }, [signature]);
+
+  // Being on the checkout page keeps the stock hold alive.
+  useEffect(() => {
+    renew();
+    const id = setInterval(renew, 60_000);
+    return () => clearInterval(id);
+  }, [renew]);
 
   const [loading, setLoading] = useState(false);
   const [taxRate, setTaxRate] = useState(0);
@@ -146,17 +163,29 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || blocked) return;
     setLoading(true);
     try {
-      const res = await api.post("/payments/place-order", {
-        items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
-        shipping_address: address,
-        shipping: 0,
-      });
+      const res = await api.post(
+        "/payments/place-order",
+        {
+          items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+          shipping_address: address,
+          shipping: 0,
+        },
+        { headers: { "Idempotency-Key": idempotencyKey.current } },
+      );
       dispatch(clearCart());
       navigate(`/order-success?order=${res.data.order_id}`);
     } catch (err: any) {
+      const status = err.response?.status;
       toast.error(err.response?.data?.error || "Checkout failed");
+      if (status === 409 && err.response?.data?.available !== undefined) {
+        // Stock changed under us: refresh holds so the cart shows what's left.
+        await sync();
+      } else if (status === 422) {
+        idempotencyKey.current = newIdempotencyKey();
+      }
     } finally {
       setLoading(false);
     }
@@ -168,7 +197,7 @@ export default function CheckoutPage() {
     props?: React.InputHTMLAttributes<HTMLInputElement>,
   ) => (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
       <input
         className="input"
         value={address[key]}
@@ -180,18 +209,18 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Checkout</h1>
+      <h1 className="text-2xl font-bold text-slate-900 mb-6">Checkout</h1>
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             <div className="card space-y-4">
-              <h2 className="font-semibold text-gray-900">Shipping Address</h2>
+              <h2 className="font-semibold text-slate-900">Shipping Address</h2>
 
               {field("Full Name", "name", { required: true, placeholder: "John Doe" })}
 
               {/* Address Line 1 with autocomplete */}
               <div className="relative" ref={suggestionsRef}>
-                <label htmlFor="line1" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="line1" className="block text-sm font-medium text-slate-700 mb-1">
                   Address Line 1
                 </label>
                 <div className="relative">
@@ -207,7 +236,7 @@ export default function CheckoutPage() {
                   />
                   <div className="absolute inset-y-0 right-2 flex items-center gap-1.5 pointer-events-none">
                     {loadingSuggestions && (
-                      <Loader2 size={15} className="text-gray-400 animate-spin pointer-events-none" />
+                      <Loader2 size={15} className="text-slate-400 animate-spin pointer-events-none" />
                     )}
                     {addressVerified && !loadingSuggestions && (
                       <CheckCircle2 size={16} className="text-emerald-500 pointer-events-none" />
@@ -216,7 +245,7 @@ export default function CheckoutPage() {
                       <button
                         type="button"
                         onClick={clearLine1}
-                        className="pointer-events-auto text-gray-400 hover:text-gray-600 p-0.5"
+                        className="pointer-events-auto text-slate-400 hover:text-slate-600 p-0.5"
                         tabIndex={-1}
                         aria-label="Clear address"
                       >
@@ -228,8 +257,8 @@ export default function CheckoutPage() {
 
                 {/* Suggestions dropdown */}
                 {suggestionsOpen && suggestions.length > 0 && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                    <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-gray-50">
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                    <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50">
                       Suggestions
                     </p>
                     <ul>
@@ -247,14 +276,14 @@ export default function CheckoutPage() {
                               type="button"
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => selectSuggestion(s)}
-                              className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 transition-colors flex items-start gap-2.5 border-b border-gray-50 last:border-0"
+                              className="w-full text-left px-3 py-2.5 hover:bg-primary-50 transition-colors flex items-start gap-2.5 border-b border-slate-50 last:border-0"
                             >
-                              <MapPin size={14} className="text-indigo-400 mt-0.5 shrink-0" />
+                              <MapPin size={14} className="text-primary-400 mt-0.5 shrink-0" />
                               <span className="min-w-0">
-                                <span className="block text-sm font-medium text-gray-800 truncate">
+                                <span className="block text-sm font-medium text-slate-800 truncate">
                                   {line1Part}
                                 </span>
-                                <span className="block text-xs text-gray-500 truncate">{rest}</span>
+                                <span className="block text-xs text-slate-500 truncate">{rest}</span>
                               </span>
                             </button>
                           </li>
@@ -282,7 +311,7 @@ export default function CheckoutPage() {
               <div className="grid grid-cols-2 gap-4">
                 {field("ZIP / Postal Code", "zip", { required: true })}
                 <div>
-                  <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="country" className="block text-sm font-medium text-slate-700 mb-1">
                     Country
                   </label>
                   <select
@@ -305,14 +334,14 @@ export default function CheckoutPage() {
             </div>
 
             <div className="card space-y-4">
-              <h2 className="font-semibold text-gray-900">Payment Method</h2>
-              <div className="flex items-center gap-3 p-3.5 border border-indigo-200 rounded-lg bg-indigo-50">
-                <div className="w-4 h-4 rounded-full border-2 border-indigo-600 flex items-center justify-center flex-shrink-0">
-                  <div className="w-2 h-2 rounded-full bg-indigo-600" />
+              <h2 className="font-semibold text-slate-900">Payment Method</h2>
+              <div className="flex items-center gap-3 p-3.5 border border-primary-200 rounded-lg bg-primary-50">
+                <div className="w-4 h-4 rounded-full border-2 border-primary-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-2 h-2 rounded-full bg-primary-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Cash on Delivery</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Pay when your order arrives</p>
+                  <p className="text-sm font-semibold text-slate-900">Cash on Delivery</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Pay when your order arrives</p>
                 </div>
               </div>
             </div>
@@ -320,43 +349,44 @@ export default function CheckoutPage() {
 
           <div>
             <div className="card sticky top-24">
-              <h2 className="font-bold text-gray-900 text-lg mb-4">Order Summary</h2>
+              <h2 className="font-bold text-slate-900 text-lg mb-4">Order Summary</h2>
+              <div className="mb-4"><HoldBanner /></div>
               <div className="space-y-2 mb-4">
                 {items.map((item) => (
                   <div key={item.product_id} className="flex gap-3">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                    <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
                       {item.image ? (
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
-                        <Package size={16} className="m-auto text-gray-300 mt-2.5" />
+                        <Package size={16} className="m-auto text-slate-300 mt-2.5" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800 truncate">{item.name}</p>
-                      <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
+                      <p className="text-sm text-slate-800 truncate">{item.name}</p>
+                      <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
                     </div>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-slate-900">
                       ${(item.effective_price * item.quantity).toFixed(2)}
                     </p>
                   </div>
                 ))}
               </div>
-              <div className="border-t border-gray-200 pt-3 space-y-1 text-sm">
-                <div className="flex justify-between text-gray-600">
+              <div className="border-t border-slate-200 pt-3 space-y-1 text-sm">
+                <div className="flex justify-between text-slate-600">
                   <span>Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
+                <div className="flex justify-between text-slate-600">
                   <span>Shipping</span>
                   <span>Free</span>
                 </div>
                 {tax > 0 && (
-                  <div className="flex justify-between text-gray-600">
+                  <div className="flex justify-between text-slate-600">
                     <span>Tax ({taxRate}%)</span>
                     <span>${tax.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-bold text-base text-gray-900 border-t border-gray-200 pt-2 mt-2">
+                <div className="flex justify-between font-bold text-base text-slate-900 border-t border-slate-200 pt-2 mt-2">
                   <span>Total</span>
                   <span>${total.toFixed(2)}</span>
                 </div>
@@ -364,7 +394,7 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
-                disabled={loading}
+                disabled={loading || blocked}
               >
                 <Lock size={14} />
                 {loading ? "Processing..." : `Place Order — $${total.toFixed(2)}`}

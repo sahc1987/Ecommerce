@@ -38,9 +38,9 @@ export default function Login() {
   return (
     <div className="min-h-screen flex">
       {/* Brand panel */}
-      <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-gray-900 p-10 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-slate-900 p-10 flex-col justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center shadow-md">
+          <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center shadow-md">
             <Store size={18} className="text-white" />
           </div>
           <span className="font-bold text-xl text-white tracking-tight">ShopHub</span>
@@ -50,48 +50,48 @@ export default function Login() {
           <h2 className="text-4xl font-bold text-white leading-tight mb-3">
             Welcome back to ShopHub
           </h2>
-          <p className="text-gray-400 text-base leading-relaxed mb-8">
+          <p className="text-slate-400 text-base leading-relaxed mb-8">
             Thousands of products, curated for you. Sign in to continue your shopping journey.
           </p>
           <ul className="space-y-3">
             {perks.map((perk) => (
               <li key={perk} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                  <Check size={11} className="text-gray-300" />
+                  <Check size={11} className="text-slate-300" />
                 </div>
-                <span className="text-gray-300 text-sm">{perk}</span>
+                <span className="text-slate-300 text-sm">{perk}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="text-gray-600 text-xs">&copy; {new Date().getFullYear()} ShopHub. All rights reserved.</p>
+        <p className="text-slate-600 text-xs">&copy; {new Date().getFullYear()} ShopHub. All rights reserved.</p>
       </div>
 
       {/* Form panel */}
-      <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-12 bg-gray-50">
+      <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-12 bg-slate-50">
         <div className="w-full max-w-md">
           <Link to="/" className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
               <Store size={15} className="text-white" />
             </div>
-            <span className="font-bold text-lg text-gray-900">ShopHub</span>
+            <span className="font-bold text-lg text-slate-900">ShopHub</span>
           </Link>
 
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Sign in to your account</h1>
-            <p className="text-gray-500 mt-2 text-sm">
+            <h1 className="text-2xl font-bold text-slate-900">Sign in to your account</h1>
+            <p className="text-slate-500 mt-2 text-sm">
               Don't have an account?{' '}
-              <Link to="/register" className="text-indigo-600 hover:text-indigo-700 font-semibold">
+              <Link to="/register" className="text-primary-600 hover:text-primary-700 font-semibold">
                 Create one free
               </Link>
             </p>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-1.5">
+                <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-1.5">
                   Email address
                 </label>
                 <input
@@ -106,12 +106,12 @@ export default function Login() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
+                  <label htmlFor="password" className="block text-sm font-semibold text-slate-700">
                     Password
                   </label>
                   <button
                     type="button"
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
                     onClick={() => toast('Password reset coming soon', { icon: '🔒' })}
                   >
                     Forgot password?
@@ -129,7 +129,7 @@ export default function Login() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                     onClick={() => setShowPw(!showPw)}
                   >
                     {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -139,7 +139,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 text-sm font-semibold bg-gray-900 hover:bg-gray-700 text-white rounded transition-colors disabled:opacity-60"
+                className="w-full py-3 text-sm font-semibold bg-slate-900 hover:bg-slate-700 text-white rounded transition-colors disabled:opacity-60"
               >
                 {loading ? 'Signing in…' : 'Sign in'}
               </button>

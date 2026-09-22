@@ -172,26 +172,26 @@ export default function CategoriesPage() {
     if (loading) {
       return (
         <div className="flex items-center justify-center h-40">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
         </div>
       );
     }
     if (categories.length === 0) {
       return (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-slate-400">
           <Tag size={40} className="mx-auto mb-3 opacity-40" />
           <p>No categories yet</p>
         </div>
       );
     }
     return (
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-slate-100">
         {categories.map((cat) => (
           <div key={cat.id}>
-            <div className="flex items-center gap-3 px-6 py-4 hover:bg-gray-50">
+            <div className="flex items-center gap-3 px-6 py-4 hover:bg-slate-50">
               <button
                 onClick={() => toggleExpand(cat.id)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-slate-400 hover:text-slate-600"
               >
                 {expanded === cat.id ? (
                   <ChevronDown size={16} />
@@ -207,27 +207,27 @@ export default function CategoriesPage() {
                 />
               )}
               <div className="flex-1">
-                <p className="font-medium text-gray-900">{cat.name}</p>
-                <p className="text-xs text-gray-400">
+                <p className="font-medium text-slate-900">{cat.name}</p>
+                <p className="text-xs text-slate-400">
                   {cat.subcategory_count} subcategories
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => openModal("subcategory", null, cat.id)}
-                  className="text-xs text-blue-600 hover:underline font-medium px-2"
+                  className="text-xs text-primary-600 hover:underline font-medium px-2"
                 >
                   + Subcategory
                 </button>
                 <button
                   onClick={() => openModal("category", cat)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                  className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
                 >
                   <Pencil size={14} />
                 </button>
                 <button
                   onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -235,30 +235,30 @@ export default function CategoriesPage() {
             </div>
 
             {expanded === cat.id && (
-              <div className="bg-gray-50 border-t border-gray-100">
+              <div className="bg-slate-50 border-t border-slate-100">
                 {(subcategories[cat.id] || []).length === 0 ? (
-                  <p className="text-sm text-gray-400 px-16 py-3">
+                  <p className="text-sm text-slate-400 px-16 py-3">
                     No subcategories
                   </p>
                 ) : (
                   (subcategories[cat.id] || []).map((sub) => (
                     <div
                       key={sub.id}
-                      className="flex items-center gap-3 px-16 py-3 hover:bg-gray-100 border-b border-gray-100 last:border-0"
+                      className="flex items-center gap-3 px-16 py-3 hover:bg-slate-100 border-b border-slate-100 last:border-0"
                     >
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-800">
+                        <p className="text-sm font-medium text-slate-800">
                           {sub.name}
                         </p>
                         {sub.description && (
-                          <p className="text-xs text-gray-400 truncate">
+                          <p className="text-xs text-slate-400 truncate">
                             {sub.description}
                           </p>
                         )}
                       </div>
                       <button
                         onClick={() => openModal("subcategory", sub, cat.id)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                        className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
                       >
                         <Pencil size={13} />
                       </button>
@@ -266,7 +266,7 @@ export default function CategoriesPage() {
                         onClick={() =>
                           handleDeleteSubcategory(cat.id, sub.id, sub.name)
                         }
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -284,7 +284,7 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Categories</h1>
         <button
           onClick={() => openModal("category")}
           className="btn-primary flex items-center gap-2"
@@ -303,13 +303,13 @@ export default function CategoriesPage() {
             onClick={() => setModal(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-5">
+            <h2 className="text-lg font-bold text-slate-900 mb-5">
               {modal.editing ? "Edit" : "Add"}{" "}
               {modal.type === "category" ? "Category" : "Subcategory"}
             </h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   Name *
                 </label>
                 <input
@@ -320,7 +320,7 @@ export default function CategoriesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   Description
                 </label>
                 <textarea
@@ -333,7 +333,7 @@ export default function CategoriesPage() {
               </div>
               {modal.type === "category" && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Image
                   </label>
                   <input

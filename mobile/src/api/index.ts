@@ -104,12 +104,42 @@ export const ordersApi = {
 };
 
 export const paymentsApi = {
-  // The endpoint returns only the new order's id, not the whole order.
-  placeOrder: (payload: {
-    items: {product_id: string; quantity: number}[];
-    shipping_address: ShippingAddress;
-    notes?: string;
-  }) => api.post<{order_id: string}>('/payments/place-order', payload),
+  // The endpoint returns only the new order's id, not the whole order. The
+  // Idempotency-Key makes a retried submit return the same order.
+  placeOrder: (
+    payload: {
+      items: {product_id: string; quantity: number}[];
+      shipping_address: ShippingAddress;
+      notes?: string;
+    },
+    idempotencyKey: string,
+  ) =>
+    api.post<{order_id: string}>('/payments/place-order', payload, {
+      headers: {'Idempotency-Key': idempotencyKey},
+    }),
+};
+
+export interface ReservationLine {
+  product_id: string;
+  requested?: number;
+  reserved?: number;
+  quantity?: number;
+  available?: number;
+  expires_at: string | null;
+}
+
+export interface ReservationResponse {
+  items: ReservationLine[];
+  expires_at: string | null;
+  hold_minutes: number;
+}
+
+// Stock holds for this device's cart (X-Cart-Token is added by the client).
+export const reservationsApi = {
+  sync: (items: {product_id: string; quantity: number}[]) =>
+    api.put<ReservationResponse>('/reservations', {items}),
+  renew: () => api.post<ReservationResponse>('/reservations/renew'),
+  release: () => api.delete('/reservations'),
 };
 
 export const returnsApi = {

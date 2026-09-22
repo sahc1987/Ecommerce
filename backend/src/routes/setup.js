@@ -6,6 +6,12 @@ const cache = require('../utils/cache');
 const safeErr = require('../utils/safeErr');
 
 const CACHE_KEY = 'setup:status';
+
+// Any IANA zone the runtime knows; falls back to UTC for unknown input.
+const isValidTimeZone = (tz) => {
+  if (typeof tz !== 'string' || !tz) return false;
+  try { Intl.DateTimeFormat(undefined, { timeZone: tz }); return true; } catch { return false; }
+};
 const TTL = 1800; // 30 minutes
 
 router.get('/status', async (req, res) => {
@@ -23,8 +29,10 @@ router.get('/status', async (req, res) => {
 });
 
 router.post('/complete', authenticate, requireRole('admin'), async (req, res) => {
-  const { name, description, currency, email, phone, address, tax_rate, tax_enabled, return_window_days } = req.body;
+  const { name, description, currency, email, phone, address, tax_rate, tax_enabled, return_window_days, timezone } = req.body;
   if (!name) return res.status(400).json({ error: 'Store name required' });
+  if (timezone !== undefined && !isValidTimeZone(timezone)) return res.status(400).json({ error: 'Invalid time zone' });
+  const tz = timezone || 'UTC';
   const parsedTaxRate = Math.min(Math.max(Number.parseFloat(tax_rate) || 0, 0), 100);
   const parsedReturnDays = Math.max(1, Number.parseInt(return_window_days) || 30);
   try {
@@ -33,14 +41,14 @@ router.post('/complete', authenticate, requireRole('admin'), async (req, res) =>
     if (existing.rows.length) {
       result = await db.query(
         `UPDATE store_settings SET name=$1, description=$2, currency=$3, email=$4,
-         phone=$5, address=$6, tax_rate=$7, tax_enabled=$8, return_window_days=$9, updated_at=NOW() WHERE id=$10 RETURNING *`,
-        [name, description, currency || 'USD', email, phone, address, parsedTaxRate, !!tax_enabled, parsedReturnDays, existing.rows[0].id]
+         phone=$5, address=$6, tax_rate=$7, tax_enabled=$8, return_window_days=$9, timezone=$10, updated_at=NOW() WHERE id=$11 RETURNING *`,
+        [name, description, currency || 'USD', email, phone, address, parsedTaxRate, !!tax_enabled, parsedReturnDays, tz, existing.rows[0].id]
       );
     } else {
       result = await db.query(
-        `INSERT INTO store_settings (name, description, currency, email, phone, address, tax_rate, tax_enabled, return_window_days)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [name, description, currency || 'USD', email, phone, address, parsedTaxRate, !!tax_enabled, parsedReturnDays]
+        `INSERT INTO store_settings (name, description, currency, email, phone, address, tax_rate, tax_enabled, return_window_days, timezone)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [name, description, currency || 'USD', email, phone, address, parsedTaxRate, !!tax_enabled, parsedReturnDays, tz]
       );
     }
     await cache.del(CACHE_KEY);

@@ -17,7 +17,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Static file serving for uploads
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Helmet defaults to Cross-Origin-Resource-Policy: same-origin, which makes
+// browsers refuse to *display* these images when the web app is served from a
+// different origin than the API (e.g. Vite on :5173 with VITE_API_URL set).
+// Uploaded media is public, so allow it to be embedded from anywhere.
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, '..', 'uploads')));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -26,6 +33,7 @@ app.use('/api/categories', require('./routes/categories'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/reservations', require('./routes/reservations'));
 app.use('/api/returns', require('./routes/returns'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/users', require('./routes/users'));
@@ -41,6 +49,9 @@ app.use((err, req, res, next) => {
   const msg = process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message;
   res.status(500).json({ error: msg });
 });
+
+// Purge expired stock holds so the reservations table stays small
+require('./utils/reservations').startExpiryJob();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

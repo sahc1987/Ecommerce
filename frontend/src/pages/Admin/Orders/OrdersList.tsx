@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
+import { formatDate } from '../../../utils/dates';
 import { Link, useSearchParams } from "react-router-dom";
 import { ShoppingCart, Search } from "lucide-react";
 import api from "../../../api";
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
-  paid: "bg-blue-100 text-blue-800",
-  processing: "bg-indigo-100 text-indigo-800",
+  paid: "bg-primary-100 text-primary-800",
+  processing: "bg-primary-100 text-primary-800",
   shipped: "bg-purple-100 text-purple-800",
   delivered: "bg-green-100 text-green-800",
   cancelled: "bg-red-100 text-red-800",
@@ -53,8 +54,8 @@ export default function OrdersList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{total} orders total</p>
+          <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
+          <p className="text-slate-500 text-sm mt-0.5">{total} orders total</p>
         </div>
       </div>
 
@@ -69,8 +70,8 @@ export default function OrdersList() {
             }}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
               status === s
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                ? "bg-primary-600 text-white"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
             {s ? s.charAt(0).toUpperCase() + s.slice(1) : "All"}
@@ -81,59 +82,59 @@ export default function OrdersList() {
       <div className="card p-0 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-slate-400">
             <ShoppingCart size={40} className="mx-auto mb-3 opacity-40" />
             <p>No orders found</p>
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">
+                <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Order ID
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500 hidden md:table-cell">
+                <th className="text-left px-6 py-3 font-medium text-slate-500 hidden md:table-cell">
                   Customer
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500 hidden sm:table-cell">
+                <th className="text-left px-6 py-3 font-medium text-slate-500 hidden sm:table-cell">
                   Date
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">
+                <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Total
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">
+                <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Status
                 </th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {orders.map((o) => (
-                <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-mono text-xs text-gray-500">
+                <tr key={o.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">
                     #{o.id.substring(0, 8).toUpperCase()}
                   </td>
                   <td className="px-6 py-4 hidden md:table-cell">
-                    <p className="font-medium text-gray-900">
+                    <p className="font-medium text-slate-900">
                       {o.customer_name || "Guest"}
                     </p>
-                    <p className="text-xs text-gray-400">{o.customer_email}</p>
+                    <p className="text-xs text-slate-400">{o.customer_email}</p>
                   </td>
-                  <td className="px-6 py-4 text-gray-500 hidden sm:table-cell">
-                    {new Date(o.created_at).toLocaleDateString()}
+                  <td className="px-6 py-4 text-slate-500 hidden sm:table-cell">
+                    {formatDate(o.created_at)}
                   </td>
-                  <td className="px-6 py-4 font-semibold text-gray-900">
+                  <td className="px-6 py-4 font-semibold text-slate-900">
                     ${parseFloat(o.total).toFixed(2)}
-                    <span className="text-xs text-gray-400 font-normal ml-1">
+                    <span className="text-xs text-slate-400 font-normal ml-1">
                       ({o.item_count} items)
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`badge ${statusColors[o.status] ?? "bg-gray-100 text-gray-800"}`}
+                      className={`badge ${statusColors[o.status] ?? "bg-slate-100 text-slate-800"}`}
                     >
                       {o.status}
                     </span>
@@ -141,7 +142,7 @@ export default function OrdersList() {
                   <td className="px-6 py-4">
                     <Link
                       to={`/admin/orders/${o.id}`}
-                      className="text-blue-600 hover:underline text-sm"
+                      className="text-primary-600 hover:underline text-sm"
                     >
                       View
                     </Link>
@@ -165,7 +166,7 @@ export default function OrdersList() {
           >
             Previous
           </button>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-slate-600">
             Page {page} of {pages}
           </span>
           <button

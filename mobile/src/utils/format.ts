@@ -2,6 +2,44 @@ import type {Product} from '../types';
 
 let activeCurrency = 'USD';
 
+// Dates are rendered in the store's zone (a store setting), not the device's,
+// so every client shows the same "placed on" day.
+let activeTimeZone = 'UTC';
+
+export const isValidTimeZone = (tz: string) => {
+  try {
+    Intl.DateTimeFormat(undefined, {timeZone: tz});
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const setTimeZone = (tz?: string | null) => {
+  if (tz && isValidTimeZone(tz)) {
+    activeTimeZone = tz;
+  }
+};
+
+export const deviceTimeZone = () =>
+  Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+const formatIn = (iso: string, options: Intl.DateTimeFormatOptions) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return '';
+  }
+  try {
+    return new Intl.DateTimeFormat('en-US', {...options, timeZone: activeTimeZone}).format(d);
+  } catch {
+    return d.toLocaleDateString('en-US', options);
+  }
+};
+
+/** Units a shopper can buy right now: stock minus other carts' active holds. */
+export const sellableStock = (p: Pick<Product, 'stock' | 'available_stock'>) =>
+  p.available_stock ?? p.stock;
+
 export const setCurrency = (code?: string | null) => {
   if (code) {
     activeCurrency = code;
@@ -25,23 +63,14 @@ export const formatDate = (iso?: string | null) => {
   if (!iso) {
     return '';
   }
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatIn(iso, {year: 'numeric', month: 'short', day: 'numeric'});
 };
 
 export const formatDateTime = (iso?: string | null) => {
   if (!iso) {
     return '';
   }
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatIn(iso, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
 };
 
 export const shortId = (id?: string | null) =>

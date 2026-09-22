@@ -167,7 +167,7 @@ export default function ProductForm() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -177,11 +177,11 @@ export default function ProductForm() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate("/admin/products")}
-          className="text-gray-400 hover:text-gray-600"
+          className="text-slate-400 hover:text-slate-600"
         >
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-slate-900">
           {isEdit ? "Edit Product" : "New Product"}
         </h1>
       </div>
@@ -189,11 +189,11 @@ export default function ProductForm() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic info */}
         <div className="card space-y-4">
-          <h2 className="font-semibold text-gray-900">Basic Information</h2>
+          <h2 className="font-semibold text-slate-900">Basic Information</h2>
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-slate-700 mb-1"
             >
               Product Name *
             </label>
@@ -208,7 +208,7 @@ export default function ProductForm() {
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-slate-700 mb-1"
             >
               Description
             </label>
@@ -225,7 +225,7 @@ export default function ProductForm() {
             <div>
               <label
                 htmlFor="sku"
-                className="block text-sm font-medium text-gray-700 mb-1"
+                className="block text-sm font-medium text-slate-700 mb-1"
               >
                 SKU
               </label>
@@ -240,7 +240,7 @@ export default function ProductForm() {
             <div>
               <label
                 htmlFor="stock"
-                className="block text-sm font-medium text-gray-700 mb-1"
+                className="block text-sm font-medium text-slate-700 mb-1"
               >
                 Stock *
               </label>
@@ -263,11 +263,11 @@ export default function ProductForm() {
               onChange={(e) =>
                 setForm({ ...form, is_active: e.target.checked })
               }
-              className="w-4 h-4 rounded text-blue-600"
+              className="w-4 h-4 rounded text-primary-600"
             />
             <label
               htmlFor="is_active"
-              className="text-sm font-medium text-gray-700"
+              className="text-sm font-medium text-slate-700"
             >
               Active (visible to customers)
             </label>
@@ -276,14 +276,14 @@ export default function ProductForm() {
 
         {/* Pricing */}
         <div className="card space-y-4">
-          <h2 className="font-semibold text-gray-900">Pricing</h2>
+          <h2 className="font-semibold text-slate-900">Pricing</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
                 Price *
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                   $
                 </span>
                 <input
@@ -298,11 +298,11 @@ export default function ProductForm() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
                 Compare-at Price
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                   $
                 </span>
                 <input
@@ -319,7 +319,7 @@ export default function ProductForm() {
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 space-y-4">
+          <div className="border-t border-slate-100 pt-4 space-y-4">
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -328,11 +328,11 @@ export default function ProductForm() {
                 onChange={(e) =>
                   setForm({ ...form, discount_active: e.target.checked })
                 }
-                className="w-4 h-4 rounded text-blue-600"
+                className="w-4 h-4 rounded text-primary-600"
               />
               <label
                 htmlFor="discount_active"
-                className="text-sm font-medium text-gray-700"
+                className="text-sm font-medium text-slate-700"
               >
                 Enable Discount
               </label>
@@ -340,7 +340,7 @@ export default function ProductForm() {
             {form.discount_active && (
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Discount %
                   </label>
                   <div className="relative">
@@ -355,13 +355,13 @@ export default function ProductForm() {
                         setForm({ ...form, discount_percent: e.target.value })
                       }
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                       %
                     </span>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Start (optional)
                   </label>
                   <input
@@ -374,7 +374,7 @@ export default function ProductForm() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     End (optional)
                   </label>
                   <input
@@ -393,10 +393,10 @@ export default function ProductForm() {
 
         {/* Category */}
         <div className="card space-y-4">
-          <h2 className="font-semibold text-gray-900">Organization</h2>
+          <h2 className="font-semibold text-slate-900">Organization</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
                 Category
               </label>
               <select
@@ -413,7 +413,7 @@ export default function ProductForm() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
                 Subcategory
               </label>
               <select
@@ -437,7 +437,7 @@ export default function ProductForm() {
 
         {/* Images */}
         <div className="card space-y-4">
-          <h2 className="font-semibold text-gray-900">Images</h2>
+          <h2 className="font-semibold text-slate-900">Images</h2>
           {!isEdit && (
             <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
               Save the product first, then you can add images.
@@ -451,7 +451,7 @@ export default function ProductForm() {
                     <img
                       src={img.url}
                       alt=""
-                      className="w-full h-full object-cover rounded-lg border border-gray-200"
+                      className="w-full h-full object-cover rounded-lg border border-slate-200"
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                       <button
@@ -484,7 +484,7 @@ export default function ProductForm() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={uploadingImages}
-                  className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors"
+                  className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 hover:border-primary-400 hover:text-primary-500 transition-colors"
                 >
                   <Upload size={20} />
                   <span className="text-xs mt-1">

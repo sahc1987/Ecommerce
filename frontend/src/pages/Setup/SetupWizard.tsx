@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Store, ArrowRight, Check } from "lucide-react";
 import api from "../../api";
+import TimeZoneSelect from "../../components/TimeZoneSelect";
+import { browserTimeZone, setStoreTimeZone } from "../../utils/dates";
 
 interface Props {
   onComplete: () => void;
@@ -16,6 +18,7 @@ export default function SetupWizard({ onComplete }: Props) {
     name: "",
     description: "",
     currency: "USD",
+    timezone: browserTimeZone(),
     email: "",
     phone: "",
     address: "",
@@ -26,6 +29,7 @@ export default function SetupWizard({ onComplete }: Props) {
     setLoading(true);
     try {
       await api.post("/setup/complete", form);
+      setStoreTimeZone(form.timezone);
       onComplete();
       toast.success("Store configured successfully!");
       navigate("/admin");
@@ -39,7 +43,7 @@ export default function SetupWizard({ onComplete }: Props) {
   const currencies = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "BRL", "MXN"];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         {/* Progress */}
         <div className="flex items-center justify-center mb-8 gap-3">
@@ -48,17 +52,17 @@ export default function SetupWizard({ onComplete }: Props) {
               <div
                 className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${
                   step > s
-                    ? "bg-blue-600 text-white"
+                    ? "bg-primary-600 text-white"
                     : step === s
-                      ? "bg-blue-600 text-white ring-4 ring-blue-200"
-                      : "bg-white text-gray-400 border-2 border-gray-200"
+                      ? "bg-primary-600 text-white ring-4 ring-primary-200"
+                      : "bg-white text-slate-400 border-2 border-slate-200"
                 }`}
               >
                 {step > s ? <Check size={16} /> : s}
               </div>
               {s < 3 && (
                 <div
-                  className={`w-16 h-0.5 mx-1 ${step > s ? "bg-blue-600" : "bg-gray-200"}`}
+                  className={`w-16 h-0.5 mx-1 ${step > s ? "bg-primary-600" : "bg-slate-200"}`}
                 />
               )}
             </div>
@@ -67,16 +71,16 @@ export default function SetupWizard({ onComplete }: Props) {
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Store className="text-blue-600" size={24} />
+            <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+              <Store className="text-primary-600" size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-slate-900">
                 {step === 1 && "Welcome! Set up your store"}
                 {step === 2 && "Contact & Location"}
                 {step === 3 && "Review & Launch"}
               </h1>
-              <p className="text-gray-500 text-sm">
+              <p className="text-slate-500 text-sm">
                 {step === 1 && "Tell us about your business"}
                 {step === 2 && "Where can customers reach you?"}
                 {step === 3 && "Everything looks good?"}
@@ -97,7 +101,7 @@ export default function SetupWizard({ onComplete }: Props) {
             {step === 1 && (
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Store Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -109,7 +113,7 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Description
                   </label>
                   <textarea
@@ -122,7 +126,7 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Currency
                   </label>
                   <select
@@ -139,13 +143,22 @@ export default function SetupWizard({ onComplete }: Props) {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label htmlFor="timezone" className="block text-sm font-medium text-slate-700 mb-1">
+                    Time Zone
+                  </label>
+                  <TimeZoneSelect
+                    value={form.timezone}
+                    onChange={(tz) => setForm({ ...form, timezone: tz })}
+                  />
+                </div>
               </div>
             )}
 
             {step === 2 && (
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Contact Email
                   </label>
                   <input
@@ -159,7 +172,7 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Phone
                   </label>
                   <input
@@ -173,7 +186,7 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     Address
                   </label>
                   <textarea
@@ -190,24 +203,25 @@ export default function SetupWizard({ onComplete }: Props) {
 
             {step === 3 && (
               <div className="space-y-4">
-                <div className="bg-gray-50 rounded-xl p-5 space-y-3">
+                <div className="bg-slate-50 rounded-xl p-5 space-y-3">
                   {[
                     { label: "Store Name", value: form.name },
                     { label: "Description", value: form.description || "—" },
                     { label: "Currency", value: form.currency },
+                    { label: "Time Zone", value: form.timezone.replace(/_/g, " ") },
                     { label: "Email", value: form.email || "—" },
                     { label: "Phone", value: form.phone || "—" },
                     { label: "Address", value: form.address || "—" },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex gap-4">
-                      <span className="text-sm font-medium text-gray-500 w-32 flex-shrink-0">
+                      <span className="text-sm font-medium text-slate-500 w-32 flex-shrink-0">
                         {label}
                       </span>
-                      <span className="text-sm text-gray-900">{value}</span>
+                      <span className="text-sm text-slate-900">{value}</span>
                     </div>
                   ))}
                 </div>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-slate-500">
                   You can update these settings anytime from the admin panel.
                 </p>
               </div>

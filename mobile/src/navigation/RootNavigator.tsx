@@ -12,6 +12,7 @@ import {setUnauthorizedHandler} from '../api/client';
 import {clearToken} from '../utils/storage';
 import {Loading} from '../components/ui';
 import {useUnreadCount} from '../hooks/useUnreadCount';
+import {useReservationSync} from '../hooks/useReservationSync';
 
 import LoginScreen from '../screens/Auth/LoginScreen';
 import RegisterScreen from '../screens/Auth/RegisterScreen';
@@ -293,6 +294,7 @@ const MainNavigator = () => {
 const RootNavigator = () => {
   const dispatch = useAppDispatch();
   const {user, booting} = useAppSelector(s => s.auth);
+  useReservationSync(); // keep server stock holds in step with the cart
 
   useEffect(() => {
     // A 401 anywhere means the stored token is dead — drop it and fall back to

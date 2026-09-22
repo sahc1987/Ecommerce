@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {FlatList, Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useNavigation} from '@react-navigation/native';
@@ -7,10 +7,14 @@ import {colors, font, radius, spacing} from '../../theme';
 import {formatMoney} from '../../utils/format';
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
 import {
+  cartBlocked,
   cartSubtotal,
+  lineStatus,
   removeItem,
+  renewReservations,
   setQuantity,
 } from '../../store/slices/cartSlice';
+import {HoldNotice} from '../../components/HoldNotice';
 import type {CartStackParams} from '../../navigation/types';
 import {mediaUrl} from '../../utils/media';
 
@@ -19,8 +23,17 @@ type Props = NativeStackScreenProps<CartStackParams, 'Cart'>;
 const CartScreen = ({navigation}: Props) => {
   const dispatch = useAppDispatch();
   const rootNav = useNavigation();
-  const items = useAppSelector(s => s.cart.items);
+  const cart = useAppSelector(s => s.cart);
+  const {items, reservations, holdStatus} = cart;
   const subtotal = cartSubtotal(items);
+  const blocked = cartBlocked(cart);
+
+  // Opening the cart counts as activity: extend the stock hold.
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => void dispatch(renewReservations()));
+    void dispatch(renewReservations());
+    return unsub;
+  }, [navigation, dispatch]);
 
   if (items.length === 0) {
     return (
@@ -48,8 +61,12 @@ const CartScreen = ({navigation}: Props) => {
         data={items}
         keyExtractor={item => item.product_id}
         contentContainerStyle={styles.list}
-        renderItem={({item}) => (
-          <View style={styles.item}>
+        ListHeaderComponent={<HoldNotice />}
+        renderItem={({item}) => {
+          const status = lineStatus(item, reservations[item.product_id], holdStatus);
+          const held = reservations[item.product_id]?.reserved ?? 0;
+          return (
+          <View style={[styles.item, status !== 'ok' && status !== 'pending' && styles.itemProblem]}>
             {item.image ? (
               <Image source={{uri: mediaUrl(item.image)}} style={styles.image} />
             ) : (
@@ -62,6 +79,13 @@ const CartScreen = ({navigation}: Props) => {
                 {item.name}
               </Text>
               <Text style={styles.itemPrice}>{formatMoney(item.price)} each</Text>
+              {status === 'unavailable' ? (
+                <Text style={styles.problemNote}>Out of stock — reserved by another shopper</Text>
+              ) : status === 'partial' ? (
+                <Text style={styles.problemNote}>Only {held} available — reduce quantity</Text>
+              ) : status === 'expired' ? (
+                <Text style={styles.stockNote}>Hold expired</Text>
+              ) : null}
               <View style={styles.itemFooter}>
                 <View style={styles.stepper}>
                   <Pressable
@@ -113,7 +137,8 @@ const CartScreen = ({navigation}: Props) => {
               {formatMoney(item.price * item.quantity)}
             </Text>
           </View>
-        )}
+          );
+        }}
       />
 
       <View style={styles.summary}>
@@ -125,8 +150,9 @@ const CartScreen = ({navigation}: Props) => {
           Tax, if any, is calculated by the store at checkout.
         </Text>
         <Button
-          title="Proceed to checkout"
+          title={blocked ? 'Fix cart to continue' : 'Proceed to checkout'}
           icon="arrow-right"
+          disabled={blocked}
           onPress={() => navigation.navigate('Checkout')}
           style={styles.cta}
         />
@@ -174,6 +200,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   stockNote: {fontSize: font.xs, color: colors.warning},
+  problemNote: {fontSize: font.xs, color: colors.danger, fontWeight: '600'},
+  itemProblem: {borderColor: colors.danger, backgroundColor: colors.dangerSoft},
   lineTotal: {fontSize: font.sm, fontWeight: '700', color: colors.text},
   summary: {
     backgroundColor: colors.surface,

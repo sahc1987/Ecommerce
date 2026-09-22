@@ -88,24 +88,69 @@ router.get('/recent-orders', async (req, res) => {
 });
 
 // GET sales chart (last 30 days)
+// Query params: granularity=hour|day|week|month (default day),
+// from/to = ISO dates (default: last 30 days). Buckets with no orders are
+// filled with zeros so the chart has a continuous axis.
+const GRANULARITIES = new Set(['hour', 'day', 'week', 'month']);
+const isIsoDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+
+// The store's IANA zone: "today" and daily buckets follow it, not the server's.
+async function storeTimeZone() {
+  const r = await db.query('SELECT timezone FROM store_settings LIMIT 1');
+  return r.rows[0]?.timezone || 'UTC';
+}
+
+// YYYY-MM-DD of "now" in the given zone.
+const todayIn = (tz) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
 router.get('/sales-chart', async (req, res) => {
-  const cached = await cache.get('dashboard:sales-chart');
+  const granularity = GRANULARITIES.has(req.query.granularity) ? req.query.granularity : 'day';
+  const tz = await storeTimeZone();
+  const to = isIsoDate(req.query.to) ? req.query.to : todayIn(tz);
+  let from = isIsoDate(req.query.from) ? req.query.from : null;
+  if (!from) {
+    const d = new Date(to);
+    d.setUTCDate(d.getUTCDate() - 29);
+    from = d.toISOString().slice(0, 10);
+  }
+  if (from > to) return res.status(400).json({ error: '"from" must be on or before "to"' });
+
+  const cacheKey = cache.queryKey('dashboard:sales-chart', { granularity, from, to, tz });
+  const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
   try {
-    const result = await db.query(`
-      SELECT
-        DATE_TRUNC('day', created_at) as date,
-        COUNT(*) as orders,
-        COALESCE(SUM(total), 0) as revenue
-      FROM orders
-      WHERE status IN ('paid','processing','shipped','delivered')
-        AND created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY DATE_TRUNC('day', created_at)
-      ORDER BY date ASC
-    `);
-    const data = { chart: result.rows };
-    await cache.set('dashboard:sales-chart', data, TTL.salesChart);
+    const result = await db.query(
+      `WITH buckets AS (
+         SELECT generate_series(
+           DATE_TRUNC($1, $2::date),
+           -- hourly buckets run through the last hour of the end day
+           CASE WHEN $1 = 'hour' THEN $3::date + INTERVAL '23 hours' ELSE DATE_TRUNC($1, $3::date) END,
+           ('1 ' || $1)::interval
+         ) AS date
+       ),
+       sales AS (
+         -- created_at is stored in UTC; shift to the store's zone before bucketing
+         SELECT DATE_TRUNC($1, (created_at AT TIME ZONE 'UTC') AT TIME ZONE $4) AS date,
+                COUNT(*) AS orders,
+                COALESCE(SUM(total), 0) AS revenue
+         FROM orders
+         WHERE status IN ('paid','processing','shipped','delivered')
+           AND created_at >= ($2::date::timestamp AT TIME ZONE $4) AT TIME ZONE 'UTC'
+           AND created_at < (($3::date + INTERVAL '1 day')::timestamp AT TIME ZONE $4) AT TIME ZONE 'UTC'
+         GROUP BY 1
+       )
+       SELECT to_char(b.date, CASE WHEN $1 = 'hour' THEN 'YYYY-MM-DD"T"HH24:00' ELSE 'YYYY-MM-DD' END) AS date,
+              COALESCE(s.orders, 0) AS orders,
+              COALESCE(s.revenue, 0) AS revenue
+       FROM buckets b
+       LEFT JOIN sales s ON s.date = b.date
+       ORDER BY b.date ASC`,
+      [granularity, from, to, tz]
+    );
+    const data = { chart: result.rows, granularity, from, to, timezone: tz };
+    await cache.set(cacheKey, data, TTL.salesChart);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });

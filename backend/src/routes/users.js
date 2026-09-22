@@ -5,6 +5,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const safeErr = require('../utils/safeErr');
 
 const MAX_LIMIT = 100;
+const ROLES = new Set(['admin', 'staff', 'customer']);
 
 router.use(authenticate, requireRole('admin'));
 
@@ -59,10 +60,22 @@ router.get('/:id', async (req, res) => {
 // PUT update user
 router.put('/:id', async (req, res) => {
   const { name, email, role, is_active, password } = req.body;
+  if (role !== undefined && !ROLES.has(role))
+    return res.status(400).json({ error: 'Invalid role' });
+  if (password !== undefined && (typeof password !== 'string' || password.length < 8 || password.length > 72))
+    return res.status(400).json({ error: 'Password must be 8-72 characters' });
+  // An admin editing themselves must stay an active admin, or they lock themselves out.
+  const isSelf = req.params.id === req.user.id;
+  if (isSelf && ((role !== undefined && role !== 'admin') || is_active === false))
+    return res.status(400).json({ error: 'You cannot demote or deactivate your own account' });
   try {
     const current = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
     if (!current.rows[0]) return res.status(404).json({ error: 'User not found' });
     const u = current.rows[0];
+    if (email !== undefined && email !== u.email) {
+      const taken = await db.query('SELECT 1 FROM users WHERE email = $1 AND id <> $2', [email, req.params.id]);
+      if (taken.rows.length) return res.status(400).json({ error: 'Email already in use' });
+    }
     const hash = password ? await bcrypt.hash(password, 10) : u.password_hash;
     const result = await db.query(
       `UPDATE users SET name=$1, email=$2, role=$3, is_active=$4, password_hash=$5, updated_at=NOW()

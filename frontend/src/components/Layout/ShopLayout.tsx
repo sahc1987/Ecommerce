@@ -3,9 +3,26 @@ import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
-import { ShoppingCart, Store, LogOut, LayoutDashboard, Package, Search } from 'lucide-react';
+import {
+  ShoppingCart, LogOut, LayoutDashboard, Package, Search, ChevronDown, User,
+  Facebook, Instagram, Twitter, Youtube,
+} from 'lucide-react';
 import api from '../../api';
 import NotificationBell from '../Notifications/NotificationBell';
+import StoreLogo from '../StoreLogo';
+import { Category } from '../../utils/pricing';
+import { useReservationSync } from '../../hooks/useReservations';
+
+export interface StoreInfo {
+  name: string;
+  description?: string | null;
+  logo_url?: string | null;
+}
+
+export interface ShopOutletContext {
+  store: StoreInfo;
+  categories: Category[];
+}
 
 export default function ShopLayout() {
   const dispatch = useDispatch();
@@ -14,13 +31,18 @@ export default function ShopLayout() {
   const cartCount = useSelector((s: RootState) =>
     s.cart.items.reduce((sum, i) => sum + i.quantity, 0)
   );
-  const [categories, setCategories] = useState<any[]>([]);
+  const [store, setStore] = useState<StoreInfo>({ name: 'ShopHub' });
+  const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  useReservationSync(); // keep server stock holds in step with the cart
 
   useEffect(() => {
     api.get('/categories').then((res) => setCategories(res.data.categories)).catch(() => {});
+    api.get('/setup/status').then((res) => {
+      if (res.data.store?.name) setStore(res.data.store);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -44,43 +66,56 @@ export default function ShopLayout() {
     navigate(searchQuery.trim() ? `/?search=${encodeURIComponent(searchQuery.trim())}` : '/');
   };
 
+  const tagline = store.description?.trim() || 'Upgrade today, smarter tomorrow';
+  const year = new Date().getFullYear();
+  const firstName = user?.name.split(' ')[0];
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="bg-gray-900 sticky top-0 z-40 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4 h-16">
+    <div className="min-h-screen flex flex-col bg-slate-100">
+      <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-sm">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+          <div className="flex items-center gap-3 sm:gap-6 h-[68px]">
+            {/* Logo */}
             <Link
               to="/"
               onClick={() => setSearchQuery('')}
               className="flex-shrink-0 flex items-center gap-2.5"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center shadow-md">
-                <Store size={15} className="text-white" />
+              <StoreLogo logoUrl={store.logo_url} name={store.name} size={40} />
+              <div className="leading-tight">
+                <p className="font-extrabold text-xl text-primary-700 tracking-tight">{store.name}</p>
+                <p className="text-[10px] text-slate-400 hidden sm:block truncate max-w-[180px]">{tagline}</p>
               </div>
-              <span className="font-bold text-xl text-white tracking-tight">ShopHub</span>
             </Link>
 
-            <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4">
-              <div className="flex rounded overflow-hidden shadow-sm">
+            {/* Search */}
+            <form onSubmit={handleSearch} className="flex-1 max-w-2xl">
+              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:ring-2 focus-within:ring-primary-500/40 focus-within:border-primary-300 transition-all">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search products..."
-                  className="flex-1 bg-white text-gray-900 placeholder-gray-400 px-4 py-2.5 text-sm focus:outline-none"
+                  placeholder="Search for laptops, phones, accessories..."
+                  className="flex-1 min-w-0 bg-transparent text-slate-900 placeholder-slate-400 px-4 py-2.5 text-sm focus:outline-none"
                 />
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 transition-colors flex items-center gap-1.5 text-sm font-medium flex-shrink-0"
+                  className="bg-primary-600 hover:bg-primary-700 text-white h-[42px] px-4 sm:px-5 transition-colors flex items-center gap-1.5 text-sm font-semibold flex-shrink-0"
+                  aria-label="Search"
                 >
-                  <Search size={15} />
-                  <span className="hidden sm:inline">Search</span>
+                  <Search size={16} />
                 </button>
               </div>
             </form>
 
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <Link to="/cart" className="relative p-2.5 text-gray-300 hover:text-white transition-colors">
+            {/* Actions */}
+            <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+              <NotificationBell buttonClassName="text-slate-500 hover:text-primary-600 hover:bg-slate-100 rounded-lg" />
+              <Link
+                to="/cart"
+                className="relative p-2.5 text-slate-500 hover:text-primary-600 hover:bg-slate-100 rounded-lg transition-colors"
+                aria-label="Cart"
+              >
                 <ShoppingCart size={22} />
                 {cartCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-sm">
@@ -88,41 +123,46 @@ export default function ShopLayout() {
                   </span>
                 )}
               </Link>
-              <NotificationBell />
 
               {user ? (
                 <div className="relative ml-1" ref={userMenuRef}>
                   <button
                     onClick={() => setUserMenuOpen((o) => !o)}
-                    className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold hover:ring-2 hover:ring-indigo-400 transition-all"
+                    className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-slate-100 transition-colors"
                     aria-label="Account menu"
                   >
-                    {user.name[0].toUpperCase()}
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
+                      {user.name[0].toUpperCase()}
+                    </div>
+                    <div className="hidden md:block text-left leading-tight">
+                      <p className="text-sm font-semibold text-slate-900 truncate max-w-[120px]">Hello, {firstName}</p>
+                      <p className="text-[11px] text-slate-400 flex items-center gap-0.5">My Account <ChevronDown size={11} /></p>
+                    </div>
                   </button>
 
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50">
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
-                        <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-50">
+                      <div className="px-4 py-3 border-b border-slate-100">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{user.name}</p>
+                        <p className="text-xs text-slate-500 capitalize">{user.role}</p>
                       </div>
                       <Link
                         to="/orders"
                         onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                       >
-                        <Package size={15} className="text-gray-400" /> My Orders
+                        <Package size={15} className="text-slate-400" /> My Orders
                       </Link>
                       {['admin', 'staff'].includes(user.role) && (
                         <Link
                           to="/admin"
                           onClick={() => setUserMenuOpen(false)}
-                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                         >
-                          <LayoutDashboard size={15} className="text-gray-400" /> Admin Panel
+                          <LayoutDashboard size={15} className="text-slate-400" /> Admin Panel
                         </Link>
                       )}
-                      <div className="border-t border-gray-100 mt-1 pt-1">
+                      <div className="border-t border-slate-100 mt-1 pt-1">
                         <button
                           onClick={handleLogout}
                           className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-500 hover:bg-rose-50 transition-colors w-full text-left"
@@ -134,16 +174,17 @@ export default function ShopLayout() {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 ml-2">
+                <div className="flex items-center gap-1.5 ml-1">
                   <Link
                     to="/login"
-                    className="text-sm text-gray-300 hover:text-white px-3 py-2 hover:bg-gray-700 rounded transition-colors"
+                    className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-primary-600 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
                   >
-                    Sign in
+                    <User size={16} />
+                    <span className="hidden sm:inline">Sign in</span>
                   </Link>
                   <Link
                     to="/register"
-                    className="text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded transition-colors"
+                    className="text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors hidden sm:block"
                   >
                     Sign up
                   </Link>
@@ -153,21 +194,22 @@ export default function ShopLayout() {
           </div>
         </div>
 
+        {/* Category strip — only on screens without the left sidebar */}
         {categories.length > 0 && (
-          <nav className="bg-gray-800 border-t border-gray-700">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center overflow-x-auto scrollbar-hide">
+          <nav className="lg:hidden bg-white border-t border-slate-100">
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 flex items-center overflow-x-auto scrollbar-hide">
               <Link
                 to="/"
                 onClick={() => setSearchQuery('')}
-                className="flex-shrink-0 text-gray-300 hover:text-white text-sm font-medium px-4 py-3 hover:bg-gray-700 transition-colors whitespace-nowrap"
+                className="flex-shrink-0 text-slate-600 hover:text-primary-600 text-sm font-medium px-3 py-2.5 whitespace-nowrap"
               >
-                All Products
+                All
               </Link>
               {categories.map((cat) => (
                 <Link
                   key={cat.id}
                   to={`/?category=${cat.id}`}
-                  className="flex-shrink-0 text-gray-300 hover:text-white text-sm font-medium px-4 py-3 hover:bg-gray-700 transition-colors whitespace-nowrap"
+                  className="flex-shrink-0 text-slate-600 hover:text-primary-600 text-sm font-medium px-3 py-2.5 whitespace-nowrap"
                 >
                   {cat.name}
                 </Link>
@@ -178,26 +220,27 @@ export default function ShopLayout() {
       </header>
 
       <main className="flex-1">
-        <Outlet />
+        <Outlet context={{ store, categories } satisfies ShopOutletContext} />
       </main>
 
-      <footer className="bg-gray-900 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
-                <Store size={13} className="text-white" />
-              </div>
-              <span className="font-bold text-white">ShopHub</span>
+      <footer className="bg-white border-t border-slate-200 mt-10">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <p>&copy; {year} {store.name}. All rights reserved.</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <button type="button" className="hover:text-primary-600 transition-colors">About</button>
+              <button type="button" className="hover:text-primary-600 transition-colors">Help</button>
+              <button type="button" className="hover:text-primary-600 transition-colors">Privacy</button>
+              <button type="button" className="hover:text-primary-600 transition-colors">Terms</button>
+              <button type="button" className="hover:text-primary-600 transition-colors">Press</button>
             </div>
-            <p className="text-sm text-gray-400">
-              &copy; {new Date().getFullYear()} ShopHub. All rights reserved.
-            </p>
-            <div className="flex gap-5 text-sm text-gray-400">
-              <button type="button" className="hover:text-white transition-colors">Privacy</button>
-              <button type="button" className="hover:text-white transition-colors">Terms</button>
-              <button type="button" className="hover:text-white transition-colors">Support</button>
+            <div className="flex items-center gap-3 text-slate-400">
+              <Facebook size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
+              <Instagram size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
+              <Twitter size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
+              <Youtube size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
             </div>
+            <p className="text-slate-400">Tech for a <span className="text-primary-600 font-semibold">Better Tomorrow</span></p>
           </div>
         </div>
       </footer>

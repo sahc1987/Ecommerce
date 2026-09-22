@@ -1,6 +1,6 @@
 import {createAsyncThunk, createSlice} from '@reduxjs/toolkit';
 import {setupApi} from '../../api';
-import {setCurrency} from '../../utils/format';
+import {setCurrency, setTimeZone} from '../../utils/format';
 import type {StoreSettings} from '../../types';
 
 interface SettingsState {
@@ -35,6 +35,7 @@ const settingsSlice = createSlice({
         state.configured = action.payload.configured;
         state.loaded = true;
         setCurrency(action.payload.store?.currency);
+        setTimeZone(action.payload.store?.timezone);
       })
       .addCase(loadStoreSettings.rejected, state => {
         state.loaded = true;

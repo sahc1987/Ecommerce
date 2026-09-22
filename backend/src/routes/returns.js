@@ -123,19 +123,39 @@ router.post('/', authenticate, async (req, res) => {
         expired: true,
       });
 
+    // Only lines that belong to this order may be returned, and never more
+    // units than were bought — otherwise a client could reference another
+    // customer's order_item_id or inflate the refund.
+    let lines = [];
+    if (items?.length) {
+      if (!Array.isArray(items) || items.length > 100)
+        return res.status(400).json({ error: 'Invalid items' });
+      const owned = await db.query(
+        'SELECT id, quantity FROM order_items WHERE order_id = $1',
+        [order_id]
+      );
+      const maxQty = new Map(owned.rows.map((r) => [r.id, r.quantity]));
+      for (const item of items) {
+        const qty = Number.parseInt(item?.quantity, 10);
+        if (!maxQty.has(item?.order_item_id))
+          return res.status(400).json({ error: 'Item does not belong to this order' });
+        if (!Number.isInteger(qty) || qty < 1 || qty > maxQty.get(item.order_item_id))
+          return res.status(400).json({ error: 'Invalid return quantity' });
+        lines.push({ order_item_id: item.order_item_id, quantity: qty, reason: item.reason ?? null });
+      }
+    }
+
     const returnRes = await db.query(
       'INSERT INTO returns (order_id, user_id, reason) VALUES ($1,$2,$3) RETURNING *',
       [order_id, req.user.id, reason]
     );
     const ret = returnRes.rows[0];
 
-    if (items?.length) {
-      for (const item of items) {
-        await db.query(
-          'INSERT INTO return_items (return_id, order_item_id, quantity, reason) VALUES ($1,$2,$3,$4)',
-          [ret.id, item.order_item_id, item.quantity, item.reason]
-        );
-      }
+    for (const line of lines) {
+      await db.query(
+        'INSERT INTO return_items (return_id, order_item_id, quantity, reason) VALUES ($1,$2,$3,$4)',
+        [ret.id, line.order_item_id, line.quantity, line.reason]
+      );
     }
 
     const orderShort = order_id.slice(0, 8).toUpperCase();

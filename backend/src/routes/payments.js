@@ -5,6 +5,8 @@ const { authenticate } = require('../middleware/auth');
 const cache = require('../utils/cache');
 const { createNotification, notifyAdmins } = require('../utils/notifications');
 const safeErr = require('../utils/safeErr');
+const reservations = require('../utils/reservations');
+const { idempotent } = require('../middleware/idempotency');
 
 // Prevent authenticated users from flooding the order endpoint
 const orderLimiter = rateLimit({
@@ -37,9 +39,10 @@ async function fetchLockedProduct(client, productId) {
   return res.rows[0] || null;
 }
 
-router.post('/place-order', authenticate, orderLimiter, async (req, res) => {
+router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, res) => {
   const { items, shipping_address, notes } = req.body;
   if (!items?.length) return res.status(400).json({ error: 'Cart is empty' });
+  const cartToken = reservations.getCartToken(req);
 
   // Shipping is server-controlled — never trusted from the client
   const shipping = 0;
@@ -58,9 +61,18 @@ router.post('/place-order', authenticate, orderLimiter, async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Product not found: ${item.product_id}` });
       }
-      if (product.stock < item.quantity) {
+      // Stock held by other carts is not for sale to this one; our own hold
+      // (if any) is consumed by this order.
+      const available = await reservations.availableFor(client, product.id, cartToken);
+      if (available < item.quantity) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
+        return res.status(409).json({
+          error: available > 0
+            ? `Only ${available} of ${product.name} available right now`
+            : `${product.name} is out of stock`,
+          product_id: product.id,
+          available,
+        });
       }
 
       const basePrice = Number.parseFloat(product.price);
@@ -101,6 +113,11 @@ router.post('/place-order', authenticate, orderLimiter, async (req, res) => {
         [order.id, item.product_id, item.product_name, item.product_image, item.unit_price, item.quantity, item.discount, item.total]
       );
       await client.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.product_id]);
+    }
+
+    // The sale is final: release this cart's holds on the purchased products.
+    if (cartToken) {
+      await client.query('DELETE FROM stock_reservations WHERE cart_token = $1', [cartToken]);
     }
 
     await client.query('COMMIT');

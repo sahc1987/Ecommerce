@@ -6,6 +6,7 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { RootState } from '../../store';
 import api from '../../api';
+import { formatDate } from '../../utils/dates';
 
 interface NotificationMetadata {
   order_id?: string;
@@ -36,7 +37,7 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  return formatDate(dateStr);
 }
 
 function NotificationIcon({
@@ -55,8 +56,8 @@ function NotificationIcon({
   }
   if (type === 'order_status') {
     return (
-      <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-        <Package size={16} className="text-blue-600" />
+      <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+        <Package size={16} className="text-primary-600" />
       </div>
     );
   }
@@ -87,7 +88,7 @@ interface Props {
 }
 
 export default function NotificationBell({
-  buttonClassName = 'text-gray-300 hover:text-white',
+  buttonClassName = 'text-slate-300 hover:text-white',
 }: Props) {
   const { user } = useSelector((s: RootState) => s.auth);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -176,10 +177,10 @@ export default function NotificationBell({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900 text-sm">Notifications</h3>
+              <h3 className="font-semibold text-slate-900 text-sm">Notifications</h3>
               {unread > 0 && (
                 <span className="bg-rose-100 text-rose-600 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
                   {unread} new
@@ -189,7 +190,7 @@ export default function NotificationBell({
             {unread > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                className="text-xs text-primary-600 hover:text-primary-800 font-medium"
               >
                 Mark all read
               </button>
@@ -198,7 +199,7 @@ export default function NotificationBell({
 
           <div className="max-h-96 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-400">
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
                 <Bell size={28} className="opacity-30" />
                 <p className="text-sm">No notifications yet</p>
               </div>
@@ -207,8 +208,8 @@ export default function NotificationBell({
                 {notifications.map((n) => (
                   <li
                     key={n.id}
-                    className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 ${
-                      !n.is_read ? 'bg-indigo-50/40' : ''
+                    className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${
+                      !n.is_read ? 'bg-primary-50/40' : ''
                     }`}
                     onClick={() => handleNotificationClick(n)}
                   >
@@ -216,7 +217,7 @@ export default function NotificationBell({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
                         <p
-                          className={`text-sm text-gray-900 truncate leading-snug ${
+                          className={`text-sm text-slate-900 truncate leading-snug ${
                             !n.is_read ? 'font-semibold' : 'font-medium'
                           }`}
                         >
@@ -224,20 +225,20 @@ export default function NotificationBell({
                         </p>
                         <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
                           {!n.is_read && (
-                            <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />
+                            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
                           )}
                           <button
                             onClick={(e) => handleDelete(e, n.id)}
-                            className="text-gray-300 hover:text-gray-600 transition-colors p-0.5 rounded"
+                            className="text-slate-300 hover:text-slate-600 transition-colors p-0.5 rounded"
                           >
                             <X size={12} />
                           </button>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
                         {n.message}
                       </p>
-                      <p className="text-[11px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
                     </div>
                   </li>
                 ))}

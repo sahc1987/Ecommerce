@@ -10,10 +10,10 @@ export default function OrderSuccess() {
       <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
         <CheckCircle size={40} className="text-green-600" />
       </div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Order Confirmed!</h1>
-      <p className="text-gray-500 mb-2">Thank you for your purchase. We've received your order and will process it shortly.</p>
+      <h1 className="text-3xl font-bold text-slate-900 mb-2">Order Confirmed!</h1>
+      <p className="text-slate-500 mb-2">Thank you for your purchase. We've received your order and will process it shortly.</p>
       {orderId && (
-        <p className="text-sm text-gray-400 mb-8">
+        <p className="text-sm text-slate-400 mb-8">
           Order #{orderId.substring(0, 8).toUpperCase()}
         </p>
       )}

@@ -1,6 +1,6 @@
 import axios, {AxiosError} from 'axios';
 import {API_URL} from '../config';
-import {loadToken} from '../utils/storage';
+import {loadCartToken, loadToken} from '../utils/storage';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -22,6 +22,14 @@ export const restoreAuthToken = async () => {
   return token;
 };
 
+let cartToken: string | null = null;
+
+/** Loads (or creates) the device cart token used for stock reservations. */
+export const restoreCartToken = async () => {
+  cartToken = await loadCartToken();
+  return cartToken;
+};
+
 let onUnauthorized: (() => void) | null = null;
 
 export const setUnauthorizedHandler = (fn: (() => void) | null) => {
@@ -31,6 +39,9 @@ export const setUnauthorizedHandler = (fn: (() => void) | null) => {
 api.interceptors.request.use(config => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (cartToken) {
+    config.headers['X-Cart-Token'] = cartToken;
   }
   return config;
 });

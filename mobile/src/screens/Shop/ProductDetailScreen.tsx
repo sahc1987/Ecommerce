@@ -15,7 +15,7 @@ import {productsApi} from '../../api';
 import {useAsync} from '../../hooks/useAsync';
 import {Button, ErrorState, Icon, Loading, StatusBadge} from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
-import {effectivePrice, formatMoney, isDiscounted} from '../../utils/format';
+import {effectivePrice, formatMoney, isDiscounted, sellableStock} from '../../utils/format';
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
 import {addItem} from '../../store/slices/cartSlice';
 import type {ShopStackParams} from '../../navigation/types';
@@ -52,7 +52,8 @@ const ProductDetailScreen = ({route}: Props) => {
   const images = product.images ?? [];
   const price = effectivePrice(product);
   const discounted = isDiscounted(product);
-  const remaining = product.stock - inCart;
+  const sellable = sellableStock(product); // stock minus other carts' holds
+  const remaining = sellable - inCart;
   const canAdd = remaining > 0;
 
   const add = () => {
@@ -124,15 +125,17 @@ const ProductDetailScreen = ({route}: Props) => {
         </View>
 
         <View style={styles.stockRow}>
-          {product.stock > 0 ? (
-            <StatusBadge status={product.stock <= 5 ? 'pending' : 'delivered'} />
+          {sellable > 0 ? (
+            <StatusBadge status={sellable <= 5 ? 'pending' : 'delivered'} />
           ) : (
             <StatusBadge status="cancelled" />
           )}
           <Text style={styles.stockText}>
-            {product.stock > 0
-              ? `${product.stock} in stock`
-              : 'Currently out of stock'}
+            {sellable > 0
+              ? `${sellable} in stock`
+              : sellable < product.stock
+                ? 'Out of stock — reserved by other shoppers'
+                : 'Currently out of stock'}
           </Text>
         </View>
 

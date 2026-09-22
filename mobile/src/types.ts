@@ -30,6 +30,8 @@ export interface Product {
   discount_start: string | null;
   discount_end: string | null;
   stock: number;
+  /** stock minus units other carts currently hold */
+  available_stock?: number;
   sku: string | null;
   category_id: number | null;
   subcategory_id: number | null;
@@ -155,6 +157,8 @@ export interface StoreSettings {
   tax_rate: string;
   tax_enabled: boolean;
   return_window_days: number;
+  /** IANA zone every date in the app is displayed in */
+  timezone?: string;
 }
 
 export interface DashboardSummary {

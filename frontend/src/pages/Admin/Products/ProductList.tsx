@@ -67,8 +67,8 @@ export default function ProductList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{total} products total</p>
+          <h1 className="text-2xl font-bold text-slate-900">Products</h1>
+          <p className="text-slate-500 text-sm mt-0.5">{total} products total</p>
         </div>
         <Link
           to="/admin/products/new"
@@ -83,7 +83,7 @@ export default function ProductList() {
         <div className="relative flex-1">
           <Search
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <input
             className="input pl-9"
@@ -100,44 +100,44 @@ export default function ProductList() {
       <div className="card p-0 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : products.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-slate-400">
             <Package size={40} className="mx-auto mb-3 opacity-40" />
             <p>No products found</p>
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">
+                <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Product
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500 hidden md:table-cell">
+                <th className="text-left px-6 py-3 font-medium text-slate-500 hidden md:table-cell">
                   Category
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">
+                <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Price
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500 hidden sm:table-cell">
+                <th className="text-left px-6 py-3 font-medium text-slate-500 hidden sm:table-cell">
                   Stock
                 </th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">
+                <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Status
                 </th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {products.map((p) => {
                 const effectivePrice = getEffectivePrice(p);
                 const hasDiscount = effectivePrice < Number.parseFloat(p.price);
                 return (
-                  <tr key={p.id} className="hover:bg-gray-50">
+                  <tr key={p.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                        <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
                           {p.primary_image ? (
                             <img
                               src={p.primary_image}
@@ -147,16 +147,16 @@ export default function ProductList() {
                           ) : (
                             <Package
                               size={18}
-                              className="m-auto text-gray-400 mt-2.5"
+                              className="m-auto text-slate-400 mt-2.5"
                             />
                           )}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900 truncate max-w-[180px]">
+                          <p className="font-medium text-slate-900 truncate max-w-[180px]">
                             {p.name}
                           </p>
                           {p.sku && (
-                            <p className="text-xs text-gray-400">
+                            <p className="text-xs text-slate-400">
                               SKU: {p.sku}
                             </p>
                           )}
@@ -165,20 +165,20 @@ export default function ProductList() {
                     </td>
                     <td className="px-6 py-4 hidden md:table-cell">
                       <div className="flex items-center gap-1.5">
-                        <Tag size={13} className="text-gray-400" />
-                        <span className="text-gray-600">
+                        <Tag size={13} className="text-slate-400" />
+                        <span className="text-slate-600">
                           {p.category_name || "—"}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div>
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-slate-900">
                           ${effectivePrice.toFixed(2)}
                         </span>
                         {hasDiscount && (
                           <>
-                            <span className="text-gray-400 line-through ml-1.5 text-xs">
+                            <span className="text-slate-400 line-through ml-1.5 text-xs">
                               ${Number.parseFloat(p.price).toFixed(2)}
                             </span>
                             <span className="ml-1.5 text-xs font-medium text-green-600">
@@ -193,15 +193,23 @@ export default function ProductList() {
                         className={
                           p.stock <= 5
                             ? "text-red-600 font-medium"
-                            : "text-gray-600"
+                            : "text-slate-600"
                         }
                       >
                         {p.stock}
                       </span>
+                      {p.reserved_stock > 0 && (
+                        <span
+                          className="ml-1.5 text-[11px] text-amber-600"
+                          title="Units currently held in shoppers' carts (released after 3 minutes of inactivity)"
+                        >
+                          {p.reserved_stock} in carts
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`badge ${p.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}
+                        className={`badge ${p.is_active ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-600"}`}
                       >
                         {p.is_active ? "Active" : "Draft"}
                       </span>
@@ -210,13 +218,13 @@ export default function ProductList() {
                       <div className="flex items-center gap-2 justify-end">
                         <Link
                           to={`/admin/products/${p.id}/edit`}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                         >
                           <Pencil size={15} />
                         </Link>
                         <button
                           onClick={() => handleDelete(p.id, p.name)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -242,7 +250,7 @@ export default function ProductList() {
           >
             Previous
           </button>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-slate-600">
             Page {page} of {pages}
           </span>
           <button

@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,7 +14,16 @@ import {Button, Card, Field, Icon, Row, SectionTitle} from '../../components/ui'
 import {colors, font, spacing} from '../../theme';
 import {formatMoney} from '../../utils/format';
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
-import {cartSubtotal, clearCart} from '../../store/slices/cartSlice';
+import {
+  cartBlocked,
+  cartSignature,
+  cartSubtotal,
+  clearCart,
+  renewReservations,
+  syncReservations,
+} from '../../store/slices/cartSlice';
+import {HoldNotice} from '../../components/HoldNotice';
+import {newIdempotencyKey} from '../../utils/storage';
 import type {CartStackParams} from '../../navigation/types';
 import type {ShippingAddress} from '../../types';
 
@@ -31,8 +40,25 @@ const REQUIRED: (keyof ShippingAddress)[] = [
 
 const CheckoutScreen = ({navigation}: Props) => {
   const dispatch = useAppDispatch();
-  const items = useAppSelector(s => s.cart.items);
+  const cart = useAppSelector(s => s.cart);
+  const {items} = cart;
+  const blocked = cartBlocked(cart);
   const user = useAppSelector(s => s.auth.user);
+
+  // One key per checkout attempt: a retried submit reuses it (the server
+  // de-duplicates); a changed cart gets a new one since the body would differ.
+  const signature = cartSignature(items);
+  const idempotencyKey = useRef(newIdempotencyKey());
+  useEffect(() => {
+    idempotencyKey.current = newIdempotencyKey();
+  }, [signature]);
+
+  // Being on the checkout screen keeps the stock hold alive.
+  useEffect(() => {
+    void dispatch(renewReservations());
+    const id = setInterval(() => void dispatch(renewReservations()), 60_000);
+    return () => clearInterval(id);
+  }, [dispatch]);
   const store = useAppSelector(s => s.settings.store);
 
   const [address, setAddress] = useState<ShippingAddress>({
@@ -68,21 +94,31 @@ const CheckoutScreen = ({navigation}: Props) => {
 
   const placeOrder = async () => {
     setTouched(true);
-    if (missing.length > 0 || items.length === 0) {
+    if (missing.length > 0 || items.length === 0 || blocked || submitting) {
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const {data} = await paymentsApi.placeOrder({
-        items: items.map(i => ({product_id: i.product_id, quantity: i.quantity})),
-        shipping_address: address,
-        notes: notes.trim() || undefined,
-      });
+      const {data} = await paymentsApi.placeOrder(
+        {
+          items: items.map(i => ({product_id: i.product_id, quantity: i.quantity})),
+          shipping_address: address,
+          notes: notes.trim() || undefined,
+        },
+        idempotencyKey.current,
+      );
       dispatch(clearCart());
       navigation.replace('OrderSuccess', {orderId: data.order_id});
     } catch (err) {
       setError(errorMessage(err, 'Could not place your order'));
+      const status = (err as {response?: {status?: number}})?.response?.status;
+      if (status === 409) {
+        // Stock changed under us: refresh holds so the cart shows what's left.
+        void dispatch(syncReservations());
+      } else if (status === 422) {
+        idempotencyKey.current = newIdempotencyKey();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -102,6 +138,8 @@ const CheckoutScreen = ({navigation}: Props) => {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
+
+        <HoldNotice />
 
         <SectionTitle title="Shipping address" />
         <Card>
@@ -206,7 +244,7 @@ const CheckoutScreen = ({navigation}: Props) => {
           icon="check"
           onPress={placeOrder}
           loading={submitting}
-          disabled={items.length === 0}
+          disabled={items.length === 0 || blocked}
           style={styles.cta}
         />
       </ScrollView>

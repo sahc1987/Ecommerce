@@ -3,6 +3,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -14,7 +15,17 @@ import {errorMessage} from '../../api/client';
 import {Button, Card, Field, Icon, Loading, SectionTitle} from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
+import {deviceTimeZone, isValidTimeZone} from '../../utils/format';
 import {loadStoreSettings} from '../../store/slices/settingsSlice';
+
+// Current wall-clock time in a zone, so admins can sanity-check their choice.
+const nowIn = (tz: string) => {
+  try {
+    return new Intl.DateTimeFormat('en-US', {timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit'}).format(new Date());
+  } catch {
+    return '—';
+  }
+};
 
 const AdminSettingsScreen = () => {
   const dispatch = useAppDispatch();
@@ -30,6 +41,7 @@ const AdminSettingsScreen = () => {
   const [taxEnabled, setTaxEnabled] = useState(false);
   const [taxRate, setTaxRate] = useState('0');
   const [returnDays, setReturnDays] = useState('30');
+  const [timezone, setTimezone] = useState('UTC');
   const [loading, setLoading] = useState(!store);
   const [saving, setSaving] = useState(false);
 
@@ -48,11 +60,16 @@ const AdminSettingsScreen = () => {
     setTaxEnabled(store.tax_enabled);
     setTaxRate(String(store.tax_rate ?? '0'));
     setReturnDays(String(store.return_window_days ?? 30));
+    setTimezone(store.timezone ?? 'UTC');
     setLoading(false);
   }, [store, dispatch]);
 
   const save = async () => {
     if (!name.trim()) {
+      return;
+    }
+    if (!isValidTimeZone(timezone.trim())) {
+      Alert.alert('Invalid time zone', 'Use an IANA name such as America/New_York.');
       return;
     }
     setSaving(true);
@@ -67,6 +84,7 @@ const AdminSettingsScreen = () => {
         tax_enabled: taxEnabled,
         tax_rate: Number.parseFloat(taxRate) || 0,
         return_window_days: Number.parseInt(returnDays, 10) || 30,
+        timezone: timezone.trim(),
       });
       await dispatch(loadStoreSettings());
       Alert.alert('Saved', 'Store settings updated.');
@@ -95,6 +113,8 @@ const AdminSettingsScreen = () => {
           <Text style={styles.readonlyValue}>{store?.name ?? '—'}</Text>
           <Text style={styles.readonlyLabel}>Currency</Text>
           <Text style={styles.readonlyValue}>{store?.currency ?? 'USD'}</Text>
+          <Text style={styles.readonlyLabel}>Time zone</Text>
+          <Text style={styles.readonlyValue}>{store?.timezone ?? 'UTC'}</Text>
           <Text style={styles.readonlyLabel}>Return window</Text>
           <Text style={styles.readonlyValue}>
             {store?.return_window_days ?? 30} days
@@ -130,6 +150,22 @@ const AdminSettingsScreen = () => {
             autoCapitalize="characters"
             maxLength={3}
             hint="ISO code, e.g. USD, EUR, MXN."
+          />
+          <Field
+            label="Time zone"
+            value={timezone}
+            onChangeText={setTimezone}
+            autoCapitalize="none"
+            autoCorrect={false}
+            error={timezone.trim() && !isValidTimeZone(timezone.trim()) ? 'Unknown time zone' : null}
+            hint={`IANA name, e.g. America/New_York. Dates across the store, admin and app use it. Now: ${nowIn(timezone)}`}
+            rightAction={
+              timezone !== deviceTimeZone() ? (
+                <Pressable onPress={() => setTimezone(deviceTimeZone())} hitSlop={8}>
+                  <Text style={styles.useDevice}>Use device</Text>
+                </Pressable>
+              ) : null
+            }
           />
         </Card>
 
@@ -206,6 +242,7 @@ const AdminSettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  useDevice: {fontSize: font.xs, fontWeight: '700', color: colors.primary, paddingHorizontal: spacing.sm},
   flex: {flex: 1},
   screen: {flex: 1, backgroundColor: colors.bg},
   content: {padding: spacing.lg, paddingBottom: spacing.xxl},

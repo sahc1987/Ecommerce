@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useEffect, useState } from 'react';
 import api from './api';
+import { setStoreTimeZone } from './utils/dates';
 
 import ProtectedRoute from './components/ProtectedRoute';
 import ShopLayout from './components/Layout/ShopLayout';
@@ -36,6 +37,7 @@ export default function App() {
   useEffect(() => {
     api.get('/setup/status').then((res) => {
       setIsConfigured(res.data.configured);
+      setStoreTimeZone(res.data.store?.timezone);
       setSetupChecked(true);
     }).catch(() => setSetupChecked(true));
   }, []);
@@ -43,7 +45,7 @@ export default function App() {
   if (!setupChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
