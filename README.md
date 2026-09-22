@@ -1,11 +1,11 @@
 # Ecommerce
 
-A full-stack e-commerce platform with a web storefront, an admin dashboard, and a companion mobile app, backed by a Node.js/Express API with PostgreSQL and Redis.
+A full-stack e-commerce platform with a customer storefront, an admin dashboard, and a companion mobile app, all sharing one Node.js/Express API backed by PostgreSQL and Redis. The system implements real-time stock reservations, idempotent checkout, and multi-client authentication — patterns closer to production commerce systems than to a typical CRUD demo.
 
 <p align="left">
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
   <img src="https://img.shields.io/badge/React_Native-0.87-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native" />
-  <img src="https://img.shields.io/badge/TypeScript-5.4-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-5%2F6-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
   <img src="https://img.shields.io/badge/Express-4-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express" />
   <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
@@ -21,54 +21,108 @@ A full-stack e-commerce platform with a web storefront, an admin dashboard, and 
 
 ## Overview
 
-This repository contains a monorepo for an e-commerce system made up of three applications that share a single backend API:
+This repository is a monorepo for an e-commerce system made up of three applications that share a single backend API and data model:
 
-- **`backend/`** — REST API built with Node.js and Express, backed by PostgreSQL and Redis, with JWT-based authentication and Cloudinary-powered image uploads.
+- **`backend/`** — REST API built with Node.js and Express, backed by PostgreSQL and Redis, with JWT-based authentication, row-level stock reservations, idempotent order placement, and Cloudinary-powered image uploads.
 - **`frontend/`** — Customer-facing web storefront and admin dashboard built with React, TypeScript, and Vite, served in production through Nginx.
-- **`mobile/`** — Cross-platform iOS/Android app built with React Native and TypeScript, sharing the same API and Redux data layer as the web client.
+- **`mobile/`** — Cross-platform iOS/Android app built with React Native and TypeScript, sharing the same API, auth model, and Redux data layer as the web client.
 
-## Features
+## Key Features
 
-- User authentication with JWT and cookie-based sessions
-- Product catalog with categories and search
-- Shopping cart and order management
-- Payment processing
-- Return/refund requests
-- User profile management
-- Notifications
-- Admin dashboard with analytics (charts via Recharts)
-- Image uploads with Cloudinary
-- Rate limiting and security headers (Helmet, express-rate-limit)
-- Dockerized local and production environment (Postgres, Redis, API, web client)
+### Storefront & checkout
+- Product catalog with categories, subcategories, search, and per-product image galleries
+- Real-time **stock reservation ("hold") system**: adding an item to a cart places a time-boxed, row-locked hold on stock (`SELECT … FOR UPDATE`) so two shoppers can't both check out the last unit; holds auto-renew while active, auto-expire after a few minutes via a background sweep job, and are surfaced to the shopper through a live countdown banner (web `HoldBanner` / mobile `HoldNotice`) that flags partial or sold-out lines
+- Guest carts identified by a client-generated cart token (`X-Cart-Token`), synced to the server and reconciled with server-side availability
+- **Idempotent checkout**: order placement accepts an `Idempotency-Key` header so a retried request (flaky network, double-tap) replays the original result instead of creating a duplicate order
+- Cart sidebar, address entry, and multi-step checkout flow
+- Order history, order detail, and shipment tracking with carrier-aware tracking URLs
+- Return/refund request workflow with itemized return line items
+- Account profile management and persistent notifications with unread badges
+
+### Admin dashboard
+- First-run **Setup Wizard** for initial store configuration (name, currency, tax rate, return window, timezone) — the app redirects here until a store record exists
+- Product, category, and subcategory management with drag-friendly multi-image upload and primary-image selection
+- Order management with status transitions and per-order detail views
+- Returns queue for staff/admin review and approval
+- User management with role assignment
+- Store settings (currency, tax, timezone-aware formatting via a dedicated `TimeZoneSelect`)
+- Analytics dashboard: revenue/order summary cards, top products, recent orders, pending shipments, and a sales trend chart built with Recharts
+
+### Platform, auth & security
+- JWT authentication delivered as an httpOnly cookie for the web client and as a `Bearer` token (stored in the OS keychain via `react-native-keychain`) for the mobile client, verified by a shared middleware
+- Role-based access control (`admin`, `staff`, `customer`) enforced per-route
+- Optional-auth support so guest shoppers can browse and hold stock without an account
+- Security middleware: Helmet security headers, scoped CORS with credentials, and endpoint-specific rate limiting (auth, order placement, cart/reservation sync)
+- Upload validation by magic-byte file-type sniffing (not just file extension) before accepting images
+- Image storage via Cloudinary, with automatic fallback to local disk in development
+- Redis-backed response caching for hot read paths (products, setup status) with targeted invalidation on writes
+- Cross-site cookie support (`SameSite=None; Secure`) for deployments where the frontend and API are on different domains
+- Dockerized environment (PostgreSQL, Redis, API, web client via Nginx) for one-command local or production startup
 
 ## Tech Stack
 
 | Layer | Technologies |
 |---|---|
-| Web Frontend | React, TypeScript, Vite, Redux Toolkit, React Router, Tailwind CSS, Axios, Recharts |
-| Mobile | React Native, TypeScript, React Navigation, Redux Toolkit |
-| Backend | Node.js, Express, JWT, bcrypt, Multer, Helmet |
-| Data | PostgreSQL, Redis |
+| Web Frontend | React 18, TypeScript, Vite, Redux Toolkit, React Router, Tailwind CSS, Axios, Recharts, react-hot-toast, lucide-react |
+| Mobile | React Native 0.87 (React 19), TypeScript, React Navigation (native-stack + bottom-tabs), Redux Toolkit, Axios, AsyncStorage, react-native-keychain, react-native-image-picker, react-native-vector-icons |
+| Backend | Node.js, Express, JWT (jsonwebtoken), bcrypt, Multer, file-type (magic-byte validation), Helmet, express-rate-limit, uuid |
+| Data | PostgreSQL (pg), Redis (ioredis) |
 | Infrastructure | Docker, Docker Compose, Nginx, Cloudinary |
-| Testing / Tooling | Jest, ESLint, Prettier |
+| Testing / Tooling | Jest, ESLint, Prettier, nodemon |
 
 ## Project Structure
 
 ```
 Ecommerce/
-├── backend/          # Express API (routes, middleware, db, config)
+├── backend/                # Express API
 │   └── src/
-│       ├── routes/   # auth, users, products, categories, orders,
-│       │             # payments, returns, notifications, dashboard
-│       ├── middleware/
-│       ├── db/
-│       └── config/
-├── frontend/         # React + TypeScript + Vite web app
+│       ├── routes/         # auth, setup, categories, products, orders,
+│       │                   # payments, reservations, returns, dashboard,
+│       │                   # users, notifications
+│       ├── middleware/     # auth (JWT + roles), upload (Multer + magic-byte
+│       │                   # validation), idempotency
+│       ├── utils/          # reservations (stock holds), cache (Redis),
+│       │                   # notifications, safeErr
+│       ├── db/              # schema.sql + migrations
+│       └── config/          # database + Redis clients
+├── frontend/                # React + TypeScript + Vite web app
 │   └── src/
-├── mobile/           # React Native app (iOS + Android)
+│       ├── pages/            # Shop (Home, Product, Cart, Checkout, Orders),
+│       │                     # Admin (Dashboard, Products, Categories,
+│       │                     # Orders, Returns, Users, Settings), Auth, Setup
+│       ├── components/       # Layout (Shop/Admin), Shop (ProductCard,
+│       │                     # CartSidebar, HoldBanner, LeftSidebar),
+│       │                     # Notifications, StoreLogo, TimeZoneSelect
+│       ├── store/             # Redux Toolkit slices (cart, etc.)
+│       └── hooks/             # useReservations (stock hold sync/countdown)
+├── mobile/                   # React Native app (iOS + Android)
 │   └── src/
-└── docker-compose.yml
+│       ├── screens/           # Shop + Admin screens mirroring the web app
+│       ├── components/        # ProductCard, HoldNotice, shared ui
+│       ├── navigation/        # RootNavigator (stack + tabs)
+│       ├── store/              # Redux Toolkit slices (cart, settings)
+│       └── hooks/              # useReservationSync
+└── docker-compose.yml         # postgres, redis, backend, frontend (nginx)
 ```
+
+## API Overview
+
+All routes are mounted under `/api`:
+
+| Base path | Purpose |
+|---|---|
+| `/auth` | Register, login, logout, current user |
+| `/setup` | First-run store configuration status and completion |
+| `/categories` | Categories and subcategories (CRUD, admin/staff-gated writes) |
+| `/products` | Catalog CRUD, image upload/management, admin listing |
+| `/orders` | Order listing, detail, status updates |
+| `/payments` | Idempotent order placement (`place-order`) |
+| `/reservations` | Cart stock holds: get, sync (renew), release |
+| `/returns` | Return requests: create, list, review/approve |
+| `/dashboard` | Admin analytics: summary, top products, recent orders, sales chart, pending shipments |
+| `/users` | User listing and management |
+| `/notifications` | User notifications: list, mark read, delete |
+| `/health` | Health check |
 
 ## Getting Started
 
@@ -87,7 +141,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts PostgreSQL, Redis, the API, and the web frontend (served via Nginx).
+This starts PostgreSQL, Redis, the API, and the web frontend (served via Nginx). On first run, the app redirects to `/setup` until an admin completes the store configuration wizard.
 
 ### Run services individually
 
@@ -120,7 +174,13 @@ npm run android
 
 ## Environment Variables
 
-Each app (`backend/`, `frontend/`, `mobile/`) includes a `.env.example` file documenting the environment variables it expects (database connection, Redis, JWT secret, Cloudinary credentials, API URL, etc.). Copy each to `.env` and fill in your own values before running.
+Each app (`backend/`, `frontend/`, `mobile/`) includes a `.env.example` file documenting the environment variables it expects. Copy each to `.env` and fill in your own values before running. Notable backend settings:
+
+- `DATABASE_URL`, `REDIS_URL` — PostgreSQL and Redis connections
+- `JWT_SECRET` — signing secret for auth tokens
+- `CLIENT_URL` — allowed CORS origin
+- `CROSS_SITE_COOKIES` — set `true` when the frontend and API are deployed on different domains (enables `SameSite=None; Secure` cookies)
+- `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` — enable Cloudinary image storage; if unset, uploads fall back to local disk (development only)
 
 ## About the Author
 
