@@ -167,7 +167,7 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req, res) =
         stock || 0, sku || null, category_id || null, subcategory_id || null,
       ]
     );
-    await cache.delByPattern('products:list:*');
+    await Promise.all([cache.invalidateProducts(), cache.invalidateDashboard()]);
     res.status(201).json({ product: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -209,10 +209,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
         req.params.id,
       ]
     );
-    await Promise.all([
-      cache.delByPattern('products:list:*'),
-      cache.del(`products:detail:${req.params.id}`, `products:detail:${p.slug}`),
-    ]);
+    await Promise.all([cache.invalidateProducts(req.params.id, p.slug), cache.invalidateDashboard()]);
     res.json({ product: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -224,10 +221,7 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res) => {
   try {
     const current = await db.query('SELECT slug FROM products WHERE id = $1', [req.params.id]);
     await db.query('DELETE FROM products WHERE id = $1', [req.params.id]);
-    await Promise.all([
-      cache.delByPattern('products:list:*'),
-      cache.del(`products:detail:${req.params.id}`, `products:detail:${current.rows[0]?.slug}`),
-    ]);
+    await Promise.all([cache.invalidateProducts(req.params.id, current.rows[0]?.slug), cache.invalidateDashboard()]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -251,7 +245,7 @@ router.post('/:id/images', authenticate, requireRole('admin', 'staff'), upload.a
       );
       images.push(result.rows[0]);
     }
-    await cache.del(`products:detail:${req.params.id}`);
+    await cache.invalidateProducts(req.params.id);
     res.status(201).json({ images });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -273,7 +267,7 @@ router.delete('/:id/images/:imageId', authenticate, requireRole('admin', 'staff'
         [req.params.id]
       );
     }
-    await cache.del(`products:detail:${req.params.id}`);
+    await cache.invalidateProducts(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -285,7 +279,7 @@ router.put('/:id/images/:imageId/primary', authenticate, requireRole('admin', 's
   try {
     await db.query('UPDATE product_images SET is_primary=FALSE WHERE product_id=$1', [req.params.id]);
     await db.query('UPDATE product_images SET is_primary=TRUE WHERE id=$1', [req.params.imageId]);
-    await cache.del(`products:detail:${req.params.id}`);
+    await cache.invalidateProducts(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });

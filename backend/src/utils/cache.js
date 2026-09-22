@@ -44,4 +44,38 @@ const queryKey = (prefix, query) => {
   return parts ? `${prefix}:${parts}` : prefix;
 };
 
-module.exports = { get, set, del, delByPattern, queryKey };
+// ---- Invalidation helpers -------------------------------------------------
+// Every write that changes what a cached read returns must call one of these,
+// so clients always see the database after an update (the TTL is only a
+// backstop). Keep the mapping here rather than in each route.
+
+// Product lists embed price/stock/availability/primary image/category name, and
+// details are cached under both id and slug, so clear everything product-shaped.
+const invalidateProducts = async (...idsOrSlugs) => {
+  await Promise.all([
+    del(...idsOrSlugs.filter(Boolean).map((k) => `products:detail:${k}`)),
+    delByPattern('products:detail:*'),
+    delByPattern('products:list:*'),
+  ]);
+};
+
+// Dashboard aggregates depend on orders, products, users and returns.
+const invalidateDashboard = async () => {
+  await Promise.all([
+    del('dashboard:summary', 'dashboard:recent-orders', 'dashboard:top-products', 'dashboard:pending-shipments'),
+    delByPattern('dashboard:sales-chart*'),
+  ]);
+};
+
+const invalidateCategories = async (categoryId) => {
+  await Promise.all([
+    del('categories:list', ...(categoryId ? [`categories:sub:${categoryId}`] : [])),
+    // product payloads embed category/subcategory names
+    invalidateProducts(),
+  ]);
+};
+
+module.exports = {
+  get, set, del, delByPattern, queryKey,
+  invalidateProducts, invalidateDashboard, invalidateCategories,
+};

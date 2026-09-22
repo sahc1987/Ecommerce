@@ -3,6 +3,7 @@ const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { createNotification, notifyAdmins } = require('../utils/notifications');
 const safeErr = require('../utils/safeErr');
+const cache = require('../utils/cache');
 
 const MAX_LIMIT = 100;
 
@@ -150,6 +151,7 @@ router.post('/', authenticate, async (req, res) => {
       [order_id, req.user.id, reason]
     );
     const ret = returnRes.rows[0];
+    await cache.invalidateDashboard();
 
     for (const line of lines) {
       await db.query(
@@ -197,6 +199,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
       [status, refund_amount, admin_notes, req.params.id]
     );
     const ret = result.rows[0];
+    await cache.invalidateDashboard();
 
     if (ret.user_id) {
       const orderShort = ret.order_id.slice(0, 8).toUpperCase();

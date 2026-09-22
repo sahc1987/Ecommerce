@@ -33,11 +33,7 @@ async function availableFor(client, productId, cartToken) {
 
 // Product list/detail caches include availability, so drop them on change.
 async function invalidateProductCache(productIds) {
-  await Promise.all([
-    cache.del(...productIds.map((id) => `products:detail:${id}`)),
-    cache.delByPattern('products:detail:*'),
-    cache.delByPattern('products:list:*'),
-  ]);
+  await cache.invalidateProducts(...productIds);
 }
 
 // Replace the cart's holds with `items` (upsert each, remove the rest), renewing

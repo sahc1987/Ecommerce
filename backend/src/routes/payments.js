@@ -122,20 +122,9 @@ router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, 
 
     await client.query('COMMIT');
 
-    const productCacheKeys = affectedProductIds.flatMap(({ id, slug }) => [
-      `products:detail:${id}`,
-      `products:detail:${slug}`,
-    ]);
     await Promise.all([
-      cache.del(...productCacheKeys),
-      cache.delByPattern('products:list:*'),
-      cache.del(
-        'dashboard:summary',
-        'dashboard:recent-orders',
-        'dashboard:top-products',
-        'dashboard:sales-chart',
-        'dashboard:pending-shipments',
-      ),
+      cache.invalidateProducts(...affectedProductIds.flatMap(({ id, slug }) => [id, slug])),
+      cache.invalidateDashboard(),
     ]);
 
     const orderShort = order.id.slice(0, 8).toUpperCase();

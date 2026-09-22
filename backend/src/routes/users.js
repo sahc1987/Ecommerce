@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const safeErr = require('../utils/safeErr');
+const cache = require('../utils/cache');
 
 const MAX_LIMIT = 100;
 const ROLES = new Set(['admin', 'staff', 'customer']);
@@ -51,6 +52,7 @@ router.get('/:id', async (req, res) => {
       [req.params.id]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    await cache.invalidateDashboard();
     res.json({ user: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -94,6 +96,7 @@ router.delete('/:id', async (req, res) => {
     return res.status(400).json({ error: 'Cannot delete your own account' });
   try {
     await db.query('UPDATE users SET is_active=FALSE WHERE id=$1', [req.params.id]);
+    await cache.invalidateDashboard();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });

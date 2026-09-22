@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const safeErr = require('../utils/safeErr');
+const cache = require('../utils/cache');
 
 // ponytail: per-IP throttle on credential endpoints — blunts brute force / signup spam.
 // 10 req / 15 min is generous for real users; tighten if abuse shows up.
@@ -70,6 +71,7 @@ router.post('/register', authLimiter, async (req, res) => {
       [name, email, hash, role]
     );
     const user = result.rows[0];
+    await cache.del('dashboard:summary');
     const token = generateToken(user.id);
     res.cookie('token', token, COOKIE_OPTS);
     res.status(201).json(authPayload(req, user, token));

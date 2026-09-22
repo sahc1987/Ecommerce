@@ -3,6 +3,7 @@ const db = require("../config/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { createNotification } = require("../utils/notifications");
 const safeErr = require("../utils/safeErr");
+const cache = require("../utils/cache");
 
 const MAX_LIMIT = 100;
 
@@ -137,6 +138,7 @@ router.put(
         return res.status(404).json({ error: "Order not found" });
 
       const order = result.rows[0];
+      await cache.invalidateDashboard();
       if (order.user_id) {
         const title = status === "shipped" ? "Your Order Has Shipped!" : "Order Status Updated";
         await createNotification(

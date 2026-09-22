@@ -60,7 +60,7 @@ router.post('/', authenticate, requireRole('admin', 'staff'), upload.single('ima
       'INSERT INTO categories (name, slug, description, image_url) VALUES ($1,$2,$3,$4) RETURNING *',
       [name, slug, description, image_url]
     );
-    await cache.del('categories:list');
+    await cache.invalidateCategories();
     res.status(201).json({ category: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Category already exists' });
@@ -86,7 +86,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), upload.single('i
         req.params.id,
       ]
     );
-    await cache.del('categories:list');
+    await cache.invalidateCategories();
     res.json({ category: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -97,7 +97,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), upload.single('i
 router.delete('/:id', authenticate, requireRole('admin'), async (req, res) => {
   try {
     await db.query('DELETE FROM categories WHERE id = $1', [req.params.id]);
-    await cache.del('categories:list');
+    await cache.invalidateCategories();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -115,8 +115,7 @@ router.post('/:categoryId/subcategories', authenticate, requireRole('admin', 'st
       [req.params.categoryId, name, slug, description]
     );
     await Promise.all([
-      cache.del('categories:list'),
-      cache.del(`categories:sub:${req.params.categoryId}`),
+      cache.invalidateCategories(req.params.categoryId),
     ]);
     res.status(201).json({ subcategory: result.rows[0] });
   } catch (err) {
@@ -142,8 +141,7 @@ router.put('/subcategories/:id', authenticate, requireRole('admin', 'staff'), as
       ]
     );
     await Promise.all([
-      cache.del('categories:list'),
-      cache.del(`categories:sub:${current.rows[0].category_id}`),
+      cache.invalidateCategories(current.rows[0].category_id),
     ]);
     res.json({ subcategory: result.rows[0] });
   } catch (err) {
@@ -157,8 +155,7 @@ router.delete('/subcategories/:id', authenticate, requireRole('admin'), async (r
     const current = await db.query('SELECT category_id FROM subcategories WHERE id = $1', [req.params.id]);
     await db.query('DELETE FROM subcategories WHERE id = $1', [req.params.id]);
     await Promise.all([
-      cache.del('categories:list'),
-      cache.del(`categories:sub:${current.rows[0]?.category_id}`),
+      cache.invalidateCategories(current.rows[0]?.category_id),
     ]);
     res.json({ success: true });
   } catch (err) {
