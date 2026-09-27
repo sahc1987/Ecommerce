@@ -19,11 +19,79 @@ import {effectivePrice, formatMoney, isDiscounted, sellableStock} from '../../ut
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
 import {addItem} from '../../store/slices/cartSlice';
 import type {ShopStackParams} from '../../navigation/types';
+import type {ProductImage} from '../../types';
 import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<ShopStackParams, 'ProductDetail'>;
 
 const {width} = Dimensions.get('window');
+
+const Gallery = ({
+  images,
+  active,
+  onSelect,
+}: Readonly<{
+  images: ProductImage[];
+  active: number;
+  onSelect: (index: number) => void;
+}>) => {
+  if (images.length === 0) {
+    return (
+      <View style={[styles.hero, styles.heroFallback]}>
+        <Icon name="image-off-outline" size={40} color={colors.textFaint} />
+      </View>
+    );
+  }
+  return (
+    <>
+      <Image
+        source={{uri: mediaUrl(images[active]?.url)}}
+        style={styles.hero}
+        resizeMode="cover"
+      />
+      {images.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.thumbs}>
+          {images.map((img, index) => (
+            <Pressable key={img.id} onPress={() => onSelect(index)}>
+              <Image
+                source={{uri: mediaUrl(img.url)}}
+                style={[styles.thumb, index === active && styles.thumbActive]}
+              />
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
+    </>
+  );
+};
+
+const stockLabel = (sellable: number, stock: number) => {
+  if (sellable > 0) {
+    return `${sellable} in stock`;
+  }
+  // Units exist but other carts are holding them.
+  if (sellable < stock) {
+    return 'Out of stock — reserved by other shoppers';
+  }
+  return 'Currently out of stock';
+};
+
+const stockBadge = (sellable: number) => {
+  if (sellable <= 0) {
+    return 'cancelled';
+  }
+  return sellable <= 5 ? 'pending' : 'delivered';
+};
+
+const StockRow = ({sellable, stock}: Readonly<{sellable: number; stock: number}>) => (
+  <View style={styles.stockRow}>
+    <StatusBadge status={stockBadge(sellable)} />
+    <Text style={styles.stockText}>{stockLabel(sellable, stock)}</Text>
+  </View>
+);
 
 const ProductDetailScreen = ({route}: Props) => {
   const {id} = route.params;
@@ -68,37 +136,7 @@ const ProductDetailScreen = ({route}: Props) => {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
       <View style={styles.gallery}>
-        {images.length > 0 ? (
-          <>
-            <Image
-              source={{uri: mediaUrl(images[activeImage]?.url)}}
-              style={styles.hero}
-              resizeMode="cover"
-            />
-            {images.length > 1 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.thumbs}>
-                {images.map((img, index) => (
-                  <Pressable key={img.id} onPress={() => setActiveImage(index)}>
-                    <Image
-                      source={{uri: mediaUrl(img.url)}}
-                      style={[
-                        styles.thumb,
-                        index === activeImage && styles.thumbActive,
-                      ]}
-                    />
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : null}
-          </>
-        ) : (
-          <View style={[styles.hero, styles.heroFallback]}>
-            <Icon name="image-off-outline" size={40} color={colors.textFaint} />
-          </View>
-        )}
+        <Gallery images={images} active={activeImage} onSelect={setActiveImage} />
       </View>
 
       <View style={styles.body}>
@@ -124,20 +162,7 @@ const ProductDetailScreen = ({route}: Props) => {
           ) : null}
         </View>
 
-        <View style={styles.stockRow}>
-          {sellable > 0 ? (
-            <StatusBadge status={sellable <= 5 ? 'pending' : 'delivered'} />
-          ) : (
-            <StatusBadge status="cancelled" />
-          )}
-          <Text style={styles.stockText}>
-            {sellable > 0
-              ? `${sellable} in stock`
-              : sellable < product.stock
-                ? 'Out of stock — reserved by other shoppers'
-                : 'Currently out of stock'}
-          </Text>
-        </View>
+        <StockRow sellable={sellable} stock={product.stock} />
 
         {product.description ? (
           <View style={styles.section}>

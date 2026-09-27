@@ -21,3 +21,8 @@ backend/uploads/*
 # logs
 *.log
 npm-debug.log*
+
+# SonarQube / SonarScanner
+.scannerwork/
+.sonar/
+.sonarlint/

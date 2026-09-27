@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { formatDate } from '../../../utils/dates';
+import { textOr } from '../../../utils/text';
 import { Link, useSearchParams } from "react-router-dom";
-import { ShoppingCart, Search } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import api from "../../../api";
+import ListContent from '../../../components/Admin/ListContent';
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -27,7 +29,7 @@ export default function OrdersList() {
   const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState(searchParams.get("status") || "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
@@ -80,16 +82,7 @@ export default function OrdersList() {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
-            <ShoppingCart size={40} className="mx-auto mb-3 opacity-40" />
-            <p>No orders found</p>
-          </div>
-        ) : (
+        <ListContent loading={loading} isEmpty={orders.length === 0} emptyIcon={ShoppingCart} emptyText="No orders found">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -115,11 +108,11 @@ export default function OrdersList() {
               {orders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">
-                    #{o.id.substring(0, 8).toUpperCase()}
+                    #{o.id.slice(0, 8).toUpperCase()}
                   </td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <p className="font-medium text-slate-900">
-                      {o.customer_name || "Guest"}
+                      {textOr(o.customer_name, "Guest")}
                     </p>
                     <p className="text-xs text-slate-400">{o.customer_email}</p>
                   </td>
@@ -127,7 +120,7 @@ export default function OrdersList() {
                     {formatDate(o.created_at)}
                   </td>
                   <td className="px-6 py-4 font-semibold text-slate-900">
-                    ${parseFloat(o.total).toFixed(2)}
+                    ${Number.parseFloat(o.total).toFixed(2)}
                     <span className="text-xs text-slate-400 font-normal ml-1">
                       ({o.item_count} items)
                     </span>
@@ -151,7 +144,7 @@ export default function OrdersList() {
               ))}
             </tbody>
           </table>
-        )}
+        </ListContent>
       </div>
 
       {pages > 1 && (

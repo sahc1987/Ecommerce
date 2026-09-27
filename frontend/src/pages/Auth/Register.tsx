@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
 import { Store, Check, Eye, EyeOff } from 'lucide-react';
-import api from '../../api';
+import api, { errorMessage } from '../../api';
 import { setCredentials } from '../../store/slices/authSlice';
 
 const perks = [
@@ -37,7 +37,7 @@ export default function Register() {
       toast.success('Account created!');
       navigate(res.data.user.role === 'admin' ? '/setup' : '/');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Registration failed');
+      toast.error(errorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }

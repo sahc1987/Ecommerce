@@ -11,6 +11,7 @@ import {
   cartSubtotal,
   lineStatus,
   removeItem,
+  type LineStatus,
   renewReservations,
   setQuantity,
 } from '../../store/slices/cartSlice';
@@ -79,13 +80,7 @@ const CartScreen = ({navigation}: Props) => {
                 {item.name}
               </Text>
               <Text style={styles.itemPrice}>{formatMoney(item.price)} each</Text>
-              {status === 'unavailable' ? (
-                <Text style={styles.problemNote}>Out of stock — reserved by another shopper</Text>
-              ) : status === 'partial' ? (
-                <Text style={styles.problemNote}>Only {held} available — reduce quantity</Text>
-              ) : status === 'expired' ? (
-                <Text style={styles.stockNote}>Hold expired</Text>
-              ) : null}
+              <LineNote status={status} held={held} />
               <View style={styles.itemFooter}>
                 <View style={styles.stepper}>
                   <Pressable
@@ -159,6 +154,20 @@ const CartScreen = ({navigation}: Props) => {
       </View>
     </View>
   );
+};
+
+/** Explains why a cart line can't be bought as-is; nothing for healthy lines. */
+const LineNote = ({status, held}: Readonly<{status: LineStatus; held: number}>) => {
+  if (status === 'unavailable') {
+    return <Text style={styles.problemNote}>Out of stock — reserved by another shopper</Text>;
+  }
+  if (status === 'partial') {
+    return <Text style={styles.problemNote}>Only {held} available — reduce quantity</Text>;
+  }
+  if (status === 'expired') {
+    return <Text style={styles.stockNote}>Hold expired</Text>;
+  }
+  return null;
 };
 
 const styles = StyleSheet.create({

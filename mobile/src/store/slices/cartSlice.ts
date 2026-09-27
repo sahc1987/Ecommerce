@@ -203,4 +203,4 @@ export const cartBlocked = (state: CartState) =>
 
 /** Stable key of product ids + quantities; changes exactly when holds must re-sync. */
 export const cartSignature = (items: CartItem[]) =>
-  items.map(i => `${i.product_id}:${i.quantity}`).sort().join('|');
+  items.map(i => `${i.product_id}:${i.quantity}`).sort((a, b) => a.localeCompare(b)).join('|');

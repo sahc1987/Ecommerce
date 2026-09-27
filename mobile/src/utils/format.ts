@@ -8,7 +8,8 @@ let activeTimeZone = 'UTC';
 
 export const isValidTimeZone = (tz: string) => {
   try {
-    Intl.DateTimeFormat(undefined, {timeZone: tz});
+    // Throws RangeError for zones the runtime does not know.
+    new Intl.DateTimeFormat(undefined, {timeZone: tz}).resolvedOptions();
     return true;
   } catch {
     return false;
@@ -22,7 +23,7 @@ export const setTimeZone = (tz?: string | null) => {
 };
 
 export const deviceTimeZone = () =>
-  Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  new Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 const formatIn = (iso: string, options: Intl.DateTimeFormatOptions) => {
   const d = new Date(iso);
@@ -48,7 +49,7 @@ export const setCurrency = (code?: string | null) => {
 
 export const formatMoney = (value: number | string | null | undefined) => {
   const n = typeof value === 'string' ? Number.parseFloat(value) : value ?? 0;
-  const safe = Number.isFinite(n) ? (n as number) : 0;
+  const safe = Number.isFinite(n) ? n : 0;
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',

@@ -160,11 +160,11 @@ const AdminSettingsScreen = () => {
             error={timezone.trim() && !isValidTimeZone(timezone.trim()) ? 'Unknown time zone' : null}
             hint={`IANA name, e.g. America/New_York. Dates across the store, admin and app use it. Now: ${nowIn(timezone)}`}
             rightAction={
-              timezone !== deviceTimeZone() ? (
+              timezone === deviceTimeZone() ? null : (
                 <Pressable onPress={() => setTimezone(deviceTimeZone())} hitSlop={8}>
                   <Text style={styles.useDevice}>Use device</Text>
                 </Pressable>
-              ) : null
+              )
             }
           />
         </Card>

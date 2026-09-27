@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const db = require('../config/database');
 
 // Keys are remembered for this long; a retry after that creates a new order.

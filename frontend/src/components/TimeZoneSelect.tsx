@@ -14,7 +14,7 @@ export default function TimeZoneSelect({ value, onChange, id = 'timezone' }: Rea
   const mine = browserTimeZone();
 
   const shown = useMemo(() => {
-    const q = filter.trim().toLowerCase().replace(/\s+/g, '_');
+    const q = filter.trim().toLowerCase().replaceAll(/\s+/g, '_');
     const list = q ? zones.filter((z) => z.toLowerCase().includes(q)) : zones;
     // Keep the current value selectable even when the filter hides it.
     return list.includes(value) ? list : [value, ...list];
@@ -33,7 +33,7 @@ export default function TimeZoneSelect({ value, onChange, id = 'timezone' }: Rea
       <select id={id} className="input" value={value} onChange={(e) => onChange(e.target.value)}>
         {shown.map((z) => (
           <option key={z} value={z}>
-            {z.replace(/_/g, ' ')} ({zoneOffsetLabel(z)})
+            {z.replaceAll('_', ' ')} ({zoneOffsetLabel(z)})
           </option>
         ))}
       </select>
@@ -46,7 +46,7 @@ export default function TimeZoneSelect({ value, onChange, id = 'timezone' }: Rea
         </span>
         {mine !== value && (
           <button type="button" onClick={() => onChange(mine)} className="text-primary-600 hover:underline font-medium">
-            Use {mine.replace(/_/g, ' ')}
+            Use {mine.replaceAll('_', ' ')}
           </button>
         )}
       </div>

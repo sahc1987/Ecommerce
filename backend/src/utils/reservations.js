@@ -15,11 +15,14 @@ const getCartToken = (req) => {
 
 // SQL fragment: units held by *other* carts for a product (non-expired).
 // $productId / $token are substituted by the caller's parameter positions.
-const heldByOthersSql = (productParam, tokenParam) => `
+const heldByOthersSql = (productParam, tokenParam) => {
+  const excludeOwnCart = tokenParam ? 'AND r.cart_token <> ' + tokenParam : '';
+  return `
   COALESCE((SELECT SUM(quantity) FROM stock_reservations r
             WHERE r.product_id = ${productParam}
               AND r.expires_at > NOW()
-              ${tokenParam ? `AND r.cart_token <> ${tokenParam}` : ''}), 0)`;
+              ${excludeOwnCart}), 0)`;
+};
 
 // Available units for a cart: stock minus what other carts currently hold.
 async function availableFor(client, productId, cartToken) {
@@ -65,7 +68,7 @@ async function syncReservations({ cartToken, userId, items }) {
         'SELECT id, stock, is_active FROM products WHERE id = $1 FOR UPDATE',
         [productId]
       );
-      if (!prod.rows[0] || !prod.rows[0].is_active) {
+      if (!prod.rows[0]?.is_active) {
         results.push({ product_id: productId, requested: qty, reserved: 0, available: 0, expires_at: null });
         continue;
       }

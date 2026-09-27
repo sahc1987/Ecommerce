@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
 import { Store, Eye, EyeOff, Check } from 'lucide-react';
-import api from '../../api';
+import api, { errorMessage } from '../../api';
 import { setCredentials } from '../../store/slices/authSlice';
 
 const perks = [
@@ -29,7 +29,7 @@ export default function Login() {
       const role = res.data.user.role;
       navigate(role === 'admin' || role === 'staff' ? '/admin' : '/');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Login failed');
+      toast.error(errorMessage(err, 'Login failed'));
     } finally {
       setLoading(false);
     }

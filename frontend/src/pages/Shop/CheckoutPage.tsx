@@ -5,7 +5,8 @@ import toast from "react-hot-toast";
 import { Package, Lock, MapPin, CheckCircle2, Loader2, X } from "lucide-react";
 import { RootState } from "../../store";
 import { clearCart } from "../../store/slices/cartSlice";
-import api from "../../api";
+import api, { errorMessage } from "../../api";
+import { textOr } from "../../utils/text";
 import HoldBanner from "../../components/Shop/HoldBanner";
 import { lineStatus, useReservations } from "../../hooks/useReservations";
 import { newIdempotencyKey } from "../../utils/cartToken";
@@ -62,7 +63,7 @@ export default function CheckoutPage() {
   const [taxRate, setTaxRate] = useState(0);
   const [taxEnabled, setTaxEnabled] = useState(false);
   const [address, setAddress] = useState<Address>({
-    name: user?.name || "",
+    name: user?.name ?? "",
     line1: "",
     line2: "",
     city: "",
@@ -138,15 +139,15 @@ export default function CheckoutPage() {
     const line1 =
       [a.house_number, a.road].filter(Boolean).join(" ") ||
       result.display_name.split(",")[0].trim();
-    const city = a.city || a.town || a.village || a.county || "";
-    const countryCode = (a.country_code || "US").toUpperCase();
+    const city = [a.city, a.town, a.village, a.county].find(Boolean) ?? "";
+    const countryCode = textOr(a.country_code, "US").toUpperCase();
 
     setAddress((prev) => ({
       ...prev,
       line1,
       city,
-      state: a.state || "",
-      zip: a.postcode || "",
+      state: a.state ?? "",
+      zip: a.postcode ?? "",
       country: SUPPORTED_COUNTRIES.has(countryCode) ? countryCode : prev.country,
     }));
     setAddressVerified(true);
@@ -179,7 +180,7 @@ export default function CheckoutPage() {
       navigate(`/order-success?order=${res.data.order_id}`);
     } catch (err: any) {
       const status = err.response?.status;
-      toast.error(err.response?.data?.error || "Checkout failed");
+      toast.error(errorMessage(err, "Checkout failed"));
       if (status === 409 && err.response?.data?.available !== undefined) {
         // Stock changed under us: refresh holds so the cart shows what's left.
         await sync();

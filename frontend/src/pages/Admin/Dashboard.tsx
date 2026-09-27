@@ -7,6 +7,7 @@ import {
 import api from '../../api';
 import { formatDate } from '../../utils/dates';
 import { mediaUrl } from '../../utils/media';
+import { textOr } from '../../utils/text';
 import SalesChart from '../../components/Admin/SalesChart';
 
 interface Period {
@@ -100,7 +101,7 @@ const relativeTime = (iso: string) => {
 
 // A null change means the previous period had no baseline — showing "+100%"
 // against zero would be misleading, so we say so instead.
-function Delta({ value }: { value: number | null }) {
+function Delta({ value }: Readonly<{ value: number | null }>) {
   if (value === null) return <span className="text-xs text-slate-400">no prior data</span>;
   if (value === 0)
     return (
@@ -120,14 +121,14 @@ function Delta({ value }: { value: number | null }) {
 
 function StatCard({
   label, value, sub, icon: Icon, tint, change,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   sub: string;
   icon: typeof DollarSign;
   tint: string;
   change: number | null;
-}) {
+}>) {
   return (
     <div className="card p-5">
       <div className="flex items-start justify-between">
@@ -152,14 +153,14 @@ const ALERT_TONES = {
 
 function AlertCard({
   to, count, label, hint, icon: Icon, tone,
-}: {
+}: Readonly<{
   to: string;
   count: number;
   label: string;
   hint: string;
   icon: typeof Clock;
   tone: keyof typeof ALERT_TONES;
-}) {
+}>) {
   const active = count > 0;
   const { icon, border } = active ? ALERT_TONES[tone] : ALERT_TONES.clear;
   return (
@@ -463,10 +464,10 @@ export default function Dashboard() {
                   className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-xl hover:bg-slate-50 transition-colors"
                 >
                   <div className="w-9 h-9 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {(o.customer_name || 'G').charAt(0).toUpperCase()}
+                    {textOr(o.customer_name, 'G').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{o.customer_name || 'Guest'}</p>
+                    <p className="text-sm font-medium text-slate-900 truncate">{textOr(o.customer_name, 'Guest')}</p>
                     <p className="text-xs text-slate-500 truncate">
                       #{String(o.id).slice(0, 8).toUpperCase()} · {o.item_count} item{Number(o.item_count) === 1 ? '' : 's'} · {relativeTime(o.created_at)}
                     </p>

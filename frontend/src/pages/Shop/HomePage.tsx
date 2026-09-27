@@ -10,6 +10,7 @@ import { RootState } from '../../store';
 import { addItem } from '../../store/slices/cartSlice';
 import { Product, getEffectivePrice, hasActiveDiscount, sellableStock } from '../../utils/pricing';
 import { categoryIcon } from '../../utils/categoryIcon';
+import { textOr } from '../../utils/text';
 import LeftSidebar from '../../components/Shop/LeftSidebar';
 import CartSidebar from '../../components/Shop/CartSidebar';
 import ProductCard from '../../components/Shop/ProductCard';
@@ -101,7 +102,7 @@ function Hero({ products }: Readonly<{ products: Product[] }>) {
       <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 p-7 md:p-9 items-center min-h-[280px]">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-primary-200 flex items-center gap-1.5">
-            <Zap size={12} /> {p?.category_name || 'Next-Gen Performance'}
+            <Zap size={12} /> {textOr(p?.category_name, 'Next-Gen Performance')}
           </p>
           <h1 className="mt-2 text-3xl md:text-4xl font-extrabold leading-tight">
             Power Up<br />your Possibilities
@@ -194,6 +195,14 @@ function Spinner() {
 
 /* ---------- page ---------- */
 
+function ProductResults({ loading, products, onAddToCart }: Readonly<{
+  loading: boolean; products: Product[]; onAddToCart: (p: Product) => void;
+}>) {
+  if (loading) return <Spinner />;
+  if (products.length === 0) return <EmptyState />;
+  return <ProductGrid products={products} onAddToCart={onAddToCart} />;
+}
+
 export default function HomePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -208,10 +217,10 @@ export default function HomePage() {
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const urlSearch = searchParams.get('search') || '';
-  const urlCategory = searchParams.get('category') || '';
+  const urlSearch = searchParams.get('search') ?? '';
+  const urlCategory = searchParams.get('category') ?? '';
   const urlDiscount = searchParams.get('discount') === 'true';
-  const urlSort = searchParams.get('sort') || '';
+  const urlSort = searchParams.get('sort') ?? '';
   const isFiltered = !!(urlSearch || urlCategory || urlDiscount || urlSort);
 
   const fetchProducts = async (p: number) => {
@@ -290,7 +299,7 @@ export default function HomePage() {
 
   const filteredTitle = (() => {
     if (urlSearch) return `Results for "${urlSearch}"`;
-    if (urlCategory) return categories.find((c) => String(c.id) === urlCategory)?.name || 'Products';
+    if (urlCategory) return textOr(categories.find((c) => String(c.id) === urlCategory)?.name, 'Products');
     if (urlDiscount) return 'Deals';
     if (urlSort === 'new') return 'New Arrivals';
     return 'All Products';
@@ -327,9 +336,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {loading ? <Spinner /> : products.length === 0 ? <EmptyState /> : (
-        <ProductGrid products={products} onAddToCart={handleAddToCart} />
-      )}
+      <ProductResults loading={loading} products={products} onAddToCart={handleAddToCart} />
 
       {pages > 1 && (
         <div className="flex items-center justify-center gap-3 mt-8">

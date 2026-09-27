@@ -43,10 +43,10 @@ function timeAgo(dateStr: string): string {
 function NotificationIcon({
   type,
   metadata,
-}: {
+}: Readonly<{
   type: Notification['type'];
   metadata: NotificationMetadata;
-}) {
+}>) {
   if (type === 'new_order') {
     return (
       <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
@@ -89,7 +89,7 @@ interface Props {
 
 export default function NotificationBell({
   buttonClassName = 'text-slate-300 hover:text-white',
-}: Props) {
+}: Readonly<Props>) {
   const { user } = useSelector((s: RootState) => s.auth);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
@@ -208,38 +208,44 @@ export default function NotificationBell({
                 {notifications.map((n) => (
                   <li
                     key={n.id}
-                    className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${
-                      !n.is_read ? 'bg-primary-50/40' : ''
+                    className={`relative hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${
+                      n.is_read ? '' : 'bg-primary-50/40'
                     }`}
-                    onClick={() => handleNotificationClick(n)}
                   >
-                    <NotificationIcon type={n.type} metadata={n.metadata} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-1">
-                        <p
-                          className={`text-sm text-slate-900 truncate leading-snug ${
-                            !n.is_read ? 'font-semibold' : 'font-medium'
-                          }`}
-                        >
-                          {n.title}
-                        </p>
-                        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-                          {!n.is_read && (
-                            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
-                          )}
-                          <button
-                            onClick={(e) => handleDelete(e, n.id)}
-                            className="text-slate-300 hover:text-slate-600 transition-colors p-0.5 rounded"
+                    {/* Row and delete are sibling buttons: interactive content can't nest. */}
+                    <button
+                      type="button"
+                      onClick={() => handleNotificationClick(n)}
+                      className="w-full flex items-start gap-3 px-4 py-3 text-left"
+                    >
+                      <NotificationIcon type={n.type} metadata={n.metadata} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-1 pr-5">
+                          <p
+                            className={`text-sm text-slate-900 truncate leading-snug ${
+                              n.is_read ? 'font-medium' : 'font-semibold'
+                            }`}
                           >
-                            <X size={12} />
-                          </button>
+                            {n.title}
+                          </p>
+                          {!n.is_read && (
+                            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0 mt-1.5" />
+                          )}
                         </div>
+                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
+                          {n.message}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
-                        {n.message}
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
-                    </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, n.id)}
+                      className="absolute top-3 right-4 mt-0.5 text-slate-300 hover:text-slate-600 transition-colors p-0.5 rounded"
+                      aria-label="Delete notification"
+                    >
+                      <X size={12} />
+                    </button>
                   </li>
                 ))}
               </ul>

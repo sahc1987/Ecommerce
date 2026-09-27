@@ -8,7 +8,7 @@ import {
   ChevronRight,
   Tag,
 } from "lucide-react";
-import api from "../../../api";
+import api, { errorMessage } from "../../../api";
 
 interface Category {
   id: number;
@@ -76,8 +76,8 @@ export default function CategoriesPage() {
   ) => {
     setModal({ type, editing, categoryId });
     setForm({
-      name: editing?.name || "",
-      description: editing?.description || "",
+      name: editing?.name ?? "",
+      description: editing?.description ?? "",
     });
     setImageFile(null);
   };
@@ -131,7 +131,7 @@ export default function CategoriesPage() {
       }
       setModal(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Save failed");
+      toast.error(errorMessage(err, "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -298,8 +298,10 @@ export default function CategoriesPage() {
       {/* Modal */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50"
+          <button
+            type="button"
+            aria-label="Close dialog"
+            className="absolute inset-0 bg-black/50 cursor-default"
             onClick={() => setModal(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
@@ -309,10 +311,11 @@ export default function CategoriesPage() {
             </h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="category-name" className="block text-sm font-medium text-slate-700 mb-1">
                   Name *
                 </label>
                 <input
+                  id="category-name"
                   className="input"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -320,10 +323,11 @@ export default function CategoriesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="category-description" className="block text-sm font-medium text-slate-700 mb-1">
                   Description
                 </label>
                 <textarea
+                  id="category-description"
                   className="input resize-none h-20"
                   value={form.description}
                   onChange={(e) =>
@@ -333,14 +337,15 @@ export default function CategoriesPage() {
               </div>
               {modal.type === "category" && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="category-image" className="block text-sm font-medium text-slate-700 mb-1">
                     Image
                   </label>
                   <input
+                    id="category-image"
                     type="file"
                     accept="image/*"
                     className="text-sm"
-                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                   />
                 </div>
               )}

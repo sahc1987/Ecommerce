@@ -3,7 +3,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { TrendingUp, CalendarRange } from 'lucide-react';
-import api from '../../api';
+import api, { errorMessage } from '../../api';
 import { formatDate, isoDateInStoreZone } from '../../utils/dates';
 
 type Granularity = 'hour' | 'day' | 'week' | 'month';
@@ -51,15 +51,25 @@ const formatLabel = (bucket: string, g: Granularity) => {
   return formatDate(bucket, { month: 'short', day: 'numeric' });
 };
 
+// Compact currency for the Y axis: $950, $1.2k
+const axisMoney = (v: number) => {
+  const amount = v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
+  return `$${amount}`;
+};
+
+const TOOLTIP_PREFIX: Partial<Record<Granularity, string>> = { week: 'Week of ', hour: 'Today, ' };
+
+const orderCount = (n: number) => `${n} ${n === 1 ? 'order' : 'orders'}`;
+
 function ChartTooltip({ active, payload, label, metric, granularity }: any) {
   if (!active || !payload?.length) return null;
   const p: Point = payload[0].payload;
-  const prefix = granularity === 'week' ? 'Week of ' : granularity === 'hour' ? 'Today, ' : '';
+  const prefix = TOOLTIP_PREFIX[granularity as Granularity] ?? '';
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 text-xs">
       <p className="font-semibold text-slate-900">{prefix}{label}</p>
       <p className="text-slate-500 mt-0.5">
-        {metric === 'revenue' ? money(p.revenue) : `${p.orders} ${p.orders === 1 ? 'order' : 'orders'}`}
+        {metric === 'revenue' ? money(p.revenue) : orderCount(p.orders)}
       </p>
     </div>
   );
@@ -99,7 +109,7 @@ export default function SalesChart() {
           orders: Number.parseInt(d.orders, 10),
         })));
       })
-      .catch((err) => setError(err.response?.data?.error || 'Failed to load sales data'))
+      .catch((err) => setError(errorMessage(err, 'Failed to load sales data')))
       .finally(() => setLoading(false));
   }, [query]);
 
@@ -125,7 +135,7 @@ export default function SalesChart() {
     if (data.length === 0) {
       return (
         <div className="relative h-[260px]">
-          {loading ? overlay() : overlay(error || 'No sales in this period')}
+          {loading ? overlay() : overlay(error ?? 'No sales in this period')}
         </div>
       );
     }
@@ -144,7 +154,7 @@ export default function SalesChart() {
           tickLine={false}
           width={56}
           allowDecimals={metric === 'revenue'}
-          tickFormatter={(v: number) => (metric === 'revenue' ? `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}` : String(v))}
+          tickFormatter={(v: number) => (metric === 'revenue' ? axisMoney(v) : String(v))}
         />
         <Tooltip content={<ChartTooltip metric={metric} granularity={granularity} />} cursor={{ stroke: '#cbd5e1' }} />
       </>

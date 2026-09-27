@@ -14,6 +14,13 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {colors, font, radius, shadow, spacing, statusColor, statusLabel} from '../theme';
 
+const buttonOpacity = (disabled: boolean, pressed: boolean) => {
+  if (disabled) {
+    return 0.5;
+  }
+  return pressed ? 0.85 : 1;
+};
+
 /* ---------------------------------------------------------------- Button */
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -35,7 +42,7 @@ export const Button = ({
   icon?: string;
   style?: StyleProp<ViewStyle>;
 }) => {
-  const isDisabled = disabled || loading;
+  const isDisabled = !!disabled || !!loading;
   const palette = {
     primary: {bg: colors.primary, fg: '#fff', border: colors.primary},
     secondary: {bg: colors.surface, fg: colors.text, border: colors.border},
@@ -52,7 +59,7 @@ export const Button = ({
         {
           backgroundColor: palette.bg,
           borderColor: palette.border,
-          opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
+          opacity: buttonOpacity(isDisabled, pressed),
         },
         style,
       ]}>
@@ -83,7 +90,7 @@ export const Field = ({
   hint?: string;
   rightAction?: React.ReactNode;
 }) => (
-  <View style={[styles.field, style as StyleProp<ViewStyle>]}>
+  <View style={[styles.field, style]}>
     {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
     <View style={[styles.inputWrap, !!error && styles.inputWrapError]}>
       <TextInput
@@ -337,4 +344,4 @@ const styles = StyleSheet.create({
   sectionTitleText: {fontSize: font.lg, fontWeight: '700', color: colors.text},
 });
 
-export {Icon};
+export {default as Icon} from 'react-native-vector-icons/MaterialCommunityIcons';

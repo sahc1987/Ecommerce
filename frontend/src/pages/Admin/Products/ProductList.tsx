@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Plus, Pencil, Trash2, Search, Package, Tag } from "lucide-react";
-import api from "../../../api";
+import api, { errorMessage } from "../../../api";
+import ListContent from '../../../components/Admin/ListContent';
+import { textOr } from '../../../utils/text';
 
 export default function ProductList() {
   const [products, setProducts] = useState<any[]>([]);
@@ -45,7 +47,7 @@ export default function ProductList() {
       toast.success("Product deleted");
       fetchProducts(page);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Delete failed");
+      toast.error(errorMessage(err, "Delete failed"));
     }
   };
 
@@ -98,16 +100,7 @@ export default function ProductList() {
       </form>
 
       <div className="card p-0 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
-            <Package size={40} className="mx-auto mb-3 opacity-40" />
-            <p>No products found</p>
-          </div>
-        ) : (
+        <ListContent loading={loading} isEmpty={products.length === 0} emptyIcon={Package} emptyText="No products found">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -167,7 +160,7 @@ export default function ProductList() {
                       <div className="flex items-center gap-1.5">
                         <Tag size={13} className="text-slate-400" />
                         <span className="text-slate-600">
-                          {p.category_name || "—"}
+                          {textOr(p.category_name, "—")}
                         </span>
                       </div>
                     </td>
@@ -235,7 +228,7 @@ export default function ProductList() {
               })}
             </tbody>
           </table>
-        )}
+        </ListContent>
       </div>
 
       {pages > 1 && (

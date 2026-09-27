@@ -50,9 +50,9 @@ export default function ProductDetailPage() {
 
   const sellable = sellableStock(product); // stock minus other carts' active holds
 
-  const images = product.images || [];
-  const primaryImage = images.find((i: any) => i.is_primary) || images[0];
-  const displayImage = images[selectedImage] || primaryImage;
+  const images = product.images ?? [];
+  const primaryImage = images.find((i: any) => i.is_primary) ?? images[0];
+  const displayImage = images[selectedImage] ?? primaryImage;
   const effectivePrice = getEffectivePrice(product);
   const hasDiscount = effectivePrice < Number.parseFloat(product.price);
   const savings = (Number.parseFloat(product.price) - effectivePrice) * quantity;

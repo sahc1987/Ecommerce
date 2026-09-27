@@ -20,6 +20,14 @@ import {useAppSelector} from '../../store/hooks';
 import type {Category, Subcategory} from '../../types';
 import {mediaUrl} from '../../utils/media';
 
+// Newly picked image wins; otherwise show the category's current one.
+const pickerPreview = (image: Asset | null, editing: Category | null) => {
+  if (image?.uri) {
+    return image.uri;
+  }
+  return mediaUrl(editing?.image_url);
+};
+
 const AdminCategoriesScreen = () => {
   const isAdmin = useAppSelector(s => s.auth.user?.role === 'admin');
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -57,6 +65,24 @@ const AdminCategoriesScreen = () => {
     }
   };
 
+  const deleteSub = async (categoryId: number, sub: Subcategory) => {
+    try {
+      await categoriesApi.removeSub(sub.id);
+      setSubs(prev => ({
+        ...prev,
+        [categoryId]: (prev[categoryId] ?? []).filter(s => s.id !== sub.id),
+      }));
+    } catch (err) {
+      Alert.alert('Could not delete', errorMessage(err));
+    }
+  };
+
+  const confirmDeleteSub = (categoryId: number, sub: Subcategory) =>
+    Alert.alert('Delete subcategory', `Delete "${sub.name}"?`, [
+      {text: 'Cancel', style: 'cancel'},
+      {text: 'Delete', style: 'destructive', onPress: () => deleteSub(categoryId, sub)},
+    ]);
+
   const openCreate = () => {
     setEditing(null);
     setName('');
@@ -92,7 +118,7 @@ const AdminCategoriesScreen = () => {
         uri: image.uri,
         type: image.type ?? 'image/jpeg',
         name: image.fileName ?? `category-${Date.now()}.jpg`,
-      } as unknown as Blob);
+      });
     }
     setSaving(true);
     try {
@@ -151,6 +177,8 @@ const AdminCategoriesScreen = () => {
     }
   };
 
+  const previewUri = pickerPreview(image, editing);
+
   if (loading) {
     return <Loading />;
   }
@@ -200,30 +228,7 @@ const AdminCategoriesScreen = () => {
                     />
                     <Text style={styles.subName}>{sub.name}</Text>
                     {isAdmin ? (
-                      <Pressable
-                        hitSlop={8}
-                        onPress={() =>
-                          Alert.alert('Delete subcategory', `Delete "${sub.name}"?`, [
-                            {text: 'Cancel', style: 'cancel'},
-                            {
-                              text: 'Delete',
-                              style: 'destructive',
-                              onPress: async () => {
-                                try {
-                                  await categoriesApi.removeSub(sub.id);
-                                  setSubs(prev => ({
-                                    ...prev,
-                                    [item.id]: (prev[item.id] ?? []).filter(
-                                      s => s.id !== sub.id,
-                                    ),
-                                  }));
-                                } catch (err) {
-                                  Alert.alert('Could not delete', errorMessage(err));
-                                }
-                              },
-                            },
-                          ])
-                        }>
+                      <Pressable hitSlop={8} onPress={() => confirmDeleteSub(item.id, sub)}>
                         <Icon
                           name="trash-can-outline"
                           size={16}
@@ -300,10 +305,8 @@ const AdminCategoriesScreen = () => {
               textAlignVertical="top"
             />
             <Pressable style={styles.imagePicker} onPress={pickImage}>
-              {image?.uri ? (
-                <Image source={{uri: image.uri}} style={styles.pickedImage} />
-              ) : editing?.image_url ? (
-                <Image source={{uri: mediaUrl(editing.image_url)}} style={styles.pickedImage} />
+              {previewUri ? (
+                <Image source={{uri: previewUri}} style={styles.pickedImage} />
               ) : (
                 <Icon name="image-plus" size={24} color={colors.textFaint} />
               )}

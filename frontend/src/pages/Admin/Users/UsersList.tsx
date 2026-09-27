@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Users, Search, Pencil, UserX } from 'lucide-react';
-import api from '../../../api';
+import api, { errorMessage } from '../../../api';
+import ListContent from '../../../components/Admin/ListContent';
 
 const roleColors: Record<string, string> = {
   admin: 'bg-red-100 text-red-800',
@@ -54,7 +55,7 @@ export default function UsersList() {
       toast.success('User updated');
       setEditUser(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Update failed');
+      toast.error(errorMessage(err, 'Update failed'));
     } finally {
       setSaving(false);
     }
@@ -67,7 +68,7 @@ export default function UsersList() {
       setUsers((prev) => prev.map((u) => u.id === id ? { ...u, is_active: false } : u));
       toast.success('User deactivated');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed');
+      toast.error(errorMessage(err, 'Failed'));
     }
   };
 
@@ -89,16 +90,7 @@ export default function UsersList() {
       </form>
 
       <div className="card p-0 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : users.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
-            <Users size={40} className="mx-auto mb-3 opacity-40" />
-            <p>No users found</p>
-          </div>
-        ) : (
+        <ListContent loading={loading} isEmpty={users.length === 0} emptyIcon={Users} emptyText="No users found">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -148,7 +140,7 @@ export default function UsersList() {
               ))}
             </tbody>
           </table>
-        )}
+        </ListContent>
       </div>
 
       {pages > 1 && (
@@ -162,21 +154,21 @@ export default function UsersList() {
       {/* Edit modal */}
       {editUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setEditUser(null)} />
+          <button type="button" aria-label="Close dialog" className="absolute inset-0 bg-black/50 cursor-default" onClick={() => setEditUser(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <h2 className="text-lg font-bold text-slate-900 mb-5">Edit User</h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                <input className="input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+                <label htmlFor="u_name" className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                <input id="u_name" className="input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input type="email" className="input" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+                <label htmlFor="u_email" className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <input id="u_email" type="email" className="input" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                <select className="input" value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}>
+                <label htmlFor="u_role" className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                <select id="u_role" className="input" value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}>
                   <option value="customer">Customer</option>
                   <option value="staff">Staff</option>
                   <option value="admin">Admin</option>

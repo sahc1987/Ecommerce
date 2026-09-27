@@ -201,6 +201,19 @@ const AdminNavigator = () => (
 
 const Tabs = createBottomTabNavigator<MainTabParams>();
 
+// Tab icons are created once here, not inline, so they aren't new components on every render.
+const tabIcon =
+  (name: string) =>
+  ({color, size}: {color: string; size: number}) =>
+    <Icon name={name} color={color} size={size} />;
+
+const ShopTabIcon = tabIcon('storefront-outline');
+const CartTabIcon = tabIcon('cart-outline');
+const OrdersTabIcon = tabIcon('package-variant-closed');
+const AlertsTabIcon = tabIcon('bell-outline');
+const AdminTabIcon = tabIcon('view-dashboard-outline');
+const AccountTabIcon = tabIcon('account-outline');
+
 const MainNavigator = () => {
   const items = useAppSelector(s => s.cart.items);
   const role = useAppSelector(s => s.auth.user?.role);
@@ -222,9 +235,7 @@ const MainNavigator = () => {
         component={ShopNavigator}
         options={{
           title: 'Shop',
-          tabBarIcon: ({color, size}) => (
-            <Icon name="storefront-outline" color={color} size={size} />
-          ),
+          tabBarIcon: ShopTabIcon,
         }}
       />
       <Tabs.Screen
@@ -233,9 +244,7 @@ const MainNavigator = () => {
         options={{
           title: 'Cart',
           tabBarBadge: count > 0 ? count : undefined,
-          tabBarIcon: ({color, size}) => (
-            <Icon name="cart-outline" color={color} size={size} />
-          ),
+          tabBarIcon: CartTabIcon,
         }}
       />
       <Tabs.Screen
@@ -243,9 +252,7 @@ const MainNavigator = () => {
         component={OrdersNavigator}
         options={{
           title: 'Orders',
-          tabBarIcon: ({color, size}) => (
-            <Icon name="package-variant-closed" color={color} size={size} />
-          ),
+          tabBarIcon: OrdersTabIcon,
         }}
       />
       <Tabs.Screen
@@ -256,9 +263,7 @@ const MainNavigator = () => {
           headerShown: true,
           ...screenOptions,
           tabBarBadge: unread > 0 ? unread : undefined,
-          tabBarIcon: ({color, size}) => (
-            <Icon name="bell-outline" color={color} size={size} />
-          ),
+          tabBarIcon: AlertsTabIcon,
         }}
       />
       {isStaff ? (
@@ -267,9 +272,7 @@ const MainNavigator = () => {
           component={AdminNavigator}
           options={{
             title: 'Admin',
-            tabBarIcon: ({color, size}) => (
-              <Icon name="view-dashboard-outline" color={color} size={size} />
-            ),
+            tabBarIcon: AdminTabIcon,
           }}
         />
       ) : null}
@@ -280,9 +283,7 @@ const MainNavigator = () => {
           title: 'Account',
           headerShown: true,
           ...screenOptions,
-          tabBarIcon: ({color, size}) => (
-            <Icon name="account-outline" color={color} size={size} />
-          ),
+          tabBarIcon: AccountTabIcon,
         }}
       />
     </Tabs.Navigator>

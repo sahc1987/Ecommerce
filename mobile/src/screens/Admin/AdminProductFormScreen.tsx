@@ -186,7 +186,7 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
         uri: asset.uri,
         type: asset.type ?? 'image/jpeg',
         name: asset.fileName ?? `upload-${Date.now()}.jpg`,
-      } as unknown as Blob);
+      });
     }
     setUploading(true);
     try {
@@ -402,11 +402,7 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
 
         <SectionTitle title="Images" />
         <Card>
-          {!isEdit ? (
-            <Text style={styles.toggleHint}>
-              Save the product first, then you can attach images.
-            </Text>
-          ) : (
+          {isEdit ? (
             <>
               {images.length > 0 ? (
                 <ScrollView
@@ -448,6 +444,10 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
                 style={styles.addImages}
               />
             </>
+          ) : (
+            <Text style={styles.toggleHint}>
+              Save the product first, then you can attach images.
+            </Text>
           )}
         </Card>
 

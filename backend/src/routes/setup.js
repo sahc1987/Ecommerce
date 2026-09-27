@@ -10,7 +10,7 @@ const CACHE_KEY = 'setup:status';
 // Any IANA zone the runtime knows; falls back to UTC for unknown input.
 const isValidTimeZone = (tz) => {
   if (typeof tz !== 'string' || !tz) return false;
-  try { Intl.DateTimeFormat(undefined, { timeZone: tz }); return true; } catch { return false; }
+  try { new Intl.DateTimeFormat(undefined, { timeZone: tz }); return true; } catch { return false; }
 };
 const TTL = 1800; // 30 minutes
 

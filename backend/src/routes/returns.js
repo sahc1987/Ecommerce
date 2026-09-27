@@ -6,6 +6,31 @@ const safeErr = require('../utils/safeErr');
 const cache = require('../utils/cache');
 
 const MAX_LIMIT = 100;
+const MAX_RETURN_LINES = 100;
+
+// Only lines that belong to this order may be returned, and never more
+// units than were bought — otherwise a client could reference another
+// customer's order_item_id or inflate the refund.
+// Resolves to { lines } on success or { error } with a client-facing message.
+async function validateReturnLines(orderId, items) {
+  if (!items?.length) return { lines: [] };
+  if (!Array.isArray(items) || items.length > MAX_RETURN_LINES) return { error: 'Invalid items' };
+
+  const owned = await db.query(
+    'SELECT id, quantity FROM order_items WHERE order_id = $1',
+    [orderId]
+  );
+  const maxQty = new Map(owned.rows.map((r) => [r.id, r.quantity]));
+  const lines = [];
+  for (const item of items) {
+    const qty = Number.parseInt(item?.quantity, 10);
+    if (!maxQty.has(item?.order_item_id)) return { error: 'Item does not belong to this order' };
+    if (!Number.isInteger(qty) || qty < 1 || qty > maxQty.get(item.order_item_id))
+      return { error: 'Invalid return quantity' };
+    lines.push({ order_item_id: item.order_item_id, quantity: qty, reason: item.reason ?? null });
+  }
+  return { lines };
+}
 
 function buildReturnNotification(status, orderShort, refund_amount, admin_notes) {
   const note = admin_notes ? ` Note: ${admin_notes}` : '';
@@ -124,27 +149,8 @@ router.post('/', authenticate, async (req, res) => {
         expired: true,
       });
 
-    // Only lines that belong to this order may be returned, and never more
-    // units than were bought — otherwise a client could reference another
-    // customer's order_item_id or inflate the refund.
-    let lines = [];
-    if (items?.length) {
-      if (!Array.isArray(items) || items.length > 100)
-        return res.status(400).json({ error: 'Invalid items' });
-      const owned = await db.query(
-        'SELECT id, quantity FROM order_items WHERE order_id = $1',
-        [order_id]
-      );
-      const maxQty = new Map(owned.rows.map((r) => [r.id, r.quantity]));
-      for (const item of items) {
-        const qty = Number.parseInt(item?.quantity, 10);
-        if (!maxQty.has(item?.order_item_id))
-          return res.status(400).json({ error: 'Item does not belong to this order' });
-        if (!Number.isInteger(qty) || qty < 1 || qty > maxQty.get(item.order_item_id))
-          return res.status(400).json({ error: 'Invalid return quantity' });
-        lines.push({ order_item_id: item.order_item_id, quantity: qty, reason: item.reason ?? null });
-      }
-    }
+    const { lines, error: linesError } = await validateReturnLines(order_id, items);
+    if (linesError) return res.status(400).json({ error: linesError });
 
     const returnRes = await db.query(
       'INSERT INTO returns (order_id, user_id, reason) VALUES ($1,$2,$3) RETURNING *',

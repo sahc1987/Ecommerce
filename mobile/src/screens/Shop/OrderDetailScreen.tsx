@@ -17,6 +17,7 @@ import {colors, font, radius, spacing} from '../../theme';
 import {formatDateTime, formatMoney, shortId} from '../../utils/format';
 import {useAppSelector} from '../../store/hooks';
 import type {OrdersStackParams} from '../../navigation/types';
+import type {Order, ReturnRequest} from '../../types';
 import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<OrdersStackParams, 'OrderDetail'>;
@@ -50,13 +51,6 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
 
   const {order, existingReturn} = data;
   const address = order.shipping_address;
-  const daysSince = Math.floor(
-    (Date.now() - new Date(order.created_at).getTime()) / 86400000,
-  );
-  const eligible =
-    ['delivered', 'paid'].includes(order.status) &&
-    !existingReturn &&
-    daysSince <= returnWindow;
 
   return (
     <ScrollView
@@ -159,39 +153,71 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
 
       <SectionTitle title="Returns" />
       <Card>
-        {existingReturn ? (
-          <View style={styles.returnRow}>
-            <View style={styles.flex}>
-              <Text style={styles.itemName}>Return requested</Text>
-              <Text style={styles.itemMeta} numberOfLines={2}>
-                {existingReturn.reason}
-              </Text>
-            </View>
-            <StatusBadge status={existingReturn.status} />
-          </View>
-        ) : eligible ? (
-          <>
-            <Text style={styles.itemMeta}>
-              Eligible for return for another {returnWindow - daysSince} day
-              {returnWindow - daysSince === 1 ? '' : 's'}.
-            </Text>
-            <Button
-              title="Request a return"
-              variant="secondary"
-              icon="backup-restore"
-              onPress={() => navigation.navigate('RequestReturn', {orderId: order.id})}
-              style={styles.returnCta}
-            />
-          </>
-        ) : (
-          <Text style={styles.itemMeta}>
-            {['delivered', 'paid'].includes(order.status)
-              ? `The ${returnWindow}-day return window for this order has passed.`
-              : 'Returns open once the order is paid or delivered.'}
-          </Text>
-        )}
+        <ReturnSection
+          order={order}
+          existingReturn={existingReturn}
+          returnWindow={returnWindow}
+          onRequest={() => navigation.navigate('RequestReturn', {orderId: order.id})}
+        />
       </Card>
     </ScrollView>
+  );
+};
+
+/** Existing return status, the request button, or why a return isn't possible. */
+const ReturnSection = ({
+  order,
+  existingReturn,
+  returnWindow,
+  onRequest,
+}: Readonly<{
+  order: Order;
+  existingReturn: ReturnRequest | null;
+  returnWindow: number;
+  onRequest: () => void;
+}>) => {
+  if (existingReturn) {
+    return (
+      <View style={styles.returnRow}>
+        <View style={styles.flex}>
+          <Text style={styles.itemName}>Return requested</Text>
+          <Text style={styles.itemMeta} numberOfLines={2}>
+            {existingReturn.reason}
+          </Text>
+        </View>
+        <StatusBadge status={existingReturn.status} />
+      </View>
+    );
+  }
+
+  const returnable = ['delivered', 'paid'].includes(order.status);
+  if (!returnable) {
+    return <Text style={styles.itemMeta}>Returns open once the order is paid or delivered.</Text>;
+  }
+
+  const daysSince = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 86400000);
+  const daysLeft = returnWindow - daysSince;
+  if (daysLeft < 0) {
+    return (
+      <Text style={styles.itemMeta}>
+        The {returnWindow}-day return window for this order has passed.
+      </Text>
+    );
+  }
+
+  return (
+    <>
+      <Text style={styles.itemMeta}>
+        Eligible for return for another {daysLeft} day{daysLeft === 1 ? '' : 's'}.
+      </Text>
+      <Button
+        title="Request a return"
+        variant="secondary"
+        icon="backup-restore"
+        onPress={onRequest}
+        style={styles.returnCta}
+      />
+    </>
   );
 };
 

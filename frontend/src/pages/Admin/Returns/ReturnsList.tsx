@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { formatDate } from '../../../utils/dates';
 import toast from 'react-hot-toast';
 import { RotateCcw } from 'lucide-react';
-import api from '../../../api';
+import api, { errorMessage } from '../../../api';
+import ListContent from '../../../components/Admin/ListContent';
 
 const statusColors: Record<string, string> = {
   requested: 'bg-yellow-100 text-yellow-800',
@@ -35,7 +36,7 @@ export default function ReturnsList() {
     setSelectedReturn(ret);
     setProcessForm({
       status: 'approved',
-      refund_amount: ret.order_total || '',
+      refund_amount: ret.order_total ?? '',
       admin_notes: '',
     });
   };
@@ -49,7 +50,7 @@ export default function ReturnsList() {
       toast.success('Return processed');
       setSelectedReturn(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Processing failed');
+      toast.error(errorMessage(err, 'Processing failed'));
     } finally {
       setProcessing(false);
     }
@@ -80,16 +81,7 @@ export default function ReturnsList() {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : returns.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
-            <RotateCcw size={40} className="mx-auto mb-3 opacity-40" />
-            <p>No returns found</p>
-          </div>
-        ) : (
+        <ListContent loading={loading} isEmpty={returns.length === 0} emptyIcon={RotateCcw} emptyText="No returns found">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -105,7 +97,7 @@ export default function ReturnsList() {
               {returns.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">
-                    #{r.id.substring(0, 8).toUpperCase()}
+                    #{r.id.slice(0, 8).toUpperCase()}
                   </td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <p className="font-medium text-slate-900">{r.customer_name}</p>
@@ -113,7 +105,7 @@ export default function ReturnsList() {
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-slate-700 max-w-[200px] truncate">{r.reason}</p>
-                    {r.refund_amount && <p className="text-xs text-green-600 font-medium">Refund: ${parseFloat(r.refund_amount).toFixed(2)}</p>}
+                    {r.refund_amount && <p className="text-xs text-green-600 font-medium">Refund: ${Number.parseFloat(r.refund_amount).toFixed(2)}</p>}
                   </td>
                   <td className="px-6 py-4 text-slate-500 hidden sm:table-cell">
                     {formatDate(r.created_at)}
@@ -134,20 +126,20 @@ export default function ReturnsList() {
               ))}
             </tbody>
           </table>
-        )}
+        </ListContent>
       </div>
 
       {/* Process modal */}
       {selectedReturn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedReturn(null)} />
+          <button type="button" aria-label="Close dialog" className="absolute inset-0 bg-black/50 cursor-default" onClick={() => setSelectedReturn(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <h2 className="text-lg font-bold text-slate-900 mb-1">Process Return</h2>
-            <p className="text-sm text-slate-500 mb-5">Return #{selectedReturn.id.substring(0, 8).toUpperCase()}</p>
+            <p className="text-sm text-slate-500 mb-5">Return #{selectedReturn.id.slice(0, 8).toUpperCase()}</p>
             <form onSubmit={handleProcess} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Decision</label>
-                <select className="input" value={processForm.status} onChange={(e) => setProcessForm({ ...processForm, status: e.target.value })}>
+                <label htmlFor="r_status" className="block text-sm font-medium text-slate-700 mb-1">Decision</label>
+                <select id="r_status" className="input" value={processForm.status} onChange={(e) => setProcessForm({ ...processForm, status: e.target.value })}>
                   <option value="approved">Approve</option>
                   <option value="rejected">Reject</option>
                   <option value="refunded">Approve & Issue Refund</option>
@@ -155,13 +147,13 @@ export default function ReturnsList() {
               </div>
               {processForm.status === 'refunded' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Refund Amount ($)</label>
-                  <input type="number" min="0" step="0.01" className="input" value={processForm.refund_amount} onChange={(e) => setProcessForm({ ...processForm, refund_amount: e.target.value })} required />
+                  <label htmlFor="r_refund" className="block text-sm font-medium text-slate-700 mb-1">Refund Amount ($)</label>
+                  <input id="r_refund" type="number" min="0" step="0.01" className="input" value={processForm.refund_amount} onChange={(e) => setProcessForm({ ...processForm, refund_amount: e.target.value })} required />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
-                <textarea className="input resize-none h-20" value={processForm.admin_notes} onChange={(e) => setProcessForm({ ...processForm, admin_notes: e.target.value })} />
+                <label htmlFor="r_notes" className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
+                <textarea id="r_notes" className="input resize-none h-20" value={processForm.admin_notes} onChange={(e) => setProcessForm({ ...processForm, admin_notes: e.target.value })} />
               </div>
               <div className="flex gap-3">
                 <button type="submit" className="btn-primary flex-1" disabled={processing}>

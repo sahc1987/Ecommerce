@@ -3,7 +3,7 @@ import { formatDateTime } from '../../../utils/dates';
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowLeft, Check, ExternalLink, Package, RotateCcw, Truck } from "lucide-react";
-import api from "../../../api";
+import api, { errorMessage } from "../../../api";
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -90,7 +90,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       setReturnReason('');
       toast.success('Return request submitted');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to submit return request');
+      toast.error(errorMessage(err, 'Failed to submit return request'));
     } finally {
       setSubmittingReturn(false);
     }
@@ -98,19 +98,19 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
 
   const handleStatusChange = async (status: string) => {
     if (status === 'shipped') {
-      setTrackingNumber(order.tracking_number || '');
-      setCarrier(order.carrier || '');
+      setTrackingNumber(order.tracking_number ?? '');
+      setCarrier(order.carrier ?? '');
       setShowShipModal(true);
       return;
     }
-    if (status === 'cancelled' && !window.confirm('Cancel this order? This cannot be undone.')) return;
+    if (status === 'cancelled' && !globalThis.confirm('Cancel this order? This cannot be undone.')) return;
     setUpdatingStatus(true);
     try {
       await api.put(`/orders/${id}/status`, { status });
       setOrder((prev: any) => ({ ...prev, status }));
       toast.success("Status updated");
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Update failed");
+      toast.error(errorMessage(err, "Update failed"));
     } finally {
       setUpdatingStatus(false);
     }
@@ -125,7 +125,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       setShowShipModal(false);
       toast.success("Order marked as shipped");
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Update failed");
+      toast.error(errorMessage(err, "Update failed"));
     } finally {
       setUpdatingStatus(false);
     }
@@ -141,6 +141,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
     return <p className="text-center text-slate-500 py-16">Order not found</p>;
 
   const addr = order.shipping_address;
+  const hasTracking = Boolean(order.tracking_number) || Boolean(order.carrier);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -153,7 +154,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            Order #{order.id.substring(0, 8).toUpperCase()}
+            Order #{order.id.slice(0, 8).toUpperCase()}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Placed {formatDateTime(order.created_at)}
@@ -285,35 +286,35 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         <div className="border-t border-slate-200 px-6 py-4 space-y-2">
           <div className="flex justify-between text-sm text-slate-600">
             <span>Subtotal</span>
-            <span>${parseFloat(order.subtotal).toFixed(2)}</span>
+            <span>${Number.parseFloat(order.subtotal).toFixed(2)}</span>
           </div>
-          {parseFloat(order.discount) > 0 && (
+          {Number.parseFloat(order.discount) > 0 && (
             <div className="flex justify-between text-sm text-green-600">
               <span>Discount</span>
-              <span>-${parseFloat(order.discount).toFixed(2)}</span>
+              <span>-${Number.parseFloat(order.discount).toFixed(2)}</span>
             </div>
           )}
-          {parseFloat(order.tax) > 0 && (
+          {Number.parseFloat(order.tax) > 0 && (
             <div className="flex justify-between text-sm text-slate-600">
               <span>Tax</span>
-              <span>${parseFloat(order.tax).toFixed(2)}</span>
+              <span>${Number.parseFloat(order.tax).toFixed(2)}</span>
             </div>
           )}
-          {parseFloat(order.shipping) > 0 && (
+          {Number.parseFloat(order.shipping) > 0 && (
             <div className="flex justify-between text-sm text-slate-600">
               <span>Shipping</span>
-              <span>${parseFloat(order.shipping).toFixed(2)}</span>
+              <span>${Number.parseFloat(order.shipping).toFixed(2)}</span>
             </div>
           )}
           <div className="flex justify-between font-bold text-slate-900 text-base border-t border-slate-100 pt-2">
             <span>Total</span>
-            <span>${parseFloat(order.total).toFixed(2)}</span>
+            <span>${Number.parseFloat(order.total).toFixed(2)}</span>
           </div>
         </div>
       </div>
 
       {/* Tracking info */}
-      {(order.tracking_number || order.carrier) && order.status !== 'cancelled' && (
+      {hasTracking && order.status !== 'cancelled' && (
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
             <Truck size={18} className="text-purple-500" />
@@ -357,10 +358,11 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             </div>
             <form onSubmit={handleShipSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="ship-carrier" className="block text-sm font-medium text-slate-700 mb-1">
                   Parcel Service / Carrier
                 </label>
                 <input
+                  id="ship-carrier"
                   type="text"
                   className="input"
                   placeholder="e.g. UPS, FedEx, USPS, DHL"
@@ -369,10 +371,11 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="ship-tracking" className="block text-sm font-medium text-slate-700 mb-1">
                   Tracking Number
                 </label>
                 <input
+                  id="ship-tracking"
                   type="text"
                   className="input"
                   placeholder="Enter tracking number"
@@ -395,79 +398,90 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       )}
 
       {/* Return & Refund (customer only, eligible orders) */}
-      {isCustomer && ['delivered', 'paid'].includes(order.status) && (() => {
-        const daysSince = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 86400000);
-        const withinWindow = daysSince <= returnWindowDays;
-        const daysLeft = returnWindowDays - daysSince;
-
-        return (
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <RotateCcw size={18} className="text-slate-500" />
-              <h2 className="font-semibold text-slate-900">Return & Refund</h2>
-            </div>
-
-            {returnRequest ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-600">Status:</span>
-                  <span className={`badge ${returnStatusColors[returnRequest.status] ?? 'bg-slate-100 text-slate-800'}`}>
-                    {returnRequest.status}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-600">
-                  <span className="font-medium">Reason:</span> {returnRequest.reason}
-                </p>
-                {returnRequest.refund_amount && (
-                  <p className="text-sm text-green-700 font-medium">
-                    Refund amount: ${parseFloat(returnRequest.refund_amount).toFixed(2)}
-                  </p>
-                )}
-                {returnRequest.admin_notes && (
-                  <p className="text-sm text-slate-500">
-                    <span className="font-medium">Store note:</span> {returnRequest.admin_notes}
-                  </p>
-                )}
-              </div>
-            ) : !withinWindow ? (
-              <p className="text-sm text-red-600">
-                The return window for this order has expired. Returns must be requested within {returnWindowDays} days of the order date.
-              </p>
-            ) : showReturnForm ? (
-              <form onSubmit={handleReturnSubmit} className="space-y-3">
-                <p className="text-xs text-slate-400">{daysLeft} day{daysLeft === 1 ? '' : 's'} remaining to request a return.</p>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Reason for return</label>
-                  <textarea
-                    className="input resize-none h-24"
-                    value={returnReason}
-                    onChange={(e) => setReturnReason(e.target.value)}
-                    placeholder="Please describe the reason for your return..."
-                    required
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button type="submit" className="btn-primary" disabled={submittingReturn}>
-                    {submittingReturn ? 'Submitting...' : 'Submit Request'}
-                  </button>
-                  <button type="button" className="btn-secondary" onClick={() => setShowReturnForm(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div>
-                <p className="text-sm text-slate-500 mb-3">
-                  {daysLeft} day{daysLeft === 1 ? '' : 's'} remaining to request a return.
-                </p>
-                <button onClick={() => setShowReturnForm(true)} className="btn-secondary flex items-center gap-2">
-                  <RotateCcw size={15} /> Request Return
-                </button>
-              </div>
-            )}
+      {isCustomer && ['delivered', 'paid'].includes(order.status) && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-3">
+            <RotateCcw size={18} className="text-slate-500" />
+            <h2 className="font-semibold text-slate-900">Return & Refund</h2>
           </div>
-        );
-      })()}
+          {renderReturnBody()}
+        </div>
+      )}
     </div>
   );
+
+  function renderReturnBody() {
+    if (returnRequest) {
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600">Status:</span>
+            <span className={`badge ${returnStatusColors[returnRequest.status] ?? 'bg-slate-100 text-slate-800'}`}>
+              {returnRequest.status}
+            </span>
+          </div>
+          <p className="text-sm text-slate-600">
+            <span className="font-medium">Reason:</span> {returnRequest.reason}
+          </p>
+          {returnRequest.refund_amount && (
+            <p className="text-sm text-green-700 font-medium">
+              Refund amount: ${Number.parseFloat(returnRequest.refund_amount).toFixed(2)}
+            </p>
+          )}
+          {returnRequest.admin_notes && (
+            <p className="text-sm text-slate-500">
+              <span className="font-medium">Store note:</span> {returnRequest.admin_notes}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    const daysSince = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 86400000);
+    const daysLeft = returnWindowDays - daysSince;
+    if (daysSince > returnWindowDays) {
+      return (
+        <p className="text-sm text-red-600">
+          The return window for this order has expired. Returns must be requested within {returnWindowDays} days of the order date.
+        </p>
+      );
+    }
+
+    const remaining = `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining to request a return.`;
+    if (!showReturnForm) {
+      return (
+        <div>
+          <p className="text-sm text-slate-500 mb-3">{remaining}</p>
+          <button onClick={() => setShowReturnForm(true)} className="btn-secondary flex items-center gap-2">
+            <RotateCcw size={15} /> Request Return
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <form onSubmit={handleReturnSubmit} className="space-y-3">
+        <p className="text-xs text-slate-400">{remaining}</p>
+        <div>
+          <label htmlFor="return-reason" className="block text-sm font-medium text-slate-700 mb-1">Reason for return</label>
+          <textarea
+            id="return-reason"
+            className="input resize-none h-24"
+            value={returnReason}
+            onChange={(e) => setReturnReason(e.target.value)}
+            placeholder="Please describe the reason for your return..."
+            required
+          />
+        </div>
+        <div className="flex gap-3">
+          <button type="submit" className="btn-primary" disabled={submittingReturn}>
+            {submittingReturn ? 'Submitting...' : 'Submit Request'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => setShowReturnForm(false)}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
+  }
 }

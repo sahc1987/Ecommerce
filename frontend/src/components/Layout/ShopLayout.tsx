@@ -5,9 +5,10 @@ import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import {
   ShoppingCart, LogOut, LayoutDashboard, Package, Search, ChevronDown, User,
-  Facebook, Instagram, Twitter, Youtube,
 } from 'lucide-react';
+import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon } from './SocialIcons';
 import api from '../../api';
+import { textOr } from '../../utils/text';
 import NotificationBell from '../Notifications/NotificationBell';
 import StoreLogo from '../StoreLogo';
 import { Category } from '../../utils/pricing';
@@ -66,7 +67,7 @@ export default function ShopLayout() {
     navigate(searchQuery.trim() ? `/?search=${encodeURIComponent(searchQuery.trim())}` : '/');
   };
 
-  const tagline = store.description?.trim() || 'Upgrade today, smarter tomorrow';
+  const tagline = textOr(store.description?.trim(), 'Upgrade today, smarter tomorrow');
   const year = new Date().getFullYear();
   const firstName = user?.name.split(' ')[0];
 
@@ -235,10 +236,10 @@ export default function ShopLayout() {
               <button type="button" className="hover:text-primary-600 transition-colors">Press</button>
             </div>
             <div className="flex items-center gap-3 text-slate-400">
-              <Facebook size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
-              <Instagram size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
-              <Twitter size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
-              <Youtube size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
+              <FacebookIcon size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
+              <InstagramIcon size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
+              <TwitterIcon size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
+              <YoutubeIcon size={15} className="hover:text-primary-600 transition-colors cursor-pointer" />
             </div>
             <p className="text-slate-400">Tech for a <span className="text-primary-600 font-semibold">Better Tomorrow</span></p>
           </div>

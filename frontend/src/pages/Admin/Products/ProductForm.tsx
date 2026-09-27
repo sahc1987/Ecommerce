@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowLeft, Upload, X, Star } from "lucide-react";
-import api from "../../../api";
+import api, { errorMessage } from "../../../api";
 
 interface Category {
   id: number;
@@ -24,6 +24,7 @@ export default function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const idleSubmitLabel = isEdit ? "Save Changes" : "Create Product";
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(false);
@@ -59,22 +60,22 @@ export default function ProductForm() {
           const p = res.data.product;
           setForm({
             name: p.name,
-            description: p.description || "",
+            description: p.description ?? "",
             price: p.price,
-            compare_at_price: p.compare_at_price || "",
+            compare_at_price: p.compare_at_price ?? "",
             stock: String(p.stock),
-            sku: p.sku || "",
+            sku: p.sku ?? "",
             category_id: p.category_id ? String(p.category_id) : "",
             subcategory_id: p.subcategory_id ? String(p.subcategory_id) : "",
             is_active: p.is_active,
             discount_active: p.discount_active,
-            discount_percent: String(p.discount_percent || "0"),
+            discount_percent: String(p.discount_percent ?? "0"),
             discount_start: p.discount_start
-              ? p.discount_start.substring(0, 16)
+              ? p.discount_start.slice(0, 16)
               : "",
-            discount_end: p.discount_end ? p.discount_end.substring(0, 16) : "",
+            discount_end: p.discount_end ? p.discount_end.slice(0, 16) : "",
           });
-          setImages(p.images || []);
+          setImages(p.images ?? []);
           if (p.category_id) loadSubcategories(p.category_id);
         })
         .finally(() => setLoading(false));
@@ -120,7 +121,7 @@ export default function ProductForm() {
         return;
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Save failed");
+      toast.error(errorMessage(err, "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -136,7 +137,7 @@ export default function ProductForm() {
       setImages((prev) => [...prev, ...res.data.images]);
       toast.success("Images uploaded");
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Upload failed");
+      toast.error(errorMessage(err, "Upload failed"));
     } finally {
       setUploadingImages(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -279,7 +280,7 @@ export default function ProductForm() {
           <h2 className="font-semibold text-slate-900">Pricing</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="price" className="block text-sm font-medium text-slate-700 mb-1">
                 Price *
               </label>
               <div className="relative">
@@ -287,6 +288,7 @@ export default function ProductForm() {
                   $
                 </span>
                 <input
+                  id="price"
                   type="number"
                   min="0"
                   step="0.01"
@@ -298,7 +300,7 @@ export default function ProductForm() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="compare_at_price" className="block text-sm font-medium text-slate-700 mb-1">
                 Compare-at Price
               </label>
               <div className="relative">
@@ -306,6 +308,7 @@ export default function ProductForm() {
                   $
                 </span>
                 <input
+                  id="compare_at_price"
                   type="number"
                   min="0"
                   step="0.01"
@@ -340,11 +343,12 @@ export default function ProductForm() {
             {form.discount_active && (
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="discount_percent" className="block text-sm font-medium text-slate-700 mb-1">
                     Discount %
                   </label>
                   <div className="relative">
                     <input
+                      id="discount_percent"
                       type="number"
                       min="0"
                       max="100"
@@ -361,10 +365,11 @@ export default function ProductForm() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="discount_start" className="block text-sm font-medium text-slate-700 mb-1">
                     Start (optional)
                   </label>
                   <input
+                    id="discount_start"
                     type="datetime-local"
                     className="input text-sm"
                     value={form.discount_start}
@@ -374,10 +379,11 @@ export default function ProductForm() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="discount_end" className="block text-sm font-medium text-slate-700 mb-1">
                     End (optional)
                   </label>
                   <input
+                    id="discount_end"
                     type="datetime-local"
                     className="input text-sm"
                     value={form.discount_end}
@@ -396,10 +402,11 @@ export default function ProductForm() {
           <h2 className="font-semibold text-slate-900">Organization</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="category_id" className="block text-sm font-medium text-slate-700 mb-1">
                 Category
               </label>
               <select
+                id="category_id"
                 className="input"
                 value={form.category_id}
                 onChange={handleCategoryChange}
@@ -413,10 +420,11 @@ export default function ProductForm() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="subcategory_id" className="block text-sm font-medium text-slate-700 mb-1">
                 Subcategory
               </label>
               <select
+                id="subcategory_id"
                 className="input"
                 value={form.subcategory_id}
                 onChange={(e) =>
@@ -506,7 +514,7 @@ export default function ProductForm() {
 
         <div className="flex gap-3">
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? "Saving..." : isEdit ? "Save Changes" : "Create Product"}
+            {saving ? "Saving..." : idleSubmitLabel}
           </button>
           <button
             type="button"

@@ -14,7 +14,7 @@ export default function OrderSuccess() {
       <p className="text-slate-500 mb-2">Thank you for your purchase. We've received your order and will process it shortly.</p>
       {orderId && (
         <p className="text-sm text-slate-400 mb-8">
-          Order #{orderId.substring(0, 8).toUpperCase()}
+          Order #{orderId.slice(0, 8).toUpperCase()}
         </p>
       )}
       <div className="flex flex-col sm:flex-row gap-3 justify-center">

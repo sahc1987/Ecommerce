@@ -27,7 +27,7 @@ interface Props {
 
 export default function LeftSidebar({ categories, storeName }: Readonly<Props>) {
   const [params] = useSearchParams();
-  const activeCategory = params.get('category') || '';
+  const activeCategory = params.get('category') ?? '';
 
   return (
     <aside className="hidden lg:flex flex-col gap-4 w-52 flex-shrink-0">

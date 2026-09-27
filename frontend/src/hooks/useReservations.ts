@@ -18,7 +18,7 @@ export function lineStatus(item: CartItem, r: Reservation | undefined, hold: Hol
 }
 
 const signature = (items: CartItem[]) =>
-  items.map((i) => `${i.product_id}:${i.quantity}`).sort().join('|');
+  items.map((i) => `${i.product_id}:${i.quantity}`).sort((a, b) => a.localeCompare(b)).join('|');
 
 export function useReservations() {
   const dispatch = useDispatch();

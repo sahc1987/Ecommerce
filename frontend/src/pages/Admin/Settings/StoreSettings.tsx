@@ -1,15 +1,15 @@
 import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { Upload, Store } from 'lucide-react';
-import api from '../../../api';
+import api, { errorMessage } from '../../../api';
 import TimeZoneSelect from '../../../components/TimeZoneSelect';
 import { mediaUrl } from '../../../utils/media';
+import { textOr } from '../../../utils/text';
 import { browserTimeZone, setStoreTimeZone } from '../../../utils/dates';
 
 export default function StoreSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [store, setStore] = useState<any>(null);
   const [form, setForm] = useState({ name: '', description: '', currency: 'USD', email: '', phone: '', address: '', tax_rate: '0', tax_enabled: false, return_window_days: '30', timezone: browserTimeZone() });
   const fileRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -20,8 +20,7 @@ export default function StoreSettings() {
     api.get('/setup/status').then((res) => {
       const s = res.data.store;
       if (s) {
-        setStore(s);
-        setForm({ name: s.name, description: s.description || '', currency: s.currency, email: s.email || '', phone: s.phone || '', address: s.address || '', tax_rate: String(s.tax_rate ?? 0), tax_enabled: !!s.tax_enabled, return_window_days: String(s.return_window_days ?? 30), timezone: s.timezone || 'UTC' });
+        setForm({ name: s.name, description: s.description ?? '', currency: s.currency, email: s.email ?? '', phone: s.phone ?? '', address: s.address ?? '', tax_rate: String(s.tax_rate ?? 0), tax_enabled: !!s.tax_enabled, return_window_days: String(s.return_window_days ?? 30), timezone: textOr(s.timezone, 'UTC') });
         if (s.logo_url) setLogoPreview(s.logo_url);
       }
     }).finally(() => setLoading(false));
@@ -35,7 +34,7 @@ export default function StoreSettings() {
       setStoreTimeZone(form.timezone);
       toast.success('Store settings saved');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Save failed');
+      toast.error(errorMessage(err, 'Save failed'));
     } finally {
       setSaving(false);
     }
@@ -91,16 +90,16 @@ export default function StoreSettings() {
       <form onSubmit={handleSubmit} className="card space-y-5">
         <h2 className="font-semibold text-slate-900">Store Information</h2>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Store Name *</label>
-          <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <label htmlFor="store_name" className="block text-sm font-medium text-slate-700 mb-1">Store Name *</label>
+          <input id="store_name" className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-          <textarea className="input resize-none h-24" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <label htmlFor="store_description" className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+          <textarea id="store_description" className="input resize-none h-24" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
-          <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
+          <label htmlFor="currency" className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
+          <select id="currency" className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
@@ -113,17 +112,17 @@ export default function StoreSettings() {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Contact Email</label>
-            <input type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <label htmlFor="store_email" className="block text-sm font-medium text-slate-700 mb-1">Contact Email</label>
+            <input id="store_email" type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-            <input type="tel" className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <label htmlFor="store_phone" className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+            <input id="store_phone" type="tel" className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-          <textarea className="input resize-none h-20" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <label htmlFor="store_address" className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+          <textarea id="store_address" className="input resize-none h-20" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </div>
         <div className="border-t border-slate-100 pt-5 space-y-4">
           <h2 className="font-semibold text-slate-900">Tax Configuration</h2>

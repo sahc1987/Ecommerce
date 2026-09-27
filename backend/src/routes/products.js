@@ -4,13 +4,11 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const cache = require('../utils/cache');
 const safeErr = require('../utils/safeErr');
+const slugify = require('../utils/slugify');
 
 // Short TTLs: responses include live availability (stock minus active cart holds)
 const TTL = { list: 30, detail: 30 }; // seconds
 const MAX_LIMIT = 100;
-
-const slugify = (str) =>
-  str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 // GET all products (public, with filters)
 router.get('/', async (req, res) => {

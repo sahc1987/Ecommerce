@@ -2,15 +2,22 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Store, ArrowRight, Check } from "lucide-react";
-import api from "../../api";
+import api, { errorMessage } from "../../api";
 import TimeZoneSelect from "../../components/TimeZoneSelect";
 import { browserTimeZone, setStoreTimeZone } from "../../utils/dates";
+
+// Progress dot: completed, current, or upcoming.
+const stepCircleClass = (s: number, step: number) => {
+  if (step > s) return "bg-primary-600 text-white";
+  if (step === s) return "bg-primary-600 text-white ring-4 ring-primary-200";
+  return "bg-white text-slate-400 border-2 border-slate-200";
+};
 
 interface Props {
   onComplete: () => void;
 }
 
-export default function SetupWizard({ onComplete }: Props) {
+export default function SetupWizard({ onComplete }: Readonly<Props>) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -34,13 +41,15 @@ export default function SetupWizard({ onComplete }: Props) {
       toast.success("Store configured successfully!");
       navigate("/admin");
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Setup failed");
+      toast.error(errorMessage(err, "Setup failed"));
     } finally {
       setLoading(false);
     }
   };
 
   const currencies = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "BRL", "MXN"];
+  const launchLabel = loading ? "Launching..." : "Launch Store";
+  const submitLabel = step === 3 ? launchLabel : "Continue";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
@@ -50,13 +59,7 @@ export default function SetupWizard({ onComplete }: Props) {
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center">
               <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${
-                  step > s
-                    ? "bg-primary-600 text-white"
-                    : step === s
-                      ? "bg-primary-600 text-white ring-4 ring-primary-200"
-                      : "bg-white text-slate-400 border-2 border-slate-200"
-                }`}
+                className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${stepCircleClass(s, step)}`}
               >
                 {step > s ? <Check size={16} /> : s}
               </div>
@@ -101,10 +104,11 @@ export default function SetupWizard({ onComplete }: Props) {
             {step === 1 && (
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="store_name" className="block text-sm font-medium text-slate-700 mb-1">
                     Store Name <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="store_name"
                     className="input text-base"
                     placeholder="My Awesome Store"
                     value={form.name}
@@ -113,10 +117,11 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="store_description" className="block text-sm font-medium text-slate-700 mb-1">
                     Description
                   </label>
                   <textarea
+                    id="store_description"
                     className="input resize-none h-24"
                     placeholder="What do you sell? Tell your customers..."
                     value={form.description}
@@ -126,10 +131,11 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="currency" className="block text-sm font-medium text-slate-700 mb-1">
                     Currency
                   </label>
                   <select
+                    id="currency"
                     className="input"
                     value={form.currency}
                     onChange={(e) =>
@@ -158,10 +164,11 @@ export default function SetupWizard({ onComplete }: Props) {
             {step === 2 && (
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="store_email" className="block text-sm font-medium text-slate-700 mb-1">
                     Contact Email
                   </label>
                   <input
+                    id="store_email"
                     type="email"
                     className="input"
                     placeholder="store@example.com"
@@ -172,10 +179,11 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="store_phone" className="block text-sm font-medium text-slate-700 mb-1">
                     Phone
                   </label>
                   <input
+                    id="store_phone"
                     type="tel"
                     className="input"
                     placeholder="+1 (555) 000-0000"
@@ -186,10 +194,11 @@ export default function SetupWizard({ onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="store_address" className="block text-sm font-medium text-slate-700 mb-1">
                     Address
                   </label>
                   <textarea
+                    id="store_address"
                     className="input resize-none h-24"
                     placeholder="123 Main St, City, State, Country"
                     value={form.address}
@@ -208,7 +217,7 @@ export default function SetupWizard({ onComplete }: Props) {
                     { label: "Store Name", value: form.name },
                     { label: "Description", value: form.description || "—" },
                     { label: "Currency", value: form.currency },
-                    { label: "Time Zone", value: form.timezone.replace(/_/g, " ") },
+                    { label: "Time Zone", value: form.timezone.replaceAll("_", " ") },
                     { label: "Email", value: form.email || "—" },
                     { label: "Phone", value: form.phone || "—" },
                     { label: "Address", value: form.address || "—" },
@@ -244,11 +253,7 @@ export default function SetupWizard({ onComplete }: Props) {
                 className="btn-primary flex items-center gap-2"
                 disabled={loading}
               >
-                {step === 3
-                  ? loading
-                    ? "Launching..."
-                    : "Launch Store"
-                  : "Continue"}
+                {submitLabel}
                 <ArrowRight size={16} />
               </button>
             </div>

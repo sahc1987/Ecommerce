@@ -89,34 +89,12 @@ const DashboardScreen = ({navigation}: Props) => {
         />
       </View>
 
-      {summary.pending_shipments > 0 || summary.pending_returns > 0 ? (
-        <View style={styles.alerts}>
-          {summary.pending_shipments > 0 ? (
-            <Pressable
-              style={styles.alert}
-              onPress={() => navigation.navigate('AdminOrders', {status: 'paid'})}>
-              <Icon name="truck-alert-outline" size={20} color={colors.warning} />
-              <Text style={styles.alertText}>
-                {summary.pending_shipments} order
-                {summary.pending_shipments === 1 ? '' : 's'} awaiting shipment
-              </Text>
-              <Icon name="chevron-right" size={18} color={colors.warning} />
-            </Pressable>
-          ) : null}
-          {summary.pending_returns > 0 ? (
-            <Pressable
-              style={styles.alert}
-              onPress={() => navigation.navigate('AdminReturns')}>
-              <Icon name="backup-restore" size={20} color={colors.warning} />
-              <Text style={styles.alertText}>
-                {summary.pending_returns} return request
-                {summary.pending_returns === 1 ? '' : 's'} to review
-              </Text>
-              <Icon name="chevron-right" size={18} color={colors.warning} />
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+      <PendingAlerts
+        shipments={summary.pending_shipments}
+        returns={summary.pending_returns}
+        onShipments={() => navigation.navigate('AdminOrders', {status: 'paid'})}
+        onReturns={() => navigation.navigate('AdminReturns')}
+      />
 
       <SectionTitle title="Manage" />
       <View style={styles.grid}>
@@ -178,7 +156,7 @@ const DashboardScreen = ({navigation}: Props) => {
             <Text style={styles.chartMeta}>{formatDate(chart[0].date)}</Text>
             <Text style={styles.chartMeta}>Peak {formatMoney(peak)}</Text>
             <Text style={styles.chartMeta}>
-              {formatDate(chart[chart.length - 1].date)}
+              {formatDate(chart.at(-1)?.date)}
             </Text>
           </View>
         ) : null}
@@ -246,6 +224,59 @@ const DashboardScreen = ({navigation}: Props) => {
         )}
       </Card>
     </ScrollView>
+  );
+};
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+const AlertRow = ({
+  icon,
+  text,
+  onPress,
+}: Readonly<{
+  icon: string;
+  text: string;
+  onPress: () => void;
+}>) => (
+  <Pressable style={styles.alert} onPress={onPress}>
+    <Icon name={icon} size={20} color={colors.warning} />
+    <Text style={styles.alertText}>{text}</Text>
+    <Icon name="chevron-right" size={18} color={colors.warning} />
+  </Pressable>
+);
+
+/** Shortcuts to work that needs attention; renders nothing when all clear. */
+const PendingAlerts = ({
+  shipments,
+  returns,
+  onShipments,
+  onReturns,
+}: Readonly<{
+  shipments: number;
+  returns: number;
+  onShipments: () => void;
+  onReturns: () => void;
+}>) => {
+  if (shipments <= 0 && returns <= 0) {
+    return null;
+  }
+  return (
+    <View style={styles.alerts}>
+      {shipments > 0 ? (
+        <AlertRow
+          icon="truck-alert-outline"
+          text={`${plural(shipments, 'order')} awaiting shipment`}
+          onPress={onShipments}
+        />
+      ) : null}
+      {returns > 0 ? (
+        <AlertRow
+          icon="backup-restore"
+          text={`${plural(returns, 'return request')} to review`}
+          onPress={onReturns}
+        />
+      ) : null}
+    </View>
   );
 };
 

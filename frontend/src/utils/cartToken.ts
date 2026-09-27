@@ -1,9 +1,16 @@
 // Identifies this browser's cart to the server so stock holds can be tied to it.
 const KEY = 'cart_token';
 
+// randomUUID needs a secure context (HTTPS/localhost); getRandomValues works everywhere.
+const randomId = (): string => {
+  if (globalThis.crypto.randomUUID) return globalThis.crypto.randomUUID();
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+};
+
 const generate = () =>
-  (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`)
-    .replace(/[^A-Za-z0-9_-]/g, '')
+  randomId()
+    .replaceAll(/[^A-Za-z0-9_-]/g, '')
     .padEnd(16, '0')
     .slice(0, 64);
 

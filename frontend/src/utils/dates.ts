@@ -12,7 +12,7 @@ export const getStoreTimeZone = () => storeTimeZone;
 
 export const isValidTimeZone = (tz: string): boolean => {
   try {
-    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    new Intl.DateTimeFormat(undefined, { timeZone: tz });
     return true;
   } catch {
     return false;
@@ -20,7 +20,7 @@ export const isValidTimeZone = (tz: string): boolean => {
 };
 
 export const browserTimeZone = (): string =>
-  Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  new Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 // Every IANA zone the browser knows, for the settings picker.
 export const allTimeZones = (): string[] => {
@@ -54,9 +54,11 @@ const toDate = (value: string | number | Date): Date | null => {
 
 const isDateOnly = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
+const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
+
 export function formatDate(
   value: string | number | Date | null | undefined,
-  options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' }
+  options: Intl.DateTimeFormatOptions = DEFAULT_DATE_OPTIONS
 ): string {
   if (value == null || value === '') return '';
   const d = toDate(value);

@@ -32,7 +32,9 @@ export const useUnreadCount = () => {
     };
 
     void fetchCount();
-    const timer = setInterval(fetchCount, POLL_MS);
+    const timer = setInterval(() => {
+      void fetchCount();
+    }, POLL_MS);
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active') {
         void fetchCount();

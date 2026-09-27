@@ -177,16 +177,20 @@ const HomeScreen = ({navigation}: Props) => {
         />
       }
       ListFooterComponent={
-        loadingMore ? (
-          <ActivityIndicator style={styles.footer} color={colors.primary} />
-        ) : page >= pages && products.length > 0 ? (
-          <Text style={styles.end}>That is everything.</Text>
-        ) : (
-          <View />
-        )
+        <ListFooter loadingMore={loadingMore} reachedEnd={page >= pages && products.length > 0} />
       }
     />
   );
+};
+
+const ListFooter = ({loadingMore, reachedEnd}: Readonly<{loadingMore: boolean; reachedEnd: boolean}>) => {
+  if (loadingMore) {
+    return <ActivityIndicator style={styles.footer} color={colors.primary} />;
+  }
+  if (reachedEnd) {
+    return <Text style={styles.end}>That is everything.</Text>;
+  }
+  return <View />;
 };
 
 const styles = StyleSheet.create({

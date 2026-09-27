@@ -111,9 +111,9 @@ const AdminProductsScreen = ({navigation}: Props) => {
                   ]}>
                   {item.stock} in stock
                 </Text>
-                {!item.is_active ? (
+                {item.is_active ? null : (
                   <Text style={styles.hidden}>Hidden</Text>
-                ) : null}
+                )}
                 {item.discount_active ? (
                   <Text style={styles.deal}>
                     -{Math.round(Number.parseFloat(item.discount_percent))}%

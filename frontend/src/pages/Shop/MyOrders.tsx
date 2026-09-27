@@ -62,7 +62,7 @@ export default function MyOrders() {
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="font-mono text-sm text-slate-500">
-                  #{o.id.substring(0, 8).toUpperCase()}
+                  #{o.id.slice(0, 8).toUpperCase()}
                 </p>
                 <span
                   className={`badge ${statusColors[o.status] ?? "bg-slate-100 text-slate-800"}`}

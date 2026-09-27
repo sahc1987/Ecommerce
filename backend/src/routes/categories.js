@@ -4,11 +4,9 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const cache = require('../utils/cache');
 const safeErr = require('../utils/safeErr');
+const slugify = require('../utils/slugify');
 
 const TTL = { list: 600, sub: 600 }; // 10 minutes
-
-const slugify = (str) =>
-  str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 // GET all categories with subcategory counts
 router.get('/', async (req, res) => {
@@ -114,9 +112,7 @@ router.post('/:categoryId/subcategories', authenticate, requireRole('admin', 'st
       'INSERT INTO subcategories (category_id, name, slug, description) VALUES ($1,$2,$3,$4) RETURNING *',
       [req.params.categoryId, name, slug, description]
     );
-    await Promise.all([
-      cache.invalidateCategories(req.params.categoryId),
-    ]);
+    await cache.invalidateCategories(req.params.categoryId);
     res.status(201).json({ subcategory: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Subcategory already exists' });
@@ -140,9 +136,7 @@ router.put('/subcategories/:id', authenticate, requireRole('admin', 'staff'), as
         req.params.id,
       ]
     );
-    await Promise.all([
-      cache.invalidateCategories(current.rows[0].category_id),
-    ]);
+    await cache.invalidateCategories(current.rows[0].category_id);
     res.json({ subcategory: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -154,9 +148,7 @@ router.delete('/subcategories/:id', authenticate, requireRole('admin'), async (r
   try {
     const current = await db.query('SELECT category_id FROM subcategories WHERE id = $1', [req.params.id]);
     await db.query('DELETE FROM subcategories WHERE id = $1', [req.params.id]);
-    await Promise.all([
-      cache.invalidateCategories(current.rows[0]?.category_id),
-    ]);
+    await cache.invalidateCategories(current.rows[0]?.category_id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
