@@ -71,7 +71,7 @@ router.post('/register', authLimiter, async (req, res) => {
       [name, email, hash, role]
     );
     const user = result.rows[0];
-    await cache.del('dashboard:summary');
+    await cache.invalidateDashboard();
     const token = generateToken(user.id);
     res.cookie('token', token, COOKIE_OPTS);
     res.status(201).json(authPayload(req, user, token));

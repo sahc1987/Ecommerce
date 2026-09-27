@@ -8,30 +8,141 @@ const TTL = { summary: 120, topProducts: 300, recentOrders: 60, salesChart: 300,
 
 router.use(authenticate, requireRole('admin', 'staff'));
 
+// Stock at or below this many units is flagged as "low" on the dashboard.
+const LOW_STOCK_THRESHOLD = 5;
+const PERIOD_DAYS = new Set([7, 30, 90, 365]);
+
+// Percent change vs the previous period. null when there is no baseline to
+// compare against, so the UI can show "—" instead of a fake +100%.
+const pctChange = (current, previous) => {
+  if (!previous) return current ? null : 0;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+};
+
 // GET dashboard summary
+// ?days=7|30|90|365 (default 30) adds a rolling-window block comparing the last
+// N days against the N days before them. All-time totals are kept unchanged so
+// existing clients (mobile) keep working.
 router.get('/summary', async (req, res) => {
-  const cached = await cache.get('dashboard:summary');
+  const days = PERIOD_DAYS.has(Number.parseInt(req.query.days, 10))
+    ? Number.parseInt(req.query.days, 10)
+    : 30;
+  const cacheKey = `dashboard:summary:${days}`;
+  const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
+  const PAID = "('paid','processing','shipped','delivered')";
+
   try {
-    const [revenue, orders, customers, products, pending, returns] = await Promise.all([
-      db.query(`SELECT COALESCE(SUM(total),0) as total FROM orders WHERE status IN ('paid','processing','shipped','delivered')`),
-      db.query(`SELECT COUNT(*) FROM orders`),
-      db.query(`SELECT COUNT(*) FROM users WHERE role = 'customer'`),
-      db.query(`SELECT COUNT(*) FROM products WHERE is_active = TRUE`),
-      db.query(`SELECT COUNT(*) FROM orders WHERE status IN ('paid','processing')`),
-      db.query(`SELECT COUNT(*) FROM returns WHERE status = 'requested'`),
+    const [totals, period, inventory, breakdown] = await Promise.all([
+      db.query(`
+        SELECT
+          (SELECT COALESCE(SUM(total),0) FROM orders WHERE status IN ${PAID}) AS total_revenue,
+          (SELECT COUNT(*) FROM orders) AS total_orders,
+          (SELECT COUNT(*) FROM users WHERE role = 'customer') AS total_customers,
+          (SELECT COUNT(*) FROM products WHERE is_active = TRUE) AS active_products,
+          (SELECT COUNT(*) FROM orders WHERE status IN ('paid','processing')) AS pending_shipments,
+          (SELECT COUNT(*) FROM returns WHERE status = 'requested') AS pending_returns
+      `),
+      // Current window and the one immediately before it, in one pass.
+      db.query(
+        `WITH windows AS (
+           SELECT NOW() - ($1::int || ' days')::interval AS cur_start,
+                  NOW() - (($1::int * 2) || ' days')::interval AS prev_start
+         )
+         SELECT
+           (SELECT COALESCE(SUM(o.total),0) FROM orders o, windows w
+              WHERE o.status IN ${PAID} AND o.created_at >= w.cur_start) AS revenue,
+           (SELECT COUNT(*) FROM orders o, windows w
+              WHERE o.status IN ${PAID} AND o.created_at >= w.cur_start) AS orders,
+           (SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi
+              JOIN orders o ON o.id = oi.order_id, windows w
+              WHERE o.status IN ${PAID} AND o.created_at >= w.cur_start) AS units,
+           (SELECT COUNT(*) FROM users u, windows w
+              WHERE u.role = 'customer' AND u.created_at >= w.cur_start) AS new_customers,
+           (SELECT COALESCE(SUM(o.total),0) FROM orders o, windows w
+              WHERE o.status IN ${PAID} AND o.created_at >= w.prev_start AND o.created_at < w.cur_start) AS prev_revenue,
+           (SELECT COUNT(*) FROM orders o, windows w
+              WHERE o.status IN ${PAID} AND o.created_at >= w.prev_start AND o.created_at < w.cur_start) AS prev_orders,
+           (SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi
+              JOIN orders o ON o.id = oi.order_id, windows w
+              WHERE o.status IN ${PAID} AND o.created_at >= w.prev_start AND o.created_at < w.cur_start) AS prev_units,
+           (SELECT COUNT(*) FROM users u, windows w
+              WHERE u.role = 'customer' AND u.created_at >= w.prev_start AND u.created_at < w.cur_start) AS prev_new_customers`,
+        [days]
+      ),
+      db.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE stock = 0) AS out_of_stock,
+           COUNT(*) FILTER (WHERE stock > 0 AND stock <= $1) AS low_stock,
+           (SELECT COALESCE(SUM(quantity),0) FROM stock_reservations WHERE expires_at > NOW()) AS reserved_units
+         FROM products WHERE is_active = TRUE`,
+        [LOW_STOCK_THRESHOLD]
+      ),
+      // Where the orders of this window currently sit, for the status strip.
+      db.query(
+        `SELECT status, COUNT(*)::int AS count, COALESCE(SUM(total),0) AS total
+         FROM orders
+         WHERE created_at >= NOW() - ($1::int || ' days')::interval
+         GROUP BY status`,
+        [days]
+      ),
     ]);
 
+    const t = totals.rows[0];
+    const p = period.rows[0];
+    const num = (v) => Number.parseFloat(v) || 0;
+    const int = (v) => Number.parseInt(v, 10) || 0;
+
+    const revenue = num(p.revenue);
+    const orderCount = int(p.orders);
+    const prevRevenue = num(p.prev_revenue);
+    const prevOrders = int(p.prev_orders);
+    const aov = orderCount ? revenue / orderCount : 0;
+    const prevAov = prevOrders ? prevRevenue / prevOrders : 0;
+
     const data = {
-      total_revenue: Number.parseFloat(revenue.rows[0].total),
-      total_orders: Number.parseInt(orders.rows[0].count),
-      total_customers: Number.parseInt(customers.rows[0].count),
-      active_products: Number.parseInt(products.rows[0].count),
-      pending_shipments: Number.parseInt(pending.rows[0].count),
-      pending_returns: Number.parseInt(returns.rows[0].count),
+      total_revenue: num(t.total_revenue),
+      total_orders: int(t.total_orders),
+      total_customers: int(t.total_customers),
+      active_products: int(t.active_products),
+      pending_shipments: int(t.pending_shipments),
+      pending_returns: int(t.pending_returns),
+      period: {
+        days,
+        revenue,
+        orders: orderCount,
+        units: int(p.units),
+        new_customers: int(p.new_customers),
+        aov,
+        previous: {
+          revenue: prevRevenue,
+          orders: prevOrders,
+          units: int(p.prev_units),
+          new_customers: int(p.prev_new_customers),
+          aov: prevAov,
+        },
+        change: {
+          revenue: pctChange(revenue, prevRevenue),
+          orders: pctChange(orderCount, prevOrders),
+          units: pctChange(int(p.units), int(p.prev_units)),
+          new_customers: pctChange(int(p.new_customers), int(p.prev_new_customers)),
+          aov: pctChange(aov, prevAov),
+        },
+      },
+      inventory: {
+        low_stock: int(inventory.rows[0].low_stock),
+        out_of_stock: int(inventory.rows[0].out_of_stock),
+        low_stock_threshold: LOW_STOCK_THRESHOLD,
+        reserved_units: int(inventory.rows[0].reserved_units),
+      },
+      status_breakdown: breakdown.rows.map((r) => ({
+        status: r.status,
+        count: r.count,
+        total: num(r.total),
+      })),
     };
-    await cache.set('dashboard:summary', data, TTL.summary);
+    await cache.set(cacheKey, data, TTL.summary);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });

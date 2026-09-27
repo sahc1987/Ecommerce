@@ -62,7 +62,8 @@ const invalidateProducts = async (...idsOrSlugs) => {
 // Dashboard aggregates depend on orders, products, users and returns.
 const invalidateDashboard = async () => {
   await Promise.all([
-    del('dashboard:summary', 'dashboard:recent-orders', 'dashboard:top-products', 'dashboard:pending-shipments'),
+    del('dashboard:recent-orders', 'dashboard:top-products', 'dashboard:pending-shipments'),
+    delByPattern('dashboard:summary*'),
     delByPattern('dashboard:sales-chart*'),
   ]);
 };
