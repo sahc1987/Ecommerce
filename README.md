@@ -34,6 +34,7 @@ This repository is a monorepo for an e-commerce system made up of three applicat
 - Real-time **stock reservation ("hold") system**: adding an item to a cart places a time-boxed, row-locked hold on stock (`SELECT … FOR UPDATE`) so two shoppers can't both check out the last unit; holds auto-renew while active, auto-expire after a few minutes via a background sweep job, and are surfaced to the shopper through a live countdown banner (web `HoldBanner` / mobile `HoldNotice`) that flags partial or sold-out lines
 - Guest carts identified by a client-generated cart token (`X-Cart-Token`), synced to the server and reconciled with server-side availability
 - **Idempotent checkout**: order placement accepts an `Idempotency-Key` header so a retried request (flaky network, double-tap) replays the original result instead of creating a duplicate order
+- **Card payments with Stripe Checkout** (hosted payment page) alongside Cash on Delivery, on web and mobile; orders are confirmed by a signed webhook, with a return-time check and a background sweep as fallbacks, and abandoned payments release their stock
 - Cart sidebar, address entry, and multi-step checkout flow
 - Order history, order detail, and shipment tracking with carrier-aware tracking URLs
 - Return/refund request workflow with itemized return line items
@@ -116,7 +117,7 @@ All routes are mounted under `/api`:
 | `/categories` | Categories and subcategories (CRUD, admin/staff-gated writes) |
 | `/products` | Catalog CRUD, image upload/management, admin listing |
 | `/orders` | Order listing, detail, status updates |
-| `/payments` | Idempotent order placement (`place-order`) |
+| `/payments` | Idempotent order placement (`place-order`), Stripe config, payment confirm/cancel, Stripe webhook |
 | `/reservations` | Cart stock holds: get, sync (renew), release |
 | `/returns` | Return requests: create, list, review/approve |
 | `/dashboard` | Admin analytics: summary, top products, recent orders, sales chart, pending shipments |
@@ -181,6 +182,20 @@ Each app (`backend/`, `frontend/`, `mobile/`) includes a `.env.example` file doc
 - `CLIENT_URL` — allowed CORS origin
 - `CROSS_SITE_COOKIES` — set `true` when the frontend and API are deployed on different domains (enables `SameSite=None; Secure` cookies)
 - `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` — enable Cloudinary image storage; if unset, uploads fall back to local disk (development only)
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — enable card payments; if unset, checkout offers Cash on Delivery only
+
+### Stripe payments
+
+1. Copy your secret key (`sk_test_…`) from the [Stripe dashboard](https://dashboard.stripe.com/test/apikeys) into `STRIPE_SECRET_KEY`.
+2. Point a webhook at `/api/payments/webhook` for the `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` and `checkout.session.expired` events, and put its signing secret in `STRIPE_WEBHOOK_SECRET`. Locally, the Stripe CLI does both:
+
+   ```bash
+   stripe listen --forward-to localhost:5000/api/payments/webhook   # prints whsec_…
+   ```
+
+3. Restart the backend. Test with card `4242 4242 4242 4242`, any future expiry and any CVC.
+
+Webhooks aren't strictly required locally: when a customer returns from Stripe, the app checks the payment directly, and a background job settles any orders left open.
 
 ## About the Author
 

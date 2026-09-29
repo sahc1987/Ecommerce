@@ -101,45 +101,92 @@ const relativeTime = (iso: string) => {
 
 // A null change means the previous period had no baseline — showing "+100%"
 // against zero would be misleading, so we say so instead.
-function Delta({ value }: Readonly<{ value: number | null }>) {
-  if (value === null) return <span className="text-xs text-slate-400">no prior data</span>;
+// `onColor` renders the delta as a translucent pill for the gradient cards,
+// where green/red text would clash with the background.
+function Delta({ value, onColor = false }: Readonly<{ value: number | null; onColor?: boolean }>) {
+  const pill = onColor ? 'px-2 py-0.5 rounded-full bg-white/20 text-white' : '';
+  if (value === null)
+    return <span className={`text-xs ${onColor ? `${pill} text-white/80` : 'text-slate-400'}`}>no prior data</span>;
   if (value === 0)
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
+      <span className={`inline-flex items-center gap-1 text-xs font-semibold ${onColor ? pill : 'text-slate-500'}`}>
         <Minus size={12} /> 0%
       </span>
     );
   const up = value > 0;
   const Icon = up ? TrendingUp : TrendingDown;
+  let color = up ? 'text-emerald-600' : 'text-rose-600';
+  if (onColor) color = pill;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${up ? 'text-emerald-600' : 'text-rose-600'}`}>
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${color}`}>
       <Icon size={12} />
       {up ? '+' : ''}{value}%
     </span>
   );
 }
 
+const STAT_THEMES = {
+  revenue: {
+    card: 'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 border-transparent text-white shadow-lg shadow-emerald-500/20',
+    icon: 'bg-white/20 text-white',
+  },
+  orders: {
+    card: 'bg-gradient-to-br from-primary-500 via-primary-600 to-indigo-700 border-transparent text-white shadow-lg shadow-primary-500/20',
+    icon: 'bg-white/20 text-white',
+  },
+  aov: {
+    card: 'bg-gradient-to-br from-violet-50 to-fuchsia-50 border-violet-100',
+    icon: 'bg-violet-500 text-white',
+  },
+  customers: {
+    card: 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-100',
+    icon: 'bg-orange-500 text-white',
+  },
+};
+
 function StatCard({
-  label, value, sub, icon: Icon, tint, change,
+  label, value, sub, icon: Icon, theme, change, featured = false,
 }: Readonly<{
   label: string;
   value: string;
   sub: string;
   icon: typeof DollarSign;
-  tint: string;
+  theme: keyof typeof STAT_THEMES;
   change: number | null;
+  featured?: boolean;
 }>) {
+  const t = STAT_THEMES[theme];
+  if (featured) {
+    return (
+      <div className={`relative overflow-hidden rounded-2xl border p-6 sm:col-span-1 xl:col-span-2 ${t.card}`}>
+        {/* Soft decorative circles for depth */}
+        <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10" />
+        <div className="absolute -right-4 -bottom-16 w-32 h-32 rounded-full bg-white/5" />
+        <div className="relative">
+          <div className="flex items-start justify-between">
+            <div className={`w-12 h-12 ${t.icon} rounded-xl flex items-center justify-center`}>
+              <Icon size={24} />
+            </div>
+            <Delta value={change} onColor />
+          </div>
+          <p className="text-sm font-medium text-white/80 mt-5">{label}</p>
+          <p className="text-4xl font-extrabold mt-1 tabular-nums tracking-tight">{value}</p>
+          <p className="text-xs text-white/75 mt-4 border-t border-white/20 pt-3">{sub}</p>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="card p-5">
+    <div className={`rounded-2xl border p-5 flex flex-col ${t.card}`}>
       <div className="flex items-start justify-between">
-        <div className={`w-10 h-10 ${tint} rounded-xl flex items-center justify-center`}>
+        <div className={`w-10 h-10 ${t.icon} rounded-xl flex items-center justify-center`}>
           <Icon size={20} />
         </div>
         <Delta value={change} />
       </div>
       <p className="text-2xl font-bold text-slate-900 mt-4 tabular-nums">{value}</p>
-      <p className="text-sm text-slate-500 mt-0.5">{label}</p>
-      <p className="text-xs text-slate-400 mt-2 border-t border-slate-100 pt-2">{sub}</p>
+      <p className="text-sm text-slate-600 mt-0.5">{label}</p>
+      <p className="text-xs text-slate-500 mt-auto pt-2 border-t border-slate-900/5">{sub}</p>
     </div>
   );
 }
@@ -233,7 +280,8 @@ export default function Dashboard() {
       value: money(period?.revenue ?? 0),
       sub: `${exactMoney(summary?.total_revenue ?? 0)} all time`,
       icon: DollarSign,
-      tint: 'bg-emerald-50 text-emerald-600',
+      theme: 'revenue' as const,
+      featured: true,
       change: period?.change.revenue ?? null,
     },
     {
@@ -241,7 +289,8 @@ export default function Dashboard() {
       value: String(period?.orders ?? 0),
       sub: `${period?.units ?? 0} units · ${summary?.total_orders ?? 0} orders all time`,
       icon: ShoppingCart,
-      tint: 'bg-primary-50 text-primary-600',
+      theme: 'orders' as const,
+      featured: true,
       change: period?.change.orders ?? null,
     },
     {
@@ -249,7 +298,7 @@ export default function Dashboard() {
       value: money(period?.aov ?? 0),
       sub: `Previously ${money(period?.previous.aov ?? 0)}`,
       icon: Receipt,
-      tint: 'bg-violet-50 text-violet-600',
+      theme: 'aov' as const,
       change: period?.change.aov ?? null,
     },
     {
@@ -257,7 +306,7 @@ export default function Dashboard() {
       value: String(period?.new_customers ?? 0),
       sub: `${summary?.total_customers ?? 0} customers total`,
       icon: Users,
-      tint: 'bg-orange-50 text-orange-600',
+      theme: 'customers' as const,
       change: period?.change.new_customers ?? null,
     },
   ];
@@ -301,7 +350,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
         {stats.map((s) => <StatCard key={s.label} {...s} />)}
       </div>
 

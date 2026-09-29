@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Package, Lock, MapPin, CheckCircle2, Loader2, X } from "lucide-react";
+import { Package, Lock, MapPin, CheckCircle2, Loader2, X, CreditCard, Banknote } from "lucide-react";
 import { RootState } from "../../store";
 import { clearCart } from "../../store/slices/cartSlice";
 import api, { errorMessage } from "../../api";
@@ -39,6 +39,13 @@ interface NominatimResult {
 
 const SUPPORTED_COUNTRIES = new Set(["US", "CA", "GB", "AU", "DE", "FR", "MX", "BR"]);
 
+type PaymentMethod = "stripe" | "cod";
+
+const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; hint: string; icon: typeof CreditCard }[] = [
+  { value: "stripe", label: "Credit or debit card", hint: "Pay securely with Stripe", icon: CreditCard },
+  { value: "cod", label: "Cash on Delivery", hint: "Pay when your order arrives", icon: Banknote },
+];
+
 export default function CheckoutPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -60,6 +67,8 @@ export default function CheckoutPage() {
   }, [renew]);
 
   const [loading, setLoading] = useState(false);
+  const [stripeEnabled, setStripeEnabled] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [taxRate, setTaxRate] = useState(0);
   const [taxEnabled, setTaxEnabled] = useState(false);
   const [address, setAddress] = useState<Address>({
@@ -87,7 +96,33 @@ export default function CheckoutPage() {
         setTaxRate(Number.parseFloat(s.tax_rate) || 0);
       }
     }).catch(() => {});
+    api.get("/payments/config").then((res) => {
+      if (res.data.stripe_enabled) {
+        setStripeEnabled(true);
+        setPaymentMethod("stripe");
+      }
+    }).catch(() => {});
   }, []);
+
+  // Back from Stripe without paying: cancel that order so its stock is
+  // released, then re-reserve the cart (it is still in localStorage).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canceledOrder = searchParams.get("canceled");
+  useEffect(() => {
+    if (!canceledOrder) return;
+    setSearchParams({}, { replace: true });
+    api.post(`/payments/${canceledOrder}/cancel`)
+      .then((res) => {
+        if (res.data.payment_status === "paid") {
+          dispatch(clearCart());
+          navigate(`/order-success?order=${canceledOrder}`, { replace: true });
+          return;
+        }
+        toast("Payment canceled — your cart is still here.");
+        return sync();
+      })
+      .catch(() => {});
+  }, [canceledOrder, setSearchParams, dispatch, navigate, sync]);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -173,9 +208,15 @@ export default function CheckoutPage() {
           items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
           shipping_address: address,
           shipping: 0,
+          payment_method: paymentMethod,
         },
         { headers: { "Idempotency-Key": idempotencyKey.current } },
       );
+      if (res.data.checkout_url) {
+        // The cart is kept until Stripe confirms payment on the success page.
+        window.location.assign(res.data.checkout_url);
+        return;
+      }
       dispatch(clearCart());
       navigate(`/order-success?order=${res.data.order_id}`);
     } catch (err: any) {
@@ -336,15 +377,43 @@ export default function CheckoutPage() {
 
             <div className="card space-y-4">
               <h2 className="font-semibold text-slate-900">Payment Method</h2>
-              <div className="flex items-center gap-3 p-3.5 border border-primary-200 rounded-lg bg-primary-50">
-                <div className="w-4 h-4 rounded-full border-2 border-primary-600 flex items-center justify-center flex-shrink-0">
-                  <div className="w-2 h-2 rounded-full bg-primary-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">Cash on Delivery</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Pay when your order arrives</p>
-                </div>
+              <div className="space-y-2" role="radiogroup" aria-label="Payment method">
+                {PAYMENT_OPTIONS.filter((o) => o.value !== "stripe" || stripeEnabled).map((o) => {
+                  const selected = paymentMethod === o.value;
+                  const Icon = o.icon;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setPaymentMethod(o.value)}
+                      className={`w-full flex items-center gap-3 p-3.5 border rounded-lg text-left transition-colors ${
+                        selected ? "border-primary-200 bg-primary-50" : "border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          selected ? "border-primary-600" : "border-slate-300"
+                        }`}
+                      >
+                        {selected && <div className="w-2 h-2 rounded-full bg-primary-600" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{o.label}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{o.hint}</p>
+                      </div>
+                      <Icon size={20} className={selected ? "text-primary-600" : "text-slate-400"} />
+                    </button>
+                  );
+                })}
               </div>
+              {paymentMethod === "stripe" && (
+                <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                  <Lock size={12} />
+                  You'll enter your card details on Stripe's secure page, then come back here.
+                </p>
+              )}
             </div>
           </div>
 
@@ -398,7 +467,8 @@ export default function CheckoutPage() {
                 disabled={loading || blocked}
               >
                 <Lock size={14} />
-                {loading ? "Processing..." : `Place Order — $${total.toFixed(2)}`}
+                {loading && (paymentMethod === "stripe" ? "Redirecting to Stripe..." : "Processing...")}
+                {!loading && (paymentMethod === "stripe" ? `Pay $${total.toFixed(2)}` : `Place Order — $${total.toFixed(2)}`)}
               </button>
             </div>
           </div>

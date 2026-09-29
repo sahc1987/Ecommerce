@@ -5,6 +5,8 @@ import type {
   DashboardSummary,
   Order,
   OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
   Product,
   ReturnRequest,
   ReturnStatus,
@@ -103,20 +105,39 @@ export const ordersApi = {
   ) => api.put<{order: Order}>('/orders/' + id + '/status', payload),
 };
 
+export interface PaymentState {
+  order_id: string;
+  status: OrderStatus;
+  payment_method: PaymentMethod;
+  payment_status: PaymentStatus;
+}
+
 export const paymentsApi = {
-  // The endpoint returns only the new order's id, not the whole order. The
-  // Idempotency-Key makes a retried submit return the same order.
+  config: () => api.get<{stripe_enabled: boolean}>('/payments/config'),
+  // The endpoint returns only the new order's id, not the whole order, plus a
+  // Stripe Checkout URL for card orders. The Idempotency-Key makes a retried
+  // submit return the same order.
   placeOrder: (
     payload: {
       items: {product_id: string; quantity: number}[];
       shipping_address: ShippingAddress;
       notes?: string;
+      payment_method: PaymentMethod;
     },
     idempotencyKey: string,
   ) =>
-    api.post<{order_id: string}>('/payments/place-order', payload, {
-      headers: {'Idempotency-Key': idempotencyKey},
-    }),
+    api.post<{order_id: string; checkout_url?: string}>(
+      '/payments/place-order',
+      // `client` makes Stripe return to a "switch back to the app" page.
+      {...payload, client: 'mobile'},
+      {headers: {'Idempotency-Key': idempotencyKey}},
+    ),
+  // Asks the server to check the order's Checkout session with Stripe.
+  confirm: (orderId: string) =>
+    api.post<PaymentState>('/payments/' + orderId + '/confirm'),
+  // Abandons an unpaid card order and returns its stock.
+  cancel: (orderId: string) =>
+    api.post<PaymentState>('/payments/' + orderId + '/cancel'),
 };
 
 export interface ReservationLine {

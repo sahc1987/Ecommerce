@@ -60,6 +60,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret_in_production}
       CLIENT_URL: ${CLIENT_URL:-http://localhost:8080}
       NODE_ENV: ${NODE_ENV:-production}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - uploads_data:/app/uploads
     ports:

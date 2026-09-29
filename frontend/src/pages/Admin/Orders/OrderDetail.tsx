@@ -46,6 +46,12 @@ function getTrackingUrl(carrier: string, trackingNumber: string): string {
   return `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackingNumber)}`;
 }
 
+const paymentBadge: Record<string, string> = {
+  paid: 'bg-emerald-100 text-emerald-800',
+  unpaid: 'bg-amber-100 text-amber-800',
+  canceled: 'bg-rose-100 text-rose-800',
+};
+
 interface Props {
   isCustomer?: boolean;
 }
@@ -309,6 +315,15 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           <div className="flex justify-between font-bold text-slate-900 text-base border-t border-slate-100 pt-2">
             <span>Total</span>
             <span>${Number.parseFloat(order.total).toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm text-slate-600 pt-1">
+            <span>Payment</span>
+            <span className="flex items-center gap-2">
+              {order.payment_method === 'stripe' ? 'Card (Stripe)' : 'Cash on Delivery'}
+              <span className={`badge ${paymentBadge[order.payment_status] ?? 'bg-slate-100 text-slate-700'}`}>
+                {order.payment_status ?? 'unpaid'}
+              </span>
+            </span>
           </div>
         </div>
       </div>

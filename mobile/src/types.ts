@@ -71,6 +71,9 @@ export type OrderStatus =
   | 'delivered'
   | 'cancelled';
 
+export type PaymentMethod = 'cod' | 'stripe';
+export type PaymentStatus = 'unpaid' | 'paid' | 'canceled';
+
 /** Matches the shape the web checkout posts, so both clients render alike. */
 export interface ShippingAddress {
   name: string;
@@ -108,6 +111,8 @@ export interface Order {
   notes: string | null;
   tracking_number: string | null;
   carrier: string | null;
+  payment_method?: PaymentMethod;
+  payment_status?: PaymentStatus;
   created_at: string;
   updated_at: string;
   customer_name?: string | null;

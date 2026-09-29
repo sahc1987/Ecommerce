@@ -1,7 +1,10 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
+  AppState,
   KeyboardAvoidingView,
+  Linking,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,9 +28,32 @@ import {
 import {HoldNotice} from '../../components/HoldNotice';
 import {newIdempotencyKey} from '../../utils/storage';
 import type {CartStackParams} from '../../navigation/types';
-import type {ShippingAddress} from '../../types';
+import type {PaymentMethod, ShippingAddress} from '../../types';
 
 type Props = NativeStackScreenProps<CartStackParams, 'Checkout'>;
+
+const PAYMENT_OPTIONS: {
+  value: PaymentMethod;
+  label: string;
+  hint: string;
+  icon: string;
+}[] = [
+  {
+    value: 'stripe',
+    label: 'Credit or debit card',
+    hint: 'Pay securely with Stripe',
+    icon: 'credit-card-outline',
+  },
+  {
+    value: 'cod',
+    label: 'Cash on Delivery',
+    hint: 'Pay when your order arrives',
+    icon: 'cash',
+  },
+];
+
+/** A card order waiting for the customer to finish paying in the browser. */
+type PendingPayment = {orderId: string; url: string};
 
 const REQUIRED: (keyof ShippingAddress)[] = [
   'name',
@@ -74,6 +100,83 @@ const CheckoutScreen = ({navigation}: Props) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
+  const [stripeEnabled, setStripeEnabled] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
+  const [pending, setPending] = useState<PendingPayment | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    paymentsApi
+      .config()
+      .then(({data}) => {
+        if (data.stripe_enabled) {
+          setStripeEnabled(true);
+          setPaymentMethod('stripe');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // The card order is gone (canceled or expired): start a fresh attempt.
+  const resetAttempt = useCallback(() => {
+    setPending(null);
+    idempotencyKey.current = newIdempotencyKey();
+    void dispatch(syncReservations());
+  }, [dispatch]);
+
+  const checkPayment = useCallback(
+    async (orderId: string) => {
+      setChecking(true);
+      try {
+        const {data} = await paymentsApi.confirm(orderId);
+        if (data.payment_status === 'paid') {
+          dispatch(clearCart());
+          navigation.replace('OrderSuccess', {orderId});
+        } else if (data.status === 'cancelled') {
+          setError('The payment session expired. Please try again.');
+          resetAttempt();
+        }
+      } catch (err) {
+        setError(errorMessage(err, 'Could not check your payment'));
+      } finally {
+        setChecking(false);
+      }
+    },
+    [dispatch, navigation, resetAttempt],
+  );
+
+  // Coming back from the browser: see whether the payment went through.
+  useEffect(() => {
+    if (!pending) {
+      return;
+    }
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        void checkPayment(pending.orderId);
+      }
+    });
+    return () => sub.remove();
+  }, [pending, checkPayment]);
+
+  const cancelPayment = async () => {
+    if (!pending) {
+      return;
+    }
+    setChecking(true);
+    try {
+      const {data} = await paymentsApi.cancel(pending.orderId);
+      if (data.payment_status === 'paid') {
+        dispatch(clearCart());
+        navigation.replace('OrderSuccess', {orderId: pending.orderId});
+        return;
+      }
+      resetAttempt();
+    } catch (err) {
+      setError(errorMessage(err, 'Could not cancel the payment'));
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const subtotal = cartSubtotal(items);
   const taxRate = store?.tax_enabled ? Number.parseFloat(store.tax_rate) : 0;
@@ -105,9 +208,16 @@ const CheckoutScreen = ({navigation}: Props) => {
           items: items.map(i => ({product_id: i.product_id, quantity: i.quantity})),
           shipping_address: address,
           notes: notes.trim() || undefined,
+          payment_method: paymentMethod,
         },
         idempotencyKey.current,
       );
+      if (data.checkout_url) {
+        // The cart is kept until Stripe confirms payment.
+        setPending({orderId: data.order_id, url: data.checkout_url});
+        await Linking.openURL(data.checkout_url);
+        return;
+      }
       dispatch(clearCart());
       navigation.replace('OrderSuccess', {orderId: data.order_id});
     } catch (err) {
@@ -211,6 +321,37 @@ const CheckoutScreen = ({navigation}: Props) => {
           />
         </Card>
 
+        <SectionTitle title="Payment method" />
+        <Card>
+          {PAYMENT_OPTIONS.filter(o => o.value !== 'stripe' || stripeEnabled).map(
+            o => {
+              const selected = paymentMethod === o.value;
+              return (
+                <Pressable
+                  key={o.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{checked: selected, disabled: !!pending}}
+                  disabled={!!pending}
+                  onPress={() => setPaymentMethod(o.value)}
+                  style={[styles.option, selected && styles.optionSelected]}>
+                  <View style={[styles.radio, selected && styles.radioSelected]}>
+                    {selected ? <View style={styles.radioDot} /> : null}
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={styles.optionLabel}>{o.label}</Text>
+                    <Text style={styles.optionHint}>{o.hint}</Text>
+                  </View>
+                  <Icon
+                    name={o.icon}
+                    size={22}
+                    color={selected ? colors.primary : colors.textFaint}
+                  />
+                </Pressable>
+              );
+            },
+          )}
+        </Card>
+
         <SectionTitle title="Order summary" />
         <Card>
           {items.map(item => (
@@ -239,14 +380,49 @@ const CheckoutScreen = ({navigation}: Props) => {
           </Text>
         </Card>
 
-        <Button
-          title="Place order"
-          icon="check"
-          onPress={placeOrder}
-          loading={submitting}
-          disabled={items.length === 0 || blocked}
-          style={styles.cta}
-        />
+        {pending ? (
+          <Card style={styles.cta}>
+            <View style={styles.pendingHeader}>
+              <Icon name="credit-card-clock-outline" size={22} color={colors.primary} />
+              <Text style={styles.pendingTitle}>Finish paying in your browser</Text>
+            </View>
+            <Text style={styles.pendingText}>
+              Complete the payment on Stripe's page, then come back here. We'll
+              confirm it automatically.
+            </Text>
+            <Button
+              title="I've paid — check status"
+              icon="refresh"
+              onPress={() => void checkPayment(pending.orderId)}
+              loading={checking}
+              style={styles.pendingButton}
+            />
+            <Button
+              title="Open payment page again"
+              icon="open-in-new"
+              variant="secondary"
+              onPress={() => void Linking.openURL(pending.url)}
+              disabled={checking}
+              style={styles.pendingButton}
+            />
+            <Button
+              title="Cancel payment"
+              variant="ghost"
+              onPress={cancelPayment}
+              disabled={checking}
+              style={styles.pendingButton}
+            />
+          </Card>
+        ) : (
+          <Button
+            title={paymentMethod === 'stripe' ? 'Pay with card' : 'Place order'}
+            icon={paymentMethod === 'stripe' ? 'lock' : 'check'}
+            onPress={placeOrder}
+            loading={submitting}
+            disabled={items.length === 0 || blocked}
+            style={styles.cta}
+          />
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -279,6 +455,34 @@ const styles = StyleSheet.create({
   divider: {height: 1, backgroundColor: colors.border, marginVertical: spacing.sm},
   note: {fontSize: font.xs, color: colors.textFaint, marginTop: spacing.sm},
   cta: {marginTop: spacing.lg},
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    marginBottom: spacing.sm,
+  },
+  optionSelected: {borderColor: colors.primary, backgroundColor: colors.primarySoft},
+  radio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: colors.textFaint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: {borderColor: colors.primary},
+  radioDot: {width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary},
+  optionLabel: {fontSize: font.sm, fontWeight: '600', color: colors.text},
+  optionHint: {fontSize: font.xs, color: colors.textMuted, marginTop: 2},
+  pendingHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  pendingTitle: {fontSize: font.md, fontWeight: '700', color: colors.text, flex: 1},
+  pendingText: {fontSize: font.sm, color: colors.textMuted, marginVertical: spacing.sm},
+  pendingButton: {marginTop: spacing.sm},
 });
 
 export default CheckoutScreen;
