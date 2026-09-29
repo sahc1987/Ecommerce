@@ -20,6 +20,16 @@ A full-stack e-commerce platform with a customer storefront, an admin dashboard,
   <img src="https://img.shields.io/badge/Cloudinary-Media-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white" alt="Cloudinary" />
 </p>
 
+## Screenshots
+
+> Captured from a local instance seeded with demo customers and orders.
+
+| Storefront | Admin dashboard |
+|---|---|
+| ![Storefront home page](docs/screenshots/storefront.png) | ![Admin dashboard with KPIs and alerts](docs/screenshots/admin-dashboard.png) |
+| **Order management** | **Product management** |
+| ![Admin orders list with status filters](docs/screenshots/admin-orders.png) | ![Admin product list](docs/screenshots/admin-products.png) |
+
 ## Overview
 
 This repository is a monorepo for an e-commerce system made up of three applications that share a single backend API and data model:
