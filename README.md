@@ -16,6 +16,7 @@ A full-stack e-commerce platform with a customer storefront, an admin dashboard,
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
   <img src="https://img.shields.io/badge/Nginx-Reverse_Proxy-009639?style=for-the-badge&logo=nginx&logoColor=white" alt="Nginx" />
   <img src="https://img.shields.io/badge/JWT-Auth-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white" alt="JWT" />
+  <img src="https://img.shields.io/badge/Stripe-Payments-635BFF?style=for-the-badge&logo=stripe&logoColor=white" alt="Stripe" />
   <img src="https://img.shields.io/badge/Cloudinary-Media-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white" alt="Cloudinary" />
 </p>
 
@@ -38,16 +39,19 @@ This repository is a monorepo for an e-commerce system made up of three applicat
 - Cart sidebar, address entry, and multi-step checkout flow
 - Order history, order detail, and shipment tracking with carrier-aware tracking URLs
 - Return/refund request workflow with itemized return line items
-- Account profile management and persistent notifications with unread badges
+- Tax calculation at checkout driven by the store's tax settings
+- Account profile management and persistent notifications (order status, shipping with carrier and tracking number) with unread badges, mark-as-read and delete
 
 ### Admin dashboard
-- First-run **Setup Wizard** for initial store configuration (name, currency, tax rate, return window, timezone) — the app redirects here until a store record exists
+- First-run **Setup Wizard** for initial store configuration (name, logo, currency, tax rate, return window, timezone) — the app redirects here until a store record exists
+- Store branding with an uploadable logo shown across the storefront and admin layouts
 - Product, category, and subcategory management with drag-friendly multi-image upload and primary-image selection
-- Order management with status transitions and per-order detail views
+- Order management with status transitions, carrier and tracking number capture on shipment, and per-order detail views
 - Returns queue for staff/admin review and approval
 - User management with role assignment
 - Store settings (currency, tax, timezone-aware formatting via a dedicated `TimeZoneSelect`)
-- Analytics dashboard: revenue/order summary cards, top products, recent orders, pending shipments, and a sales trend chart built with Recharts
+- Analytics dashboard: revenue, orders, units sold, average order value and new customers for a selectable period, each with **percent change vs. the previous period**; inventory breakdown with **low-stock and out-of-stock alerts**; top products, recent orders, pending shipments, and a sales trend chart built with Recharts
+- Full admin experience on mobile too: dashboard, products, categories, orders, returns, users and settings screens
 
 ### Platform, auth & security
 - JWT authentication delivered as an httpOnly cookie for the web client and as a `Bearer` token (stored in the OS keychain via `react-native-keychain`) for the mobile client, verified by a shared middleware
@@ -56,7 +60,9 @@ This repository is a monorepo for an e-commerce system made up of three applicat
 - Security middleware: Helmet security headers, scoped CORS with credentials, and endpoint-specific rate limiting (auth, order placement, cart/reservation sync)
 - Upload validation by magic-byte file-type sniffing (not just file extension) before accepting images
 - Image storage via Cloudinary, with automatic fallback to local disk in development
-- Redis-backed response caching for hot read paths (products, setup status) with targeted invalidation on writes
+- Redis-backed response caching for hot read paths (products, categories, dashboard, setup status) with targeted invalidation helpers called on every write
+- Background jobs: an expired-hold sweeper for stock reservations and a Stripe sweeper that settles or cancels pending card orders
+- Stripe webhook mounted before the JSON body parser so raw-body signature verification works
 - Cross-site cookie support (`SameSite=None; Secure`) for deployments where the frontend and API are on different domains
 - Dockerized environment (PostgreSQL, Redis, API, web client via Nginx) for one-command local or production startup
 
@@ -66,10 +72,11 @@ This repository is a monorepo for an e-commerce system made up of three applicat
 |---|---|
 | Web Frontend | React 18, TypeScript, Vite, Redux Toolkit, React Router, Tailwind CSS, Axios, Recharts, react-hot-toast, lucide-react |
 | Mobile | React Native 0.87 (React 19), TypeScript, React Navigation (native-stack + bottom-tabs), Redux Toolkit, Axios, AsyncStorage, react-native-keychain, react-native-image-picker, react-native-vector-icons |
-| Backend | Node.js, Express, JWT (jsonwebtoken), bcrypt, Multer, file-type (magic-byte validation), Helmet, express-rate-limit, uuid |
-| Data | PostgreSQL (pg), Redis (ioredis) |
-| Infrastructure | Docker, Docker Compose, Nginx, Cloudinary |
-| Testing / Tooling | Jest, ESLint, Prettier, nodemon |
+| Backend | Node.js, Express 4, JWT (jsonwebtoken), bcrypt, cookie-parser, CORS, Multer, file-type (magic-byte validation), Helmet, express-rate-limit, uuid, dotenv |
+| Payments | Stripe (Checkout Sessions + signed webhooks) |
+| Data | PostgreSQL 16 (pg), Redis 7 (ioredis), SQL schema + migrations |
+| Infrastructure | Docker, Docker Compose (health checks, `no-new-privileges`), Nginx, Cloudinary |
+| Tooling | nodemon (backend), PostCSS + Autoprefixer (web), Jest, ESLint and Prettier (mobile) |
 
 ## Project Structure
 
@@ -78,14 +85,14 @@ Ecommerce/
 ├── backend/                # Express API
 │   └── src/
 │       ├── routes/         # auth, setup, categories, products, orders,
-│       │                   # payments, reservations, returns, dashboard,
-│       │                   # users, notifications
+│       │                   # payments, stripeWebhook, reservations, returns,
+│       │                   # dashboard, users, notifications
 │       ├── middleware/     # auth (JWT + roles), upload (Multer + magic-byte
 │       │                   # validation), idempotency
 │       ├── utils/          # reservations (stock holds), cache (Redis),
-│       │                   # notifications, safeErr
+│       │                   # stripeOrders, notifications, safeErr, slugify
 │       ├── db/              # schema.sql + migrations
-│       └── config/          # database + Redis clients
+│       └── config/          # database, Redis, Stripe, Cloudinary clients
 ├── frontend/                # React + TypeScript + Vite web app
 │   └── src/
 │       ├── pages/            # Shop (Home, Product, Cart, Checkout, Orders),
@@ -113,14 +120,14 @@ All routes are mounted under `/api`:
 | Base path | Purpose |
 |---|---|
 | `/auth` | Register, login, logout, current user |
-| `/setup` | First-run store configuration status and completion |
+| `/setup` | First-run store configuration status, completion, and logo upload |
 | `/categories` | Categories and subcategories (CRUD, admin/staff-gated writes) |
 | `/products` | Catalog CRUD, image upload/management, admin listing |
 | `/orders` | Order listing, detail, status updates |
 | `/payments` | Idempotent order placement (`place-order`), Stripe config, payment confirm/cancel, Stripe webhook |
 | `/reservations` | Cart stock holds: get, sync (renew), release |
 | `/returns` | Return requests: create, list, review/approve |
-| `/dashboard` | Admin analytics: summary, top products, recent orders, sales chart, pending shipments |
+| `/dashboard` | Admin analytics: period summary with comparison and stock alerts, top products, recent orders, sales chart, pending shipments |
 | `/users` | User listing and management |
 | `/notifications` | User notifications: list, mark read, delete |
 | `/health` | Health check |
@@ -152,6 +159,7 @@ This starts PostgreSQL, Redis, the API, and the web frontend (served via Nginx).
 cd backend
 cp .env.example .env
 npm install
+npm run db:init   # create tables from schema.sql
 npm run dev
 ```
 
