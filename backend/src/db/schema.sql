@@ -69,8 +69,6 @@ CREATE TABLE IF NOT EXISTS products (
   discount_active BOOLEAN DEFAULT FALSE,
   discount_start TIMESTAMP,
   discount_end TIMESTAMP,
-  stock INTEGER DEFAULT 0,
-  sku VARCHAR(100),
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL,
   is_active BOOLEAN DEFAULT TRUE,
@@ -207,7 +205,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_stripe_session ON orders(stripe_session_id
 -- Product variants: each sellable combination (e.g. Color=Rojo, Talla=M) has its
 -- own SKU, optional price override and stock. Every product has at least one
 -- variant; a product without options has a single "default" variant ({}).
--- products.stock / products.sku are legacy and no longer read.
+-- products.stock / products.sku were copied into default variants here and are
+-- dropped by drop_legacy_product_stock_sku.sql.
 -- Safe to re-run: schema.sql (which includes this) runs on every startup.
 
 -- The option pickers a product offers, e.g. "Color" → {Rojo, Azul}.
@@ -237,15 +236,28 @@ CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(p
 
 -- Give every product without variants a default one carrying its stock and SKU.
 -- SKUs that are blank, duplicated, or already taken by a variant are dropped
--- rather than failing the whole init.
-INSERT INTO product_variants (product_id, sku, stock)
-SELECT p.id,
-       CASE WHEN p.clean_sku IS NOT NULL
-             AND COUNT(*) OVER (PARTITION BY p.clean_sku) = 1
-             AND NOT EXISTS (SELECT 1 FROM product_variants v2 WHERE v2.sku = p.clean_sku)
-            THEN p.clean_sku END,
-       GREATEST(COALESCE(p.stock, 0), 0)
-FROM (SELECT id, stock, NULLIF(TRIM(sku), '') AS clean_sku FROM products) p
+-- rather than failing the whole init. Only while the legacy columns exist
+-- (dynamic SQL, so this still parses once they are dropped); after that a
+-- product without variants just gets an empty default one.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = current_schema() AND table_name = 'products' AND column_name = 'stock') THEN
+    EXECUTE $sql$
+      INSERT INTO product_variants (product_id, sku, stock)
+      SELECT p.id,
+             CASE WHEN p.clean_sku IS NOT NULL
+                   AND COUNT(*) OVER (PARTITION BY p.clean_sku) = 1
+                   AND NOT EXISTS (SELECT 1 FROM product_variants v2 WHERE v2.sku = p.clean_sku)
+                  THEN p.clean_sku END,
+             GREATEST(COALESCE(p.stock, 0), 0)
+      FROM (SELECT id, stock, NULLIF(TRIM(sku), '') AS clean_sku FROM products) p
+      WHERE NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id)
+    $sql$;
+  END IF;
+END $$;
+INSERT INTO product_variants (product_id)
+SELECT p.id FROM products p
 WHERE NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id);
 
 -- Cart holds are per variant. Holds last minutes, so any that can't be mapped
@@ -285,3 +297,27 @@ BEGIN
   END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_order_items_variant_id ON order_items(variant_id);
+
+-- Stock and SKU live on product_variants (add_product_variants.sql), so the
+-- product-level columns go. Their last values are kept in
+-- legacy_product_stock_sku first: the variant backfill skipped duplicate or
+-- blank SKUs, and dropping a column can't be undone.
+-- Safe to re-run: does nothing once the columns are gone.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = current_schema() AND table_name = 'products' AND column_name IN ('stock', 'sku')) THEN
+    CREATE TABLE IF NOT EXISTS legacy_product_stock_sku (
+      product_id UUID PRIMARY KEY,
+      stock INTEGER,
+      sku VARCHAR(100),
+      saved_at TIMESTAMP DEFAULT NOW()
+    );
+    EXECUTE $sql$
+      INSERT INTO legacy_product_stock_sku (product_id, stock, sku)
+      SELECT id, stock, sku FROM products
+      ON CONFLICT (product_id) DO NOTHING
+    $sql$;
+    ALTER TABLE products DROP COLUMN IF EXISTS stock, DROP COLUMN IF EXISTS sku;
+  END IF;
+END $$;
