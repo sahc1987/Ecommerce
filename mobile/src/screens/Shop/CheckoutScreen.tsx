@@ -22,8 +22,10 @@ import {
   cartSignature,
   cartSubtotal,
   clearCart,
+  lineKey,
   renewReservations,
   syncReservations,
+  toCartLine,
 } from '../../store/slices/cartSlice';
 import {HoldNotice} from '../../components/HoldNotice';
 import {newIdempotencyKey} from '../../utils/storage';
@@ -205,7 +207,7 @@ const CheckoutScreen = ({navigation}: Props) => {
     try {
       const {data} = await paymentsApi.placeOrder(
         {
-          items: items.map(i => ({product_id: i.product_id, quantity: i.quantity})),
+          items: items.map(toCartLine),
           shipping_address: address,
           notes: notes.trim() || undefined,
           payment_method: paymentMethod,
@@ -355,9 +357,10 @@ const CheckoutScreen = ({navigation}: Props) => {
         <SectionTitle title="Order summary" />
         <Card>
           {items.map(item => (
-            <View key={item.product_id} style={styles.line}>
+            <View key={lineKey(item)} style={styles.line}>
               <Text style={styles.lineName} numberOfLines={1}>
                 {item.quantity} × {item.name}
+                {item.variant_label ? ` (${item.variant_label})` : ''}
               </Text>
               <Text style={styles.lineValue}>
                 {formatMoney(item.price * item.quantity)}

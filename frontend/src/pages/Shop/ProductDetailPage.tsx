@@ -5,15 +5,10 @@ import toast from 'react-hot-toast';
 import { ShoppingCart, Package, ArrowLeft, Minus, Plus, Truck, RotateCcw, Shield } from 'lucide-react';
 import api from '../../api';
 import { addItem } from '../../store/slices/cartSlice';
-import { sellableStock } from '../../utils/pricing';
-
-const getEffectivePrice = (p: any) => {
-  if (!p.discount_active || !p.discount_percent) return Number.parseFloat(p.price);
-  const now = new Date();
-  if (p.discount_start && new Date(p.discount_start) > now) return Number.parseFloat(p.price);
-  if (p.discount_end && new Date(p.discount_end) < now) return Number.parseFloat(p.price);
-  return Number.parseFloat(p.price) * (1 - Number.parseFloat(p.discount_percent) / 100);
-};
+import {
+  Variant, applyDiscount, formatPrice, effectivePriceRange, sellableStock, variantBasePrice, variantLabel,
+} from '../../utils/pricing';
+import VariantPicker, { Selection, findVariant, initialSelection } from '../../components/Shop/VariantPicker';
 
 const trustBadges = [
   { icon: Truck, label: 'Free shipping', sub: 'On orders over $50' },
@@ -29,10 +24,13 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [selection, setSelection] = useState<Selection>({});
 
   useEffect(() => {
     api.get(`/products/${slug}`).then((res) => {
       setProduct(res.data.product);
+      setSelection(initialSelection(res.data.product.variants ?? []));
+      setQuantity(1);
     }).catch(() => {
       toast.error('Product not found');
       navigate('/');
@@ -48,20 +46,45 @@ export default function ProductDetailPage() {
   }
   if (!product) return null;
 
-  const sellable = sellableStock(product); // stock minus other carts' active holds
+  const options = product.options ?? [];
+  const variants: Variant[] = product.variants ?? [];
+  const hasOptions = options.length > 0;
+  // The variant being bought: the chosen combination, or the only one.
+  const variant = hasOptions ? findVariant(variants, options, selection) : variants[0] ?? null;
+  const missing = options.filter((o: { name: string }) => !selection[o.name]).map((o: { name: string }) => o.name);
+  const label = variant ? variantLabel(options, variant.options) : null;
+
+  // Stock minus other carts' active holds, for the chosen variant.
+  let sellable = 0;
+  if (variant) sellable = variant.available_stock ?? variant.stock;
+  else if (!hasOptions) sellable = sellableStock(product);
 
   const images = product.images ?? [];
   const primaryImage = images.find((i: any) => i.is_primary) ?? images[0];
   const displayImage = images[selectedImage] ?? primaryImage;
-  const effectivePrice = getEffectivePrice(product);
-  const hasDiscount = effectivePrice < Number.parseFloat(product.price);
-  const savings = (Number.parseFloat(product.price) - effectivePrice) * quantity;
+  const basePrice = variant ? variantBasePrice(product, variant) : Number.parseFloat(product.price);
+  const effectivePrice = applyDiscount(product, basePrice);
+  const hasDiscount = effectivePrice < basePrice;
+  const savings = (basePrice - effectivePrice) * quantity;
+  const range = effectivePriceRange(product);
+  // Until a full combination is chosen, show the range rather than one price.
+  const showRange = hasOptions && !variant && range.min !== range.max;
+
+  const choose = (next: Selection) => {
+    setSelection(next);
+    setQuantity(1);
+  };
 
   const handleAddToCart = () => {
+    if (hasOptions && !variant) return;
     dispatch(addItem({
       product_id: product.id,
+      variant_id: variant?.id ?? null,
+      variant_label: label,
+      sku: variant?.sku ?? null,
+      slug: product.slug,
       name: product.name,
-      price: Number.parseFloat(product.price),
+      price: basePrice,
       effective_price: effectivePrice,
       image: primaryImage?.url,
       quantity,
@@ -71,6 +94,10 @@ export default function ProductDetailPage() {
   };
 
   const stockStatus = () => {
+    if (hasOptions && !variant) {
+      const text = missing.length ? `Choose ${missing.join(' and ').toLowerCase()}` : 'This combination is not available';
+      return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500"><span className="w-2 h-2 rounded-full bg-slate-300" />{text}</span>;
+    }
     if (sellable === 0) return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-rose-600"><span className="w-2 h-2 rounded-full bg-rose-500" />Out of Stock</span>;
     if (sellable <= 5) return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-600"><span className="w-2 h-2 rounded-full bg-amber-500" />Only {sellable} left</span>;
     return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><span className="w-2 h-2 rounded-full bg-emerald-500" />In Stock</span>;
@@ -131,11 +158,13 @@ export default function ProductDetailPage() {
           {/* Price */}
           <div className="py-4 border-y border-slate-100">
             <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-bold text-slate-900">${effectivePrice.toFixed(2)}</span>
-              {hasDiscount && (
+              <span className="text-4xl font-bold text-slate-900">
+                {showRange ? `${formatPrice(range.min)} – ${formatPrice(range.max)}` : `$${effectivePrice.toFixed(2)}`}
+              </span>
+              {hasDiscount && !showRange && (
                 <>
                   <span className="text-xl text-slate-400 line-through font-medium">
-                    ${Number.parseFloat(product.price).toFixed(2)}
+                    ${basePrice.toFixed(2)}
                   </span>
                   <span className="bg-rose-100 text-rose-600 text-sm font-bold px-2.5 py-0.5 rounded-lg">
                     {product.discount_percent}% OFF
@@ -143,12 +172,16 @@ export default function ProductDetailPage() {
                 </>
               )}
             </div>
-            {hasDiscount && quantity > 0 && (
+            {hasDiscount && !showRange && quantity > 0 && (
               <p className="text-sm text-emerald-600 font-semibold mt-2">
                 You save ${savings.toFixed(2)} on this order
               </p>
             )}
           </div>
+
+          {hasOptions && (
+            <VariantPicker options={options} variants={variants} selection={selection} onChange={choose} />
+          )}
 
           {/* Stock */}
           <div>{stockStatus()}</div>
@@ -203,8 +236,8 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          {product.sku && (
-            <p className="text-xs text-slate-400">SKU: {product.sku}</p>
+          {(variant?.sku ?? product.sku) && (
+            <p className="text-xs text-slate-400">SKU: {variant?.sku ?? product.sku}</p>
           )}
         </div>
       </div>

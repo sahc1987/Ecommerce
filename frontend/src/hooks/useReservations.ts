@@ -3,13 +3,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import api from '../api';
 import { RootState } from '../store';
 import {
-  CartItem, HoldStatus, Reservation, expireReservations, setReservations, setSyncing,
+  CartItem, HoldStatus, Reservation, expireReservations, lineKey, setReservations, setSyncing,
 } from '../store/slices/cartSlice';
 
-export type LineStatus = 'ok' | 'partial' | 'unavailable' | 'expired' | 'pending';
+export type LineStatus = 'ok' | 'partial' | 'unavailable' | 'needs_option' | 'expired' | 'pending';
 
 // What the UI should say about one cart line given the server's hold on it.
 export function lineStatus(item: CartItem, r: Reservation | undefined, hold: HoldStatus): LineStatus {
+  if (r?.needsOption) return 'needs_option';
   if (hold === 'expired') return 'expired';
   if (!r) return hold === 'none' ? 'pending' : 'ok';
   if (r.reserved === 0) return 'unavailable';
@@ -17,8 +18,12 @@ export function lineStatus(item: CartItem, r: Reservation | undefined, hold: Hol
   return 'ok';
 }
 
+// Request body line for /reservations and /payments/place-order.
+export const toOrderLine = (i: CartItem) =>
+  i.variant_id ? { variant_id: i.variant_id, quantity: i.quantity } : { product_id: i.product_id, quantity: i.quantity };
+
 const signature = (items: CartItem[]) =>
-  items.map((i) => `${i.product_id}:${i.quantity}`).sort((a, b) => a.localeCompare(b)).join('|');
+  items.map((i) => `${lineKey(i)}:${i.quantity}`).sort((a, b) => a.localeCompare(b)).join('|');
 
 export function useReservations() {
   const dispatch = useDispatch();
@@ -36,7 +41,7 @@ export function useReservations() {
     dispatch(setSyncing(true));
     try {
       const res = await api.put('/reservations', {
-        items: current.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+        items: current.map(toOrderLine),
       });
       dispatch(setReservations(res.data));
       return res.data;

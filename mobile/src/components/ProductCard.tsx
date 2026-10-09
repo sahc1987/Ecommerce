@@ -1,7 +1,7 @@
 import React from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {colors, font, radius, shadow, spacing} from '../theme';
-import {effectivePrice, formatMoney, isDiscounted, sellableStock} from '../utils/format';
+import {effectivePriceRange, formatMoney, isDiscounted, sellableStock} from '../utils/format';
 import type {Product} from '../types';
 import {mediaUrl} from '../utils/media';
 
@@ -12,8 +12,10 @@ export const ProductCard = ({
   product: Product;
   onPress: () => void;
 }) => {
-  const price = effectivePrice(product);
-  const discounted = isDiscounted(product);
+  const {min: price, max} = effectivePriceRange(product);
+  // Variants priced differently: show "From $X" and no single strike price.
+  const fromPrice = price !== max;
+  const discounted = isDiscounted(product) && !fromPrice;
   const image = product.primary_image ?? product.images?.[0]?.url ?? null;
   const outOfStock = sellableStock(product) <= 0;
 
@@ -47,9 +49,10 @@ export const ProductCard = ({
           {product.name}
         </Text>
         <View style={styles.priceRow}>
+          {fromPrice ? <Text style={styles.from}>From</Text> : null}
           <Text style={styles.price}>{formatMoney(price)}</Text>
           {discounted ? (
-            <Text style={styles.strike}>{formatMoney(product.price)}</Text>
+            <Text style={styles.strike}>{formatMoney(product.price_min ?? product.price)}</Text>
           ) : null}
         </View>
       </View>
@@ -96,6 +99,7 @@ const styles = StyleSheet.create({
   body: {padding: spacing.md, gap: spacing.xs},
   name: {fontSize: font.sm, fontWeight: '600', color: colors.text, minHeight: 34},
   priceRow: {flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm},
+  from: {fontSize: font.xs, color: colors.textMuted},
   price: {fontSize: font.md, fontWeight: '700', color: colors.text},
   strike: {
     fontSize: font.xs,

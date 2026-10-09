@@ -8,6 +8,7 @@ const reservations = require('../utils/reservations');
 const { idempotent } = require('../middleware/idempotency');
 const stripe = require('../config/stripe');
 const stripeOrders = require('../utils/stripeOrders');
+const variants = require('../utils/variants');
 
 const PAYMENT_METHODS = new Set(['cod', 'stripe']);
 const toCents = (amount) => Math.round(amount * 100);
@@ -37,7 +38,10 @@ async function createCheckoutSession(req, { order, orderItems, tax, currency, cl
     price_data: {
       currency,
       unit_amount: toCents(item.unit_price),
-      product_data: { name: item.product_name, images: stripeImages(item.product_image) },
+      product_data: {
+        name: item.variant_label ? `${item.product_name} (${item.variant_label})` : item.product_name,
+        images: stripeImages(item.product_image),
+      },
     },
   }));
   if (tax > 0) {
@@ -135,33 +139,105 @@ const orderLimiter = rateLimit({
   message: { error: 'Too many order attempts, please slow down.' },
 });
 
-function computeEffectivePrice(product) {
-  if (!product.discount_active || product.discount_percent <= 0) {
-    return Number.parseFloat(product.price);
-  }
-  const now = new Date();
-  const start = product.discount_start ? new Date(product.discount_start) : null;
-  const end = product.discount_end ? new Date(product.discount_end) : null;
-  if ((!start || now >= start) && (!end || now <= end)) {
-    return Number.parseFloat(product.price) * (1 - Number.parseFloat(product.discount_percent) / 100);
-  }
-  return Number.parseFloat(product.price);
-}
+const MAX_ORDER_LINES = 50;
 
 function validateOrderRequest(items, paymentMethod) {
-  if (!items?.length) return 'Cart is empty';
+  const invalidLines = variants.validateLines(items, MAX_ORDER_LINES);
+  if (invalidLines) return invalidLines;
   if (!PAYMENT_METHODS.has(paymentMethod)) return 'Invalid payment method';
   if (paymentMethod === 'stripe' && !stripe) return 'Card payments are not available right now';
   return null;
 }
 
-async function fetchLockedProduct(client, productId) {
+// The variant with what pricing needs from its product, locked for the order.
+// Only sellable when both the variant and its product are active.
+async function fetchLockedVariant(client, variantId) {
   const res = await client.query(
-    `SELECT p.*, (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image
-     FROM products p WHERE p.id = $1 AND p.is_active = TRUE FOR UPDATE OF p`,
-    [productId]
+    `SELECT v.id, v.product_id, v.sku, v.price AS variant_price,
+            p.name, p.slug, p.price, p.discount_percent, p.discount_active, p.discount_start, p.discount_end,
+            (SELECT string_agg(v.options->>o.name, ' / ' ORDER BY o.position, o.id)
+               FROM product_options o WHERE o.product_id = v.product_id) AS variant_label,
+            (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) AS primary_image
+     FROM product_variants v JOIN products p ON p.id = v.product_id
+     WHERE v.id = $1 AND v.is_active = TRUE AND p.is_active = TRUE
+     FOR UPDATE OF v`,
+    [variantId]
   );
   return res.rows[0] || null;
+}
+
+// Locks, checks and prices every cart line inside the order's transaction.
+// Returns { reject: { status, body } } when the order can't go ahead.
+async function priceOrderLines(client, items, cartToken) {
+  // One line per variant (duplicates are summed, so they can't each pass the
+  // stock check), locked in a fixed order to avoid deadlocks between orders.
+  const { lines, unresolved } = await variants.resolveLines(client, items);
+  if (unresolved.length) {
+    return {
+      reject: {
+        status: 400,
+        body: {
+          error: 'Please choose an option (size, color…) for every product in your cart',
+          product_id: unresolved[0].product_id,
+        },
+      },
+    };
+  }
+  lines.sort((a, b) => a.variant_id.localeCompare(b.variant_id));
+
+  let subtotal = 0;
+  let discount = 0;
+  const orderItems = [];
+  const affectedProductIds = [];
+  for (const line of lines) {
+    const variant = await fetchLockedVariant(client, line.variant_id);
+    if (!variant) {
+      return {
+        reject: { status: 400, body: { error: 'A product in your cart is no longer available', variant_id: line.variant_id } },
+      };
+    }
+    const displayName = variant.variant_label ? `${variant.name} (${variant.variant_label})` : variant.name;
+    // Stock held by other carts is not for sale to this one; our own hold
+    // (if any) is consumed by this order.
+    const available = await reservations.availableFor(client, variant.id, cartToken);
+    if (available < line.quantity) {
+      return {
+        reject: {
+          status: 409,
+          body: {
+            error: available > 0
+              ? `Only ${available} of ${displayName} available right now`
+              : `${displayName} is out of stock`,
+            product_id: variant.product_id,
+            variant_id: variant.id,
+            available,
+          },
+        },
+      };
+    }
+
+    const basePrice = Number.parseFloat(variant.variant_price ?? variant.price);
+    // Rounded to the cent so the stored total equals what Stripe charges.
+    const effectivePrice = round2(variants.effectivePrice(variant, variant.variant_price));
+    const itemDiscount = (basePrice - effectivePrice) * line.quantity;
+
+    subtotal += basePrice * line.quantity;
+    discount += itemDiscount;
+    orderItems.push({
+      product_id: variant.product_id,
+      variant_id: variant.id,
+      sku: variant.sku,
+      variant_label: variant.variant_label,
+      product_name: variant.name,
+      product_image: variant.primary_image,
+      unit_price: effectivePrice,
+      quantity: line.quantity,
+      discount: itemDiscount,
+      total: effectivePrice * line.quantity,
+    });
+    affectedProductIds.push({ id: variant.product_id, slug: variant.slug });
+  }
+  return { orderItems, subtotal, discount, affectedProductIds };
 }
 
 router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, res) => {
@@ -176,49 +252,12 @@ router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, 
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    let subtotal = 0;
-    let discount = 0;
-    const orderItems = [];
-    const affectedProductIds = [];
-
-    for (const item of items) {
-      const product = await fetchLockedProduct(client, item.product_id);
-      if (!product) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: `Product not found: ${item.product_id}` });
-      }
-      // Stock held by other carts is not for sale to this one; our own hold
-      // (if any) is consumed by this order.
-      const available = await reservations.availableFor(client, product.id, cartToken);
-      if (available < item.quantity) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({
-          error: available > 0
-            ? `Only ${available} of ${product.name} available right now`
-            : `${product.name} is out of stock`,
-          product_id: product.id,
-          available,
-        });
-      }
-
-      const basePrice = Number.parseFloat(product.price);
-      // Rounded to the cent so the stored total equals what Stripe charges.
-      const effectivePrice = round2(computeEffectivePrice(product));
-      const itemDiscount = (basePrice - effectivePrice) * item.quantity;
-
-      subtotal += basePrice * item.quantity;
-      discount += itemDiscount;
-      orderItems.push({
-        product_id: product.id,
-        product_name: product.name,
-        product_image: product.primary_image,
-        unit_price: effectivePrice,
-        quantity: item.quantity,
-        discount: itemDiscount,
-        total: effectivePrice * item.quantity,
-      });
-      affectedProductIds.push({ id: product.id, slug: product.slug });
+    const priced = await priceOrderLines(client, items, cartToken);
+    if (priced.reject) {
+      await client.query('ROLLBACK');
+      return res.status(priced.reject.status).json(priced.reject.body);
     }
+    const { orderItems, subtotal, discount, affectedProductIds } = priced;
 
     const settingsRes = await client.query('SELECT tax_rate, tax_enabled, currency FROM store_settings LIMIT 1');
     const settings = settingsRes.rows[0];
@@ -235,11 +274,16 @@ router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, 
 
     for (const item of orderItems) {
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, product_name, product_image, unit_price, quantity, discount, total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [order.id, item.product_id, item.product_name, item.product_image, item.unit_price, item.quantity, item.discount, item.total]
+        `INSERT INTO order_items
+           (order_id, product_id, variant_id, sku, variant_label, product_name, product_image, unit_price, quantity, discount, total)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [
+          order.id, item.product_id, item.variant_id, item.sku, item.variant_label, item.product_name,
+          item.product_image, item.unit_price, item.quantity, item.discount, item.total,
+        ]
       );
-      await client.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.product_id]);
+      // CHECK (stock >= 0) on product_variants backs up the availability check.
+      await client.query('UPDATE product_variants SET stock = stock - $1, updated_at = NOW() WHERE id = $2', [item.quantity, item.variant_id]);
     }
 
     // The sale is final: release this cart's holds on the purchased products.

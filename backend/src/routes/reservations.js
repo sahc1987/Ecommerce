@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const { optionalAuth } = require('../middleware/auth');
 const safeErr = require('../utils/safeErr');
 const reservations = require('../utils/reservations');
+const variants = require('../utils/variants');
 
 // Carts sync on every change; keep it generous but bounded.
 const limiter = rateLimit({
@@ -14,8 +15,7 @@ const limiter = rateLimit({
 });
 
 const MAX_ITEMS = 50;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_QTY = 1000;
+const { UUID_RE } = variants;
 
 // Every route needs a cart token to identify whose holds these are.
 router.use(limiter, optionalAuth, (req, res, next) => {
@@ -37,13 +37,10 @@ router.get('/', async (req, res) => {
 // PUT replace this cart's holds with the given items (renews the timer)
 router.put('/', async (req, res) => {
   const { items } = req.body;
-  if (!Array.isArray(items) || items.length > MAX_ITEMS)
-    return res.status(400).json({ error: 'items must be an array' });
-  for (const it of items) {
-    const qty = Number.parseInt(it?.quantity, 10);
-    if (!UUID_RE.test(String(it?.product_id)) || !Number.isInteger(qty) || qty < 1 || qty > MAX_QTY)
-      return res.status(400).json({ error: 'Each item needs a valid product_id and quantity (1-1000)' });
-  }
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items must be an array' });
+  // An empty list is valid here: it releases every hold of this cart.
+  const invalid = items.length ? variants.validateLines(items, MAX_ITEMS) : null;
+  if (invalid) return res.status(400).json({ error: invalid });
   try {
     res.json(await reservations.syncReservations({
       cartToken: req.cartToken,
@@ -64,12 +61,12 @@ router.post('/renew', async (req, res) => {
   }
 });
 
-// DELETE release one product (or everything) for this cart
-router.delete('/:productId?', async (req, res) => {
-  if (req.params.productId && !UUID_RE.test(req.params.productId))
-    return res.status(400).json({ error: 'Invalid product id' });
+// DELETE release one variant, all variants of one product, or everything
+router.delete('/:id?', async (req, res) => {
+  if (req.params.id && !UUID_RE.test(req.params.id))
+    return res.status(400).json({ error: 'Invalid variant or product id' });
   try {
-    await reservations.releaseReservations(req.cartToken, req.params.productId);
+    await reservations.releaseReservations(req.cartToken, req.params.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });

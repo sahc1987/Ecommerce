@@ -4,11 +4,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Package, Lock, MapPin, CheckCircle2, Loader2, X, CreditCard, Banknote } from "lucide-react";
 import { RootState } from "../../store";
-import { clearCart } from "../../store/slices/cartSlice";
+import { clearCart, lineKey } from "../../store/slices/cartSlice";
 import api, { errorMessage } from "../../api";
 import { textOr } from "../../utils/text";
 import HoldBanner from "../../components/Shop/HoldBanner";
-import { lineStatus, useReservations } from "../../hooks/useReservations";
+import { lineStatus, toOrderLine, useReservations } from "../../hooks/useReservations";
 import { newIdempotencyKey } from "../../utils/cartToken";
 
 interface Address {
@@ -52,7 +52,7 @@ export default function CheckoutPage() {
   const { items, reservations, holdStatus } = useSelector((s: RootState) => s.cart);
   const { user } = useSelector((s: RootState) => s.auth);
   const { renew, sync, signature } = useReservations();
-  const blocked = items.some((i) => lineStatus(i, reservations[i.product_id], holdStatus) !== "ok");
+  const blocked = items.some((i) => lineStatus(i, reservations[lineKey(i)], holdStatus) !== "ok");
 
   // One key per checkout attempt: retries reuse it (server de-duplicates), a
   // changed cart gets a new one because the request body would differ.
@@ -205,7 +205,7 @@ export default function CheckoutPage() {
       const res = await api.post(
         "/payments/place-order",
         {
-          items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+          items: items.map(toOrderLine),
           shipping_address: address,
           shipping: 0,
           payment_method: paymentMethod,
@@ -423,7 +423,7 @@ export default function CheckoutPage() {
               <div className="mb-4"><HoldBanner /></div>
               <div className="space-y-2 mb-4">
                 {items.map((item) => (
-                  <div key={item.product_id} className="flex gap-3">
+                  <div key={lineKey(item)} className="flex gap-3">
                     <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
                       {item.image ? (
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
@@ -433,7 +433,9 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-800 truncate">{item.name}</p>
-                      <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
+                      <p className="text-xs text-slate-500">
+                        {item.variant_label && <>{item.variant_label} · </>}Qty: {item.quantity}
+                      </p>
                     </div>
                     <p className="text-sm font-medium text-slate-900">
                       ${(item.effective_price * item.quantity).toFixed(2)}

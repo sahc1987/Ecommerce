@@ -3,6 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowLeft, Upload, X, Star } from "lucide-react";
 import api, { errorMessage } from "../../../api";
+import VariantEditor, {
+  OptionDraft, VariantDraft, cleanOptions, isStale,
+} from "../../../components/Admin/VariantEditor";
 
 interface Category {
   id: number;
@@ -33,6 +36,12 @@ export default function ProductForm() {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
+  // With no options the product has one default variant, edited through the
+  // plain SKU/Stock fields; defaultVariantId keeps its holds and order links.
+  const [options, setOptions] = useState<OptionDraft[]>([]);
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
+  const [defaultVariantId, setDefaultVariantId] = useState<string | undefined>();
+  const hasOptions = options.length > 0;
 
   const [form, setForm] = useState({
     name: "",
@@ -54,10 +63,28 @@ export default function ProductForm() {
     api.get("/categories").then((res) => setCategories(res.data.categories));
     if (isEdit) {
       setLoading(true);
+      // The admin view includes inactive variants: saving replaces the whole
+      // list, so the form must start from all of them.
       api
-        .get(`/products/${id}`)
+        .get(`/products/admin/${id}`)
         .then((res) => {
           const p = res.data.product;
+          const loadedOptions: OptionDraft[] = (p.options ?? []).map(
+            (o: { name: string; values: string[] }) => ({ name: o.name, valuesText: o.values.join(", ") }),
+          );
+          setOptions(loadedOptions);
+          if (loadedOptions.length) {
+            setVariants((p.variants ?? []).map((v: any) => ({
+              id: v.id,
+              options: v.options,
+              sku: v.sku ?? "",
+              price: v.price === null ? "" : String(v.price),
+              stock: String(v.stock),
+              is_active: v.is_active,
+            })));
+          } else {
+            setDefaultVariantId(p.variants?.[0]?.id);
+          }
           setForm({
             name: p.name,
             description: p.description ?? "",
@@ -96,15 +123,41 @@ export default function ProductForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasOptions) {
+      if (!cleanOptions(options).length || cleanOptions(options).length !== options.length) {
+        toast.error("Give every option a name and at least one value");
+        return;
+      }
+      if (!variants.length) {
+        toast.error("Click “Generate variants” to create the combinations");
+        return;
+      }
+      if (variants.some((v) => isStale(options, v))) {
+        toast.error("Click “Update variants” so they match the options");
+        return;
+      }
+    }
     setSaving(true);
     try {
+      const { stock, sku, ...rest } = form;
+      const variantPayload = hasOptions
+        ? variants.map((v) => ({
+            id: v.id,
+            options: v.options,
+            sku: v.sku.trim() || null,
+            price: v.price === "" ? null : Number.parseFloat(v.price),
+            stock: Number.parseInt(v.stock, 10) || 0,
+            is_active: v.is_active,
+          }))
+        : [{ id: defaultVariantId, options: {}, sku: sku.trim() || null, price: null, stock: Number.parseInt(stock, 10) || 0, is_active: true }];
       const payload = {
-        ...form,
+        ...rest,
+        options: cleanOptions(options),
+        variants: variantPayload,
         price: Number.parseFloat(form.price),
         compare_at_price: form.compare_at_price
           ? Number.parseFloat(form.compare_at_price)
           : null,
-        stock: Number.parseInt(form.stock),
         discount_percent: Number.parseFloat(form.discount_percent),
         category_id: form.category_id || null,
         subcategory_id: form.subcategory_id || null,
@@ -112,7 +165,17 @@ export default function ProductForm() {
         discount_end: form.discount_end || null,
       };
       if (isEdit) {
-        await api.put(`/products/${id}`, payload);
+        const res = await api.put(`/products/${id}`, payload);
+        // New variants now have ids; keep them so the next save updates in place.
+        const saved = res.data.product;
+        if (hasOptions) {
+          setVariants(saved.variants.map((v: any) => ({
+            id: v.id, options: v.options, sku: v.sku ?? "",
+            price: v.price === null ? "" : String(v.price), stock: String(v.stock), is_active: v.is_active,
+          })));
+        } else {
+          setDefaultVariantId(saved.variants?.[0]?.id);
+        }
         toast.success("Product updated");
       } else {
         const res = await api.post("/products", payload);
@@ -222,6 +285,7 @@ export default function ProductForm() {
               }
             />
           </div>
+          {!hasOptions && (
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label
@@ -256,6 +320,7 @@ export default function ProductForm() {
               />
             </div>
           </div>
+          )}
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
@@ -395,6 +460,29 @@ export default function ProductForm() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Options & variants */}
+        <div className="card space-y-4">
+          <div>
+            <h2 className="font-semibold text-slate-900">Options &amp; Variants</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {hasOptions
+                ? "Each combination is a variant with its own SKU, stock and (optional) price."
+                : "Sold in sizes, colors or capacities? Add an option to sell each combination separately."}
+            </p>
+          </div>
+          <VariantEditor
+            productName={form.name}
+            basePrice={form.price}
+            options={options}
+            variants={variants}
+            onOptionsChange={(next) => {
+              setOptions(next);
+              if (!next.length) setVariants([]);
+            }}
+            onVariantsChange={setVariants}
+          />
         </div>
 
         {/* Category */}

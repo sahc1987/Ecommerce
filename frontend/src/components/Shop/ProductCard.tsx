@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Heart, Package, ShoppingCart } from 'lucide-react';
-import { Product, formatPrice, getEffectivePrice, hasActiveDiscount, sellableStock } from '../../utils/pricing';
+import {
+  Product, effectivePriceRange, formatPrice, hasActiveDiscount, needsOptions, sellableStock,
+} from '../../utils/pricing';
 
 interface Props {
   product: Product;
@@ -8,9 +10,11 @@ interface Props {
 }
 
 export default function ProductCard({ product: p, onAddToCart }: Readonly<Props>) {
-  const price = getEffectivePrice(p);
+  const { min, max } = effectivePriceRange(p);
+  const fromPrice = min !== max; // variants priced differently: "From $X"
   const discounted = hasActiveDiscount(p);
   const stock = sellableStock(p);
+  const choose = needsOptions(p);
 
   return (
     <div className="relative bg-white rounded-2xl border border-slate-200 p-3 group hover:shadow-lg hover:border-primary-200 hover:-translate-y-0.5 transition-all duration-200 flex flex-col">
@@ -52,10 +56,11 @@ export default function ProductCard({ product: p, onAddToCart }: Readonly<Props>
         )}
         <div className="flex items-end justify-between mt-auto pt-2.5">
           <div className="leading-tight">
-            <span className="font-bold text-slate-900 text-sm">{formatPrice(price)}</span>
-            {discounted && (
+            {fromPrice && <span className="text-[10px] text-slate-500 mr-1">From</span>}
+            <span className="font-bold text-slate-900 text-sm">{formatPrice(min)}</span>
+            {discounted && !fromPrice && (
               <span className="text-[10px] text-slate-400 line-through ml-1">
-                {formatPrice(Number.parseFloat(p.price))}
+                {formatPrice(p.price_min ?? Number.parseFloat(p.price))}
               </span>
             )}
           </div>
@@ -64,7 +69,7 @@ export default function ProductCard({ product: p, onAddToCart }: Readonly<Props>
             onClick={() => onAddToCart(p)}
             disabled={stock === 0}
             className="w-7 h-7 rounded-lg bg-primary-600 text-white flex items-center justify-center hover:bg-primary-700 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            aria-label={`Add ${p.name} to cart`}
+            aria-label={choose ? `Choose options for ${p.name}` : `Add ${p.name} to cart`}
           >
             <ShoppingCart size={13} />
           </button>

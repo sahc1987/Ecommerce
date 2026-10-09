@@ -8,7 +8,9 @@ import {
 import api from '../../api';
 import { RootState } from '../../store';
 import { addItem } from '../../store/slices/cartSlice';
-import { Product, getEffectivePrice, hasActiveDiscount, sellableStock } from '../../utils/pricing';
+import {
+  Product, getEffectivePrice, hasActiveDiscount, needsOptions, sellableStock, singleVariant,
+} from '../../utils/pricing';
 import { categoryIcon } from '../../utils/categoryIcon';
 import { textOr } from '../../utils/text';
 import LeftSidebar from '../../components/Shop/LeftSidebar';
@@ -254,9 +256,18 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
+  // Products with options (size, color…) need a choice first: open their page.
   const handleAddToCart = (p: Product) => {
+    if (needsOptions(p)) {
+      navigate(`/products/${p.slug}`);
+      return;
+    }
+    const only = singleVariant(p);
     dispatch(addItem({
       product_id: p.id,
+      variant_id: only?.id ?? null,
+      sku: only?.sku ?? null,
+      slug: p.slug,
       name: p.name,
       price: Number.parseFloat(p.price),
       effective_price: getEffectivePrice(p),

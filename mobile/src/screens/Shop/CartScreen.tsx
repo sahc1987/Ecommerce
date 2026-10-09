@@ -9,6 +9,7 @@ import {useAppDispatch, useAppSelector} from '../../store/hooks';
 import {
   cartBlocked,
   cartSubtotal,
+  lineKey,
   lineStatus,
   removeItem,
   type LineStatus,
@@ -60,12 +61,12 @@ const CartScreen = ({navigation}: Props) => {
     <View style={styles.screen}>
       <FlatList
         data={items}
-        keyExtractor={item => item.product_id}
+        keyExtractor={item => lineKey(item)}
         contentContainerStyle={styles.list}
         ListHeaderComponent={<HoldNotice />}
         renderItem={({item}) => {
-          const status = lineStatus(item, reservations[item.product_id], holdStatus);
-          const held = reservations[item.product_id]?.reserved ?? 0;
+          const status = lineStatus(item, reservations[lineKey(item)], holdStatus);
+          const held = reservations[lineKey(item)]?.reserved ?? 0;
           return (
           <View style={[styles.item, status !== 'ok' && status !== 'pending' && styles.itemProblem]}>
             {item.image ? (
@@ -79,6 +80,9 @@ const CartScreen = ({navigation}: Props) => {
               <Text style={styles.itemName} numberOfLines={2}>
                 {item.name}
               </Text>
+              {item.variant_label ? (
+                <Text style={styles.itemVariant}>{item.variant_label}</Text>
+              ) : null}
               <Text style={styles.itemPrice}>{formatMoney(item.price)} each</Text>
               <LineNote status={status} held={held} />
               <View style={styles.itemFooter}>
@@ -89,7 +93,7 @@ const CartScreen = ({navigation}: Props) => {
                     onPress={() =>
                       dispatch(
                         setQuantity({
-                          product_id: item.product_id,
+                          key: lineKey(item),
                           quantity: item.quantity - 1,
                         }),
                       )
@@ -104,7 +108,7 @@ const CartScreen = ({navigation}: Props) => {
                     onPress={() =>
                       dispatch(
                         setQuantity({
-                          product_id: item.product_id,
+                          key: lineKey(item),
                           quantity: item.quantity + 1,
                         }),
                       )
@@ -120,7 +124,7 @@ const CartScreen = ({navigation}: Props) => {
                 </View>
                 <Pressable
                   hitSlop={8}
-                  onPress={() => dispatch(removeItem(item.product_id))}>
+                  onPress={() => dispatch(removeItem(lineKey(item)))}>
                   <Icon name="trash-can-outline" size={20} color={colors.danger} />
                 </Pressable>
               </View>
@@ -158,6 +162,13 @@ const CartScreen = ({navigation}: Props) => {
 
 /** Explains why a cart line can't be bought as-is; nothing for healthy lines. */
 const LineNote = ({status, held}: Readonly<{status: LineStatus; held: number}>) => {
+  if (status === 'needs_option') {
+    return (
+      <Text style={styles.problemNote}>
+        This product now comes in options — remove it and add it again from its page
+      </Text>
+    );
+  }
   if (status === 'unavailable') {
     return <Text style={styles.problemNote}>Out of stock — reserved by another shopper</Text>;
   }
@@ -186,6 +197,7 @@ const styles = StyleSheet.create({
   imageFallback: {alignItems: 'center', justifyContent: 'center'},
   itemBody: {flex: 1, gap: spacing.xs},
   itemName: {fontSize: font.sm, fontWeight: '600', color: colors.text},
+  itemVariant: {fontSize: font.xs, color: colors.text, fontWeight: '600'},
   itemPrice: {fontSize: font.xs, color: colors.textMuted},
   itemFooter: {
     flexDirection: 'row',

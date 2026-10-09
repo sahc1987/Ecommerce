@@ -81,8 +81,7 @@ export const shortId = (id?: string | null) =>
  * Mirrors the server's price logic in payments.js so the cart total the user
  * sees matches the total the server computes at checkout.
  */
-export const effectivePrice = (product: Product): number => {
-  const base = Number.parseFloat(product.price);
+export const applyDiscount = (product: Product, base: number): number => {
   const percent = Number.parseFloat(product.discount_percent ?? '0');
   if (!product.discount_active || percent <= 0) {
     return base;
@@ -96,5 +95,17 @@ export const effectivePrice = (product: Product): number => {
   return base;
 };
 
+export const effectivePrice = (product: Product): number =>
+  applyDiscount(product, Number.parseFloat(product.price));
+
 export const isDiscounted = (product: Product) =>
   effectivePrice(product) < Number.parseFloat(product.price);
+
+/** Lowest and highest price after discount across the sellable variants. */
+export const effectivePriceRange = (product: Product) => {
+  const base = Number.parseFloat(product.price);
+  return {
+    min: applyDiscount(product, product.price_min ?? base),
+    max: applyDiscount(product, product.price_max ?? base),
+  };
+};

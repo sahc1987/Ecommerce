@@ -68,10 +68,13 @@ async function cancelUnpaid(orderId) {
       await client.query('ROLLBACK');
       return false;
     }
+    // Summed per variant: UPDATE … FROM applies only one matching line per row.
     const restored = await client.query(
-      `UPDATE products p SET stock = p.stock + oi.quantity
-       FROM order_items oi
-       WHERE oi.order_id = $1 AND p.id = oi.product_id
+      `UPDATE product_variants v SET stock = v.stock + oi.quantity, updated_at = NOW()
+       FROM (SELECT variant_id, SUM(quantity) AS quantity FROM order_items
+             WHERE order_id = $1 AND variant_id IS NOT NULL GROUP BY variant_id) oi,
+            products p
+       WHERE v.id = oi.variant_id AND p.id = v.product_id
        RETURNING p.id, p.slug`,
       [orderId]
     );

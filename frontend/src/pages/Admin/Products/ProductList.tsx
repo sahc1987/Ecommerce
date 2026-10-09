@@ -153,6 +153,11 @@ export default function ProductList() {
                               SKU: {p.sku}
                             </p>
                           )}
+                          {p.options?.length > 0 && (
+                            <p className="text-xs text-slate-400">
+                              {p.variants.length} variants · {p.options.map((o: { name: string }) => o.name).join(", ")}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -191,6 +196,13 @@ export default function ProductList() {
                       >
                         {p.stock}
                       </span>
+                      {(() => {
+                        // Total stock can hide a sold-out size: flag those.
+                        const out = (p.variants ?? []).filter((v: any) => v.is_active && v.stock === 0).length;
+                        return p.options?.length > 0 && out > 0 ? (
+                          <span className="block text-[11px] text-red-600">{out} sold out</span>
+                        ) : null;
+                      })()}
                       {p.reserved_stock > 0 && (
                         <span
                           className="ml-1.5 text-[11px] text-amber-600"

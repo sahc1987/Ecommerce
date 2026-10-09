@@ -1,7 +1,14 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
+// One line per variant: "Camisa Rojo / M" and "Camisa Rojo / L" are separate.
+// Carts saved before variants have no variant_id; the server maps those to the
+// product's only variant and setReservations fills it in.
 export interface CartItem {
   product_id: string;
+  variant_id?: string | null;
+  variant_label?: string | null; // "Rojo / M"; absent for single-variant products
+  sku?: string | null;
+  slug?: string;
   name: string;
   price: number;
   effective_price: number;
@@ -10,11 +17,15 @@ export interface CartItem {
   stock: number;
 }
 
+// Identifies a cart line, for reservations, quantity changes and removal.
+export const lineKey = (i: Pick<CartItem, 'product_id' | 'variant_id'>): string => i.variant_id ?? i.product_id;
+
 // Server-side stock hold for one cart line (see /api/reservations).
 export interface Reservation {
   reserved: number;   // units the server is holding for this cart
   available: number;  // units this cart could hold (stock minus other carts)
   expires_at: string | null;
+  needsOption?: boolean; // the line names a product with several variants
 }
 
 export type HoldStatus = 'none' | 'active' | 'expired';
@@ -27,9 +38,17 @@ interface CartState {
   syncing: boolean;
 }
 
-const savedCart = localStorage.getItem('cart');
+const loadCart = (): CartItem[] => {
+  try {
+    const saved = localStorage.getItem('cart');
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
+
 const initialState: CartState = {
-  items: savedCart ? JSON.parse(savedCart) : [],
+  items: loadCart(),
   reservations: {},
   holdExpiresAt: null,
   holdStatus: 'none',
@@ -37,29 +56,44 @@ const initialState: CartState = {
 };
 
 const saveCart = (items: CartItem[]) => {
-  localStorage.setItem('cart', JSON.stringify(items));
+  try {
+    localStorage.setItem('cart', JSON.stringify(items));
+  } catch {}
 };
+
+interface ReservationResult {
+  product_id: string | null;
+  variant_id?: string | null;
+  reserved?: number;
+  quantity?: number;
+  available?: number;
+  expires_at: string | null;
+  error?: string;
+}
 
 const cartSlice = createSlice({
   name: 'cart',
   initialState,
   reducers: {
     addItem(state, action: PayloadAction<CartItem>) {
-      const existing = state.items.find((i) => i.product_id === action.payload.product_id);
+      const key = lineKey(action.payload);
+      const existing = state.items.find((i) => lineKey(i) === key);
       if (existing) {
+        existing.stock = action.payload.stock;
         existing.quantity = Math.min(existing.quantity + action.payload.quantity, existing.stock);
       } else {
         state.items.push(action.payload);
       }
       saveCart(state.items);
     },
+    // Payload: the line's key (see lineKey).
     removeItem(state, action: PayloadAction<string>) {
-      state.items = state.items.filter((i) => i.product_id !== action.payload);
+      state.items = state.items.filter((i) => lineKey(i) !== action.payload);
       delete state.reservations[action.payload];
       saveCart(state.items);
     },
-    updateQuantity(state, action: PayloadAction<{ product_id: string; quantity: number }>) {
-      const item = state.items.find((i) => i.product_id === action.payload.product_id);
+    updateQuantity(state, action: PayloadAction<{ key: string; quantity: number }>) {
+      const item = state.items.find((i) => lineKey(i) === action.payload.key);
       if (item) {
         item.quantity = Math.min(Math.max(1, action.payload.quantity), item.stock);
       }
@@ -70,20 +104,35 @@ const cartSlice = createSlice({
       state.reservations = {};
       state.holdExpiresAt = null;
       state.holdStatus = 'none';
-      localStorage.removeItem('cart');
+      try { localStorage.removeItem('cart'); } catch {}
     },
     // Result of PUT /reservations or POST /reservations/renew.
     setReservations(
       state,
-      action: PayloadAction<{ items: { product_id: string; reserved?: number; quantity?: number; available?: number; expires_at: string | null }[]; expires_at: string | null }>
+      action: PayloadAction<{ items: ReservationResult[]; expires_at: string | null }>
     ) {
+      // Lines saved before variants learn their variant from the server.
+      let upgraded = false;
+      for (const r of action.payload.items) {
+        if (!r.variant_id || !r.product_id) continue;
+        const legacy = state.items.find((i) => !i.variant_id && i.product_id === r.product_id);
+        if (legacy && !state.items.some((i) => i.variant_id === r.variant_id)) {
+          legacy.variant_id = r.variant_id;
+          upgraded = true;
+        }
+      }
+      if (upgraded) saveCart(state.items);
+
       const next: Record<string, Reservation> = {};
       for (const r of action.payload.items) {
+        const key = r.variant_id ?? r.product_id;
+        if (!key) continue;
         const reserved = r.reserved ?? r.quantity ?? 0;
-        next[r.product_id] = {
+        next[key] = {
           reserved,
           available: r.available ?? reserved,
           expires_at: r.expires_at,
+          needsOption: r.error === 'variant_required',
         };
       }
       // Lines the server didn't mention keep nothing (renew only returns live holds).

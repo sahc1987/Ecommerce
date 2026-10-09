@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useEffect, useState } from 'react';
 import { ShoppingBag, Trash2, Plus, Minus, ArrowRight, Package } from 'lucide-react';
 import { RootState } from '../../store';
-import { removeItem, updateQuantity } from '../../store/slices/cartSlice';
+import { lineKey, removeItem, updateQuantity } from '../../store/slices/cartSlice';
 import api from '../../api';
 import HoldBanner from '../../components/Shop/HoldBanner';
 import { lineStatus, useReservations } from '../../hooks/useReservations';
@@ -14,7 +14,7 @@ export default function CartPage() {
   const { items, reservations, holdStatus } = useSelector((s: RootState) => s.cart);
   const { user } = useSelector((s: RootState) => s.auth);
   const { renew } = useReservations();
-  const blocked = items.some((i) => lineStatus(i, reservations[i.product_id], holdStatus) !== 'ok');
+  const blocked = items.some((i) => lineStatus(i, reservations[lineKey(i)], holdStatus) !== 'ok');
 
   // Opening the cart counts as activity: extend the stock hold.
   useEffect(() => { renew(); }, [renew]);
@@ -61,13 +61,12 @@ export default function CartPage() {
         {/* Items */}
         <div className="lg:col-span-2 space-y-3">
           {items.map((item) => {
-            const status = lineStatus(item, reservations[item.product_id], holdStatus);
-            const held = reservations[item.product_id]?.reserved ?? 0;
+            const status = lineStatus(item, reservations[lineKey(item)], holdStatus);
+            const held = reservations[lineKey(item)]?.reserved ?? 0;
             return (
             <div
-              key={item.product_id}
-              className={`bg-white rounded-2xl border p-4 flex gap-4 transition-colors ${status === 'ok' || status === 'pending' ? 'border-slate-100 hover:border-primary-100' : 'border-rose-200 bg-rose-50/30'}`}
-            >
+              key={lineKey(item)}
+              className={`bg-white rounded-2xl border p-4 flex gap-4 transition-colors ${status === 'ok' || status === 'pending' ? 'border-slate-100 hover:border-primary-100' : 'border-rose-200 bg-rose-50/30'}`}            >
               <div className="w-20 h-20 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0">
                 {item.image ? (
                   <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
@@ -80,6 +79,13 @@ export default function CartPage() {
 
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-900 truncate">{item.name}</p>
+                {item.variant_label && <p className="text-xs text-slate-500 mt-0.5">{item.variant_label}</p>}
+                {status === 'needs_option' && (
+                  <p className="text-xs font-semibold text-amber-600 mt-0.5">
+                    This product now comes in options —{' '}
+                    {item.slug ? <Link to={`/products/${item.slug}`} className="underline">choose one</Link> : 'remove it and add it again'}
+                  </p>
+                )}
                 {status === 'unavailable' && <p className="text-xs font-semibold text-rose-600 mt-0.5">Out of stock — reserved by another shopper</p>}
                 {status === 'partial' && <p className="text-xs font-semibold text-amber-600 mt-0.5">Only {held} available — reduce quantity to continue</p>}
                 {status === 'expired' && <p className="text-xs font-semibold text-amber-600 mt-0.5">Hold expired</p>}
@@ -93,7 +99,7 @@ export default function CartPage() {
                 <div className="flex items-center gap-4 mt-3">
                   <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg p-0.5">
                     <button
-                      onClick={() => dispatch(updateQuantity({ product_id: item.product_id, quantity: item.quantity - 1 }))}
+                      onClick={() => dispatch(updateQuantity({ key: lineKey(item), quantity: item.quantity - 1 }))}
                       className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white hover:shadow-sm text-slate-600 transition-all"
                       aria-label="Decrease quantity"
                     >
@@ -101,7 +107,7 @@ export default function CartPage() {
                     </button>
                     <span className="w-7 text-center text-sm font-bold">{item.quantity}</span>
                     <button
-                      onClick={() => dispatch(updateQuantity({ product_id: item.product_id, quantity: item.quantity + 1 }))}
+                      onClick={() => dispatch(updateQuantity({ key: lineKey(item), quantity: item.quantity + 1 }))}
                       className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white hover:shadow-sm text-slate-600 transition-all"
                       aria-label="Increase quantity"
                     >
@@ -109,7 +115,7 @@ export default function CartPage() {
                     </button>
                   </div>
                   <button
-                    onClick={() => dispatch(removeItem(item.product_id))}
+                    onClick={() => dispatch(removeItem(lineKey(item)))}
                     className="flex items-center gap-1 text-xs text-slate-400 hover:text-rose-500 transition-colors"
                     aria-label="Remove item"
                   >

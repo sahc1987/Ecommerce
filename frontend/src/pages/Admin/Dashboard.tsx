@@ -386,7 +386,7 @@ export default function Dashboard() {
             to="/admin/products"
             count={inv?.low_stock ?? 0}
             label="Low stock"
-            hint={`At or below ${inv?.low_stock_threshold ?? 5} units left`}
+            hint={`Variants at or below ${inv?.low_stock_threshold ?? 5} units`}
             icon={AlertTriangle}
             tone="orange"
           />
@@ -394,7 +394,7 @@ export default function Dashboard() {
             to="/admin/products"
             count={inv?.out_of_stock ?? 0}
             label="Out of stock"
-            hint="Active products with no units"
+            hint="Variants (sizes, colors…) with no units"
             icon={XCircle}
             tone="rose"
           />

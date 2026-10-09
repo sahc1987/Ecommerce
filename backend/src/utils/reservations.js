@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const cache = require('./cache');
+const variants = require('./variants');
 
 // How long an add-to-cart holds stock before it is released.
 const HOLD_MINUTES = 3;
@@ -13,23 +14,23 @@ const getCartToken = (req) => {
   return token && TOKEN_RE.test(token) ? token : null;
 };
 
-// SQL fragment: units held by *other* carts for a product (non-expired).
-// $productId / $token are substituted by the caller's parameter positions.
-const heldByOthersSql = (productParam, tokenParam) => {
+// SQL fragment: units held by *other* carts for a variant (non-expired).
+// $variantId / $token are substituted by the caller's parameter positions.
+const heldByOthersSql = (variantParam, tokenParam) => {
   const excludeOwnCart = tokenParam ? 'AND r.cart_token <> ' + tokenParam : '';
   return `
   COALESCE((SELECT SUM(quantity) FROM stock_reservations r
-            WHERE r.product_id = ${productParam}
+            WHERE r.variant_id = ${variantParam}
               AND r.expires_at > NOW()
               ${excludeOwnCart}), 0)`;
 };
 
-// Available units for a cart: stock minus what other carts currently hold.
-async function availableFor(client, productId, cartToken) {
+// Available units of a variant for a cart: stock minus what other carts hold.
+async function availableFor(client, variantId, cartToken) {
   const res = await client.query(
-    `SELECT p.stock - ${heldByOthersSql('$1', cartToken ? '$2' : null)} AS available
-     FROM products p WHERE p.id = $1`,
-    cartToken ? [productId, cartToken] : [productId]
+    `SELECT v.stock - ${heldByOthersSql('$1', cartToken ? '$2' : null)} AS available
+     FROM product_variants v WHERE v.id = $1`,
+    cartToken ? [variantId, cartToken] : [variantId]
   );
   return res.rows[0] ? Math.max(0, Number(res.rows[0].available)) : 0;
 }
@@ -40,54 +41,63 @@ async function invalidateProductCache(productIds) {
 }
 
 // Replace the cart's holds with `items` (upsert each, remove the rest), renewing
-// the timer. Returns one result per item with how much could be held.
+// the timer. Items name a variant_id (or, from older clients, a product_id with
+// a single variant). Returns one result per line with how much could be held;
+// results carry product_id too so product-keyed carts keep working.
 async function syncReservations({ cartToken, userId, items }) {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    const wanted = new Map();
-    for (const it of items) {
-      const qty = Number.parseInt(it.quantity, 10);
-      if (it.product_id && qty > 0) wanted.set(it.product_id, qty);
-    }
+    const { lines, unresolved } = await variants.resolveLines(client, items);
+    // Lock in a fixed order so two carts never wait on each other's rows.
+    lines.sort((a, b) => a.variant_id.localeCompare(b.variant_id));
 
-    // Remove holds for products no longer in the cart.
-    const keep = [...wanted.keys()];
-    await client.query(
+    // Remove holds for variants no longer in the cart.
+    const keep = lines.map((l) => l.variant_id);
+    const removed = await client.query(
       `DELETE FROM stock_reservations WHERE cart_token = $1
-       ${keep.length ? 'AND NOT (product_id = ANY($2::uuid[]))' : ''}`,
+       ${keep.length ? 'AND NOT (variant_id = ANY($2::uuid[]))' : ''}
+       RETURNING product_id`,
       keep.length ? [cartToken, keep] : [cartToken]
     );
 
     // Expiry is computed on the DB clock so it compares cleanly with NOW().
     const expiresAt = (await client.query("SELECT NOW() + ($1 || ' minutes')::interval AS t", [HOLD_MINUTES])).rows[0].t;
-    const results = [];
-    for (const [productId, qty] of wanted) {
-      // Lock the product row so concurrent carts can't both grab the last unit.
-      const prod = await client.query(
-        'SELECT id, stock, is_active FROM products WHERE id = $1 FOR UPDATE',
-        [productId]
-      );
-      if (!prod.rows[0]?.is_active) {
-        results.push({ product_id: productId, requested: qty, reserved: 0, available: 0, expires_at: null });
+    const results = unresolved.map((u) => ({
+      product_id: u.product_id, variant_id: null, requested: u.quantity, reserved: 0, available: 0,
+      expires_at: null, error: 'variant_required',
+    }));
+    const touchedProducts = removed.rows.map((r) => r.product_id);
+    for (const { variant_id: variantId, quantity: qty } of lines) {
+      // Lock the variant row so concurrent carts can't both grab the last unit.
+      const row = (await client.query(
+        `SELECT v.id, v.product_id, v.is_active AND p.is_active AS sellable
+         FROM product_variants v JOIN products p ON p.id = v.product_id
+         WHERE v.id = $1 FOR UPDATE OF v`,
+        [variantId]
+      )).rows[0];
+      if (!row?.sellable) {
+        results.push({ product_id: row?.product_id ?? null, variant_id: variantId, requested: qty, reserved: 0, available: 0, expires_at: null });
         continue;
       }
-      const available = await availableFor(client, productId, cartToken);
+      touchedProducts.push(row.product_id);
+      const available = await availableFor(client, variantId, cartToken);
       const reserved = Math.min(qty, available);
       if (reserved > 0) {
         await client.query(
-          `INSERT INTO stock_reservations (product_id, cart_token, user_id, quantity, expires_at)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (product_id, cart_token)
+          `INSERT INTO stock_reservations (product_id, variant_id, cart_token, user_id, quantity, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (variant_id, cart_token)
            DO UPDATE SET quantity = EXCLUDED.quantity, user_id = COALESCE(EXCLUDED.user_id, stock_reservations.user_id),
                          expires_at = EXCLUDED.expires_at, updated_at = NOW()`,
-          [productId, cartToken, userId, reserved, expiresAt]
+          [row.product_id, variantId, cartToken, userId, reserved, expiresAt]
         );
       } else {
-        await client.query('DELETE FROM stock_reservations WHERE product_id = $1 AND cart_token = $2', [productId, cartToken]);
+        await client.query('DELETE FROM stock_reservations WHERE variant_id = $1 AND cart_token = $2', [variantId, cartToken]);
       }
       results.push({
-        product_id: productId,
+        product_id: row.product_id,
+        variant_id: variantId,
         requested: qty,
         reserved,
         available,
@@ -95,7 +105,7 @@ async function syncReservations({ cartToken, userId, items }) {
       });
     }
     await client.query('COMMIT');
-    await invalidateProductCache(keep);
+    await invalidateProductCache([...new Set(touchedProducts)]);
     return { items: results, expires_at: expiresAt.toISOString(), hold_minutes: HOLD_MINUTES };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -110,7 +120,7 @@ async function renewReservations(cartToken) {
   const res = await db.query(
     `UPDATE stock_reservations SET expires_at = NOW() + ($2 || ' minutes')::interval, updated_at = NOW()
      WHERE cart_token = $1 AND expires_at > NOW()
-     RETURNING product_id, quantity, expires_at`,
+     RETURNING product_id, variant_id, quantity, expires_at`,
     [cartToken, HOLD_MINUTES]
   );
   const expiresAt = res.rows[0]?.expires_at ?? new Date(Date.now() + HOLD_MS);
@@ -119,18 +129,19 @@ async function renewReservations(cartToken) {
 
 async function getReservations(cartToken) {
   const res = await db.query(
-    `SELECT product_id, quantity, expires_at FROM stock_reservations
+    `SELECT product_id, variant_id, quantity, expires_at FROM stock_reservations
      WHERE cart_token = $1 AND expires_at > NOW()`,
     [cartToken]
   );
   return { items: res.rows, hold_minutes: HOLD_MINUTES };
 }
 
-async function releaseReservations(cartToken, productId) {
+// `id` may be a variant id, or a product id to release all of its variants.
+async function releaseReservations(cartToken, id) {
   const res = await db.query(
-    `DELETE FROM stock_reservations WHERE cart_token = $1 ${productId ? 'AND product_id = $2' : ''}
+    `DELETE FROM stock_reservations WHERE cart_token = $1 ${id ? 'AND (variant_id = $2 OR product_id = $2)' : ''}
      RETURNING product_id`,
-    productId ? [cartToken, productId] : [cartToken]
+    id ? [cartToken, id] : [cartToken]
   );
   await invalidateProductCache(res.rows.map((r) => r.product_id));
 }

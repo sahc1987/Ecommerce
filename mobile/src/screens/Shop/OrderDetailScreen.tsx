@@ -94,6 +94,7 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
                 {item.product_name}
               </Text>
               <Text style={styles.itemMeta}>
+                {item.variant_label ? `${item.variant_label} · ` : ''}
                 {item.quantity} × {formatMoney(item.unit_price)}
               </Text>
             </View>

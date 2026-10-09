@@ -1,14 +1,27 @@
 import {createAsyncThunk, createSlice, type PayloadAction} from '@reduxjs/toolkit';
 import {loadCart} from '../../utils/storage';
-import {effectivePrice, sellableStock} from '../../utils/format';
-import {reservationsApi, type ReservationResponse} from '../../api';
-import type {CartItem, Product} from '../../types';
+import {applyDiscount, effectivePrice, sellableStock} from '../../utils/format';
+import {singleVariant, variantLabel} from '../../utils/variants';
+import {reservationsApi, type CartLine, type ReservationResponse} from '../../api';
+import type {CartItem, Product, Variant} from '../../types';
+
+/** Identifies a cart line: its variant, or the product for carts saved before variants. */
+export const lineKey = (i: Pick<CartItem, 'product_id' | 'variant_id'>) =>
+  i.variant_id ?? i.product_id;
+
+/** Request body line for /reservations and /payments/place-order. */
+export const toCartLine = (i: CartItem): CartLine =>
+  i.variant_id
+    ? {variant_id: i.variant_id, quantity: i.quantity}
+    : {product_id: i.product_id, quantity: i.quantity};
 
 /** Server-side stock hold for one cart line. */
 export interface Reservation {
   reserved: number;
   available: number;
   expires_at: string | null;
+  /** The line names a product that now has several variants. */
+  needsOption?: boolean;
 }
 
 export type HoldStatus = 'none' | 'active' | 'expired';
@@ -44,9 +57,7 @@ export const syncReservations = createAsyncThunk<ReservationResponse, void, {sta
     if (items.length === 0) {
       return {items: [], expires_at: null, hold_minutes: 0};
     }
-    const {data} = await reservationsApi.sync(
-      items.map(i => ({product_id: i.product_id, quantity: i.quantity})),
-    );
+    const {data} = await reservationsApi.sync(items.map(toCartLine));
     return data;
   },
 );
@@ -68,13 +79,29 @@ export const renewReservations = createAsyncThunk<ReservationResponse | null, vo
 );
 
 const applyReservations = (state: CartState, data: ReservationResponse) => {
+  // Lines saved before variants learn their variant from the server.
+  for (const r of data.items) {
+    if (!r.variant_id || !r.product_id) {
+      continue;
+    }
+    const legacy = state.items.find(i => !i.variant_id && i.product_id === r.product_id);
+    if (legacy && !state.items.some(i => i.variant_id === r.variant_id)) {
+      legacy.variant_id = r.variant_id;
+    }
+  }
+
   const next: Record<string, Reservation> = {};
   for (const r of data.items) {
+    const key = r.variant_id ?? r.product_id;
+    if (!key) {
+      continue;
+    }
     const reserved = r.reserved ?? r.quantity ?? 0;
-    next[r.product_id] = {
+    next[key] = {
       reserved,
       available: r.available ?? reserved,
       expires_at: r.expires_at,
+      needsOption: r.error === 'variant_required',
     };
   }
   state.reservations = next;
@@ -87,10 +114,19 @@ const cartSlice = createSlice({
   name: 'cart',
   initialState,
   reducers: {
-    addItem(state, action: PayloadAction<{product: Product; quantity?: number}>) {
+    /**
+     * Adds `variant` of `product` (one line per variant). Without a variant the
+     * product's only variant is used, as for products without options.
+     */
+    addItem(
+      state,
+      action: PayloadAction<{product: Product; variant?: Variant | null; quantity?: number}>,
+    ) {
       const {product, quantity = 1} = action.payload;
-      const stock = sellableStock(product);
-      const existing = state.items.find(i => i.product_id === product.id);
+      const variant = action.payload.variant ?? singleVariant(product);
+      const stock = variant ? variant.available_stock ?? variant.stock : sellableStock(product);
+      const line = {product_id: product.id, variant_id: variant?.id ?? null};
+      const existing = state.items.find(i => lineKey(i) === lineKey(line));
       if (existing) {
         // Never let the local cart exceed known stock; the server re-checks anyway.
         existing.stock = stock;
@@ -98,28 +134,29 @@ const cartSlice = createSlice({
         return;
       }
       state.items.push({
-        product_id: product.id,
+        ...line,
+        variant_label: variant ? variantLabel(product.options, variant.options) : null,
+        sku: variant?.sku ?? null,
         name: product.name,
         slug: product.slug,
-        price: effectivePrice(product),
+        price: variant?.price != null ? applyDiscount(product, variant.price) : effectivePrice(product),
         image: product.primary_image ?? product.images?.[0]?.url ?? null,
         quantity: Math.min(quantity, stock),
         stock,
       });
     },
-    setQuantity(
-      state,
-      action: PayloadAction<{product_id: string; quantity: number}>,
-    ) {
-      const item = state.items.find(i => i.product_id === action.payload.product_id);
+    /** `key` is the line's lineKey(). */
+    setQuantity(state, action: PayloadAction<{key: string; quantity: number}>) {
+      const item = state.items.find(i => lineKey(i) === action.payload.key);
       if (!item) {
         return;
       }
       const next = Math.max(1, Math.min(action.payload.quantity, item.stock));
       item.quantity = next;
     },
+    /** Payload: the line's lineKey(). */
     removeItem(state, action: PayloadAction<string>) {
-      state.items = state.items.filter(i => i.product_id !== action.payload);
+      state.items = state.items.filter(i => lineKey(i) !== action.payload);
       delete state.reservations[action.payload];
     },
     clearCart(state) {
@@ -174,7 +211,7 @@ export const cartSubtotal = (items: CartItem[]) =>
 export const cartCount = (items: CartItem[]) =>
   items.reduce((sum, i) => sum + i.quantity, 0);
 
-export type LineStatus = 'ok' | 'partial' | 'unavailable' | 'expired' | 'pending';
+export type LineStatus = 'ok' | 'partial' | 'unavailable' | 'needs_option' | 'expired' | 'pending';
 
 /** What the UI should say about one cart line given the server's hold on it. */
 export const lineStatus = (
@@ -182,6 +219,9 @@ export const lineStatus = (
   r: Reservation | undefined,
   hold: HoldStatus,
 ): LineStatus => {
+  if (r?.needsOption) {
+    return 'needs_option';
+  }
   if (hold === 'expired') {
     return 'expired';
   }
@@ -199,8 +239,8 @@ export const lineStatus = (
 
 /** True when any line can't be bought as-is, so checkout should be blocked. */
 export const cartBlocked = (state: CartState) =>
-  state.items.some(i => lineStatus(i, state.reservations[i.product_id], state.holdStatus) !== 'ok');
+  state.items.some(i => lineStatus(i, state.reservations[lineKey(i)], state.holdStatus) !== 'ok');
 
-/** Stable key of product ids + quantities; changes exactly when holds must re-sync. */
+/** Stable key of cart lines + quantities; changes exactly when holds must re-sync. */
 export const cartSignature = (items: CartItem[]) =>
-  items.map(i => `${i.product_id}:${i.quantity}`).sort((a, b) => a.localeCompare(b)).join('|');
+  items.map(i => `${lineKey(i)}:${i.quantity}`).sort((a, b) => a.localeCompare(b)).join('|');

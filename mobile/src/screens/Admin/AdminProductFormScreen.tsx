@@ -28,6 +28,14 @@ import {colors, font, radius, spacing} from '../../theme';
 import type {Category, Product, ProductImage, Subcategory} from '../../types';
 import type {AdminStackParams} from '../../navigation/types';
 import {mediaUrl} from '../../utils/media';
+import {VariantEditor} from '../../components/VariantEditor';
+import {
+  cleanOptions,
+  isStale,
+  toVariantDraft,
+  type OptionDraft,
+  type VariantDraft,
+} from '../../utils/variants';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminProductForm'>;
 
@@ -70,11 +78,29 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
+  // With no options the product has one default variant, edited through the
+  // plain Stock/SKU fields; defaultVariantId keeps its holds and order links.
+  const [options, setOptions] = useState<OptionDraft[]>([]);
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
+  const [defaultVariantId, setDefaultVariantId] = useState<string | undefined>();
+  const hasOptions = options.length > 0;
 
   const set = <K extends keyof FormState>(key: K) => (value: FormState[K]) =>
     setForm(prev => ({...prev, [key]: value}));
 
+  const applyVariants = useCallback((product: Product) => {
+    const loaded = (product.options ?? []).map(o => ({name: o.name, valuesText: o.values.join(', ')}));
+    setOptions(loaded);
+    if (loaded.length) {
+      setVariants((product.variants ?? []).map(toVariantDraft));
+    } else {
+      setVariants([]);
+      setDefaultVariantId(product.variants?.[0]?.id);
+    }
+  }, []);
+
   const applyProduct = useCallback((product: Product) => {
+    applyVariants(product);
     setForm({
       name: product.name,
       description: product.description ?? '',
@@ -89,7 +115,7 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
     setCategoryId(product.category_id);
     setSubcategoryId(product.subcategory_id);
     setImages(product.images ?? []);
-  }, []);
+  }, [applyVariants]);
 
   useEffect(() => {
     categoriesApi
@@ -104,7 +130,7 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
     }
     setLoading(true);
     productsApi
-      .detail(productId)
+      .adminDetail(productId)
       .then(({data}) => applyProduct(data.product))
       .catch(err => setError(errorMessage(err)))
       .finally(() => setLoading(false));
@@ -137,16 +163,56 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
       ? Number.parseFloat(form.discount_percent)
       : 0,
     discount_active: form.discount_active,
-    stock: Number.parseInt(form.stock, 10) || 0,
-    sku: form.sku.trim() || null,
     category_id: categoryId,
     subcategory_id: subcategoryId,
     is_active: form.is_active,
+    options: cleanOptions(options),
+    variants: hasOptions
+      ? variants.map(v => ({
+          id: v.id,
+          options: v.options,
+          sku: v.sku.trim() || null,
+          price: v.price.trim() === '' ? null : Number.parseFloat(v.price),
+          stock: Number.parseInt(v.stock, 10) || 0,
+          is_active: v.is_active,
+        }))
+      : [
+          {
+            id: defaultVariantId,
+            options: {},
+            sku: form.sku.trim() || null,
+            price: null,
+            stock: Number.parseInt(form.stock, 10) || 0,
+            is_active: true,
+          },
+        ],
   });
+
+  // Why the variant section can't be saved yet, or null when it can.
+  const variantProblem = () => {
+    if (!hasOptions) {
+      return null;
+    }
+    if (cleanOptions(options).length !== options.length) {
+      return 'Give every option a name and at least one value.';
+    }
+    if (!variants.length) {
+      return 'Tap “Generate variants” to create the combinations.';
+    }
+    if (variants.some(v => isStale(options, v))) {
+      return 'Tap “Update variants” so they match the options.';
+    }
+    return null;
+  };
 
   const save = async () => {
     setTouched(true);
     if (invalid) {
+      return;
+    }
+    const problem = variantProblem();
+    if (problem) {
+      setError(problem);
       return;
     }
     setSaving(true);
@@ -291,6 +357,7 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
               style={styles.splitItem}
             />
           </View>
+          {!hasOptions ? (
           <View style={styles.split}>
             <Field
               label="Stock"
@@ -309,6 +376,7 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
               style={styles.splitItem}
             />
           </View>
+          ) : null}
           <View style={styles.toggle}>
             <View style={styles.flex}>
               <Text style={styles.toggleLabel}>Visible in the shop</Text>
@@ -322,6 +390,28 @@ const AdminProductFormScreen = ({route, navigation}: Props) => {
               trackColor={{true: colors.primary, false: colors.border}}
             />
           </View>
+        </Card>
+
+        <SectionTitle title="Options & variants" />
+        <Card>
+          <Text style={[styles.toggleHint, styles.variantIntro]}>
+            {hasOptions
+              ? 'Each combination is a variant with its own SKU, stock and (optional) price.'
+              : 'Sold in sizes, colors or capacities? Add an option to sell each combination separately.'}
+          </Text>
+          <VariantEditor
+            productName={form.name}
+            basePrice={form.price}
+            options={options}
+            variants={variants}
+            onOptionsChange={next => {
+              setOptions(next);
+              if (!next.length) {
+                setVariants([]);
+              }
+            }}
+            onVariantsChange={setVariants}
+          />
         </Card>
 
         <SectionTitle title="Discount" />
@@ -483,6 +573,7 @@ const styles = StyleSheet.create({
   toggleLabel: {fontSize: font.sm, fontWeight: '600', color: colors.text},
   toggleHint: {fontSize: font.xs, color: colors.textMuted, marginTop: 2, lineHeight: 17},
   discountField: {marginTop: spacing.lg, marginBottom: 0},
+  variantIntro: {marginTop: 0, marginBottom: spacing.md},
   pickerLabel: {
     fontSize: font.sm,
     fontWeight: '600',

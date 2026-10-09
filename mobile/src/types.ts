@@ -41,6 +41,31 @@ export interface Product {
   subcategory_name?: string | null;
   primary_image?: string | null;
   images?: ProductImage[] | null;
+  /** Pickers the product offers, e.g. Color → [Rojo, Azul]; empty when none. */
+  options?: ProductOption[];
+  /** Sellable combinations; a product without options has one, with options {}. */
+  variants?: Variant[];
+  /** Lowest / highest variant price before discount. */
+  price_min?: number;
+  price_max?: number;
+}
+
+export interface ProductOption {
+  name: string;
+  values: string[];
+}
+
+export interface Variant {
+  id: string;
+  sku: string | null;
+  options: Record<string, string>;
+  /** null = the product's price */
+  price: number | null;
+  stock: number;
+  is_active: boolean;
+  reserved_stock?: number;
+  /** stock minus units other carts currently hold */
+  available_stock?: number;
 }
 
 export interface Category {
@@ -89,6 +114,10 @@ export interface OrderItem {
   id: string;
   order_id: string;
   product_id: string | null;
+  /** The variant bought, with a snapshot of its SKU and "Rojo / M" label. */
+  variant_id?: string | null;
+  sku?: string | null;
+  variant_label?: string | null;
   product_name: string;
   product_image: string | null;
   /** Column is `unit_price` in the order_items table, not `price`. */
@@ -175,8 +204,16 @@ export interface DashboardSummary {
   pending_returns: number;
 }
 
+/**
+ * One line per variant. Carts saved before variants have no variant_id; the
+ * server maps those to the product's only variant and the cart fills it in.
+ */
 export interface CartItem {
   product_id: string;
+  variant_id?: string | null;
+  /** "Rojo / M"; absent for products without options */
+  variant_label?: string | null;
+  sku?: string | null;
   name: string;
   slug: string;
   price: number;

@@ -4,8 +4,10 @@ import {
   ArrowRight, Minus, Plus, ShoppingCart, Package, Trash2, ShieldCheck, Truck, RotateCcw, Lock,
 } from 'lucide-react';
 import { RootState } from '../../store';
-import { removeItem, updateQuantity } from '../../store/slices/cartSlice';
-import { Product, formatPrice, getEffectivePrice, hasActiveDiscount, sellableStock } from '../../utils/pricing';
+import { lineKey, removeItem, updateQuantity } from '../../store/slices/cartSlice';
+import {
+  Product, effectivePriceRange, formatPrice, hasActiveDiscount, needsOptions, sellableStock,
+} from '../../utils/pricing';
 import HoldBanner from './HoldBanner';
 import { lineStatus } from '../../hooks/useReservations';
 
@@ -37,7 +39,7 @@ function Thumb({ src, alt, size = 'w-14 h-14' }: Readonly<{ src?: string | null;
 export default function CartSidebar({ suggestions, storeName, onAddToCart }: Readonly<Props>) {
   const dispatch = useDispatch();
   const { items, reservations, holdStatus } = useSelector((s: RootState) => s.cart);
-  const blocked = items.some((i) => lineStatus(i, reservations[i.product_id], holdStatus) !== 'ok');
+  const blocked = items.some((i) => lineStatus(i, reservations[lineKey(i)], holdStatus) !== 'ok');
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
   const subtotal = items.reduce((sum, i) => sum + i.effective_price * i.quantity, 0);
 
@@ -55,22 +57,24 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
         ) : (
           <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
             {items.map((item) => (
-              <div key={item.product_id} className="flex gap-3">
+              <div key={lineKey(item)} className="flex gap-3">
                 <Thumb src={item.image} alt={item.name} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-slate-900 leading-snug line-clamp-2">{item.name}</p>
+                  {item.variant_label && <p className="text-[10px] text-slate-500">{item.variant_label}</p>}
                   <p className="text-xs font-bold text-slate-900 mt-0.5">{formatPrice(item.effective_price)}</p>
                   {(() => {
-                    const st = lineStatus(item, reservations[item.product_id], holdStatus);
+                    const st = lineStatus(item, reservations[lineKey(item)], holdStatus);
+                    if (st === 'needs_option') return <p className="text-[10px] font-semibold text-amber-600">Choose an option in your cart</p>;
                     if (st === 'unavailable') return <p className="text-[10px] font-semibold text-rose-500">Out of stock</p>;
-                    if (st === 'partial') return <p className="text-[10px] font-semibold text-amber-600">Only {reservations[item.product_id]?.reserved} available</p>;
+                    if (st === 'partial') return <p className="text-[10px] font-semibold text-amber-600">Only {reservations[lineKey(item)]?.reserved} available</p>;
                     return null;
                   })()}
                   <div className="flex items-center justify-between mt-1.5">
                     <div className="inline-flex items-center border border-slate-200 rounded-md">
                       <button
                         type="button"
-                        onClick={() => dispatch(updateQuantity({ product_id: item.product_id, quantity: item.quantity - 1 }))}
+                        onClick={() => dispatch(updateQuantity({ key: lineKey(item), quantity: item.quantity - 1 }))}
                         disabled={item.quantity <= 1}
                         className="p-1 text-slate-500 hover:text-primary-600 disabled:opacity-30"
                         aria-label="Decrease quantity"
@@ -80,7 +84,7 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
                       <span className="text-[11px] font-semibold w-6 text-center">{item.quantity}</span>
                       <button
                         type="button"
-                        onClick={() => dispatch(updateQuantity({ product_id: item.product_id, quantity: item.quantity + 1 }))}
+                        onClick={() => dispatch(updateQuantity({ key: lineKey(item), quantity: item.quantity + 1 }))}
                         disabled={item.quantity >= item.stock}
                         className="p-1 text-slate-500 hover:text-primary-600 disabled:opacity-30"
                         aria-label="Increase quantity"
@@ -90,7 +94,7 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
                     </div>
                     <button
                       type="button"
-                      onClick={() => dispatch(removeItem(item.product_id))}
+                      onClick={() => dispatch(removeItem(lineKey(item)))}
                       className="p-1 text-slate-300 hover:text-rose-500 transition-colors"
                       aria-label={`Remove ${item.name}`}
                     >
@@ -135,8 +139,9 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
           <h3 className="text-sm font-bold text-slate-900 mb-3">You Might Also Like</h3>
           <div className="space-y-3">
             {suggestions.map((p) => {
-              const price = getEffectivePrice(p);
-              const discounted = hasActiveDiscount(p);
+              const { min, max } = effectivePriceRange(p);
+              const price = min;
+              const discounted = hasActiveDiscount(p) && min === max;
               return (
                 <div key={p.id} className="flex gap-3 items-center">
                   <Link to={`/products/${p.slug}`}>
@@ -149,10 +154,11 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
                     {p.category_name && <p className="text-[10px] text-slate-400 truncate">{p.category_name}</p>}
                     <div className="flex items-center justify-between mt-0.5">
                       <p className="text-xs font-bold text-slate-900">
+                        {min !== max && <span className="font-normal text-slate-500">From </span>}
                         {formatPrice(price)}
                         {discounted && (
                           <span className="ml-1 text-[10px] text-slate-400 line-through font-normal">
-                            {formatPrice(Number.parseFloat(p.price))}
+                            {formatPrice(p.price_min ?? Number.parseFloat(p.price))}
                           </span>
                         )}
                       </p>
@@ -161,7 +167,7 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
                         onClick={() => onAddToCart(p)}
                         disabled={sellableStock(p) === 0}
                         className="w-6 h-6 rounded-md bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center disabled:opacity-30 transition-colors"
-                        aria-label={`Add ${p.name} to cart`}
+                        aria-label={needsOptions(p) ? `Choose options for ${p.name}` : `Add ${p.name} to cart`}
                       >
                         <ShoppingCart size={11} />
                       </button>

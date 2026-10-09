@@ -3,7 +3,7 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {Icon} from './ui';
 import {colors, font, radius, spacing} from '../theme';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
-import {lineStatus, syncReservations} from '../store/slices/cartSlice';
+import {lineKey, lineStatus, syncReservations} from '../store/slices/cartSlice';
 import {formatCountdown, useHoldCountdown} from '../hooks/useReservationSync';
 
 /** Shows how long the cart's stock is held, or what went wrong with the hold. */
@@ -17,7 +17,7 @@ export const HoldNotice = () => {
   }
 
   const problems = items.filter(i =>
-    ['partial', 'unavailable'].includes(lineStatus(i, reservations[i.product_id], holdStatus)),
+    ['partial', 'unavailable'].includes(lineStatus(i, reservations[lineKey(i)], holdStatus)),
   );
 
   if (holdStatus === 'expired') {
@@ -47,10 +47,11 @@ export const HoldNotice = () => {
           </Text>
         </View>
         {problems.map(i => {
-          const r = reservations[i.product_id];
+          const r = reservations[lineKey(i)];
           return (
-            <Text key={i.product_id} style={[styles.text, styles.dangerText, styles.detail]}>
-              • {i.name}: {r?.reserved ? `only ${r.reserved} available` : 'out of stock'}
+            <Text key={lineKey(i)} style={[styles.text, styles.dangerText, styles.detail]}>
+              • {i.name}{i.variant_label ? ` (${i.variant_label})` : ''}:{' '}
+              {r?.reserved ? `only ${r.reserved} available` : 'out of stock'}
             </Text>
           );
         })}

@@ -71,12 +71,14 @@ router.get('/summary', async (req, res) => {
               WHERE u.role = 'customer' AND u.created_at >= w.prev_start AND u.created_at < w.cur_start) AS prev_new_customers`,
         [days]
       ),
+      // Counted per sellable variant: "Rojo / M" can be out while "Rojo / L" isn't.
       db.query(
         `SELECT
-           COUNT(*) FILTER (WHERE stock = 0) AS out_of_stock,
-           COUNT(*) FILTER (WHERE stock > 0 AND stock <= $1) AS low_stock,
+           COUNT(*) FILTER (WHERE v.stock = 0) AS out_of_stock,
+           COUNT(*) FILTER (WHERE v.stock > 0 AND v.stock <= $1) AS low_stock,
            (SELECT COALESCE(SUM(quantity),0) FROM stock_reservations WHERE expires_at > NOW()) AS reserved_units
-         FROM products WHERE is_active = TRUE`,
+         FROM product_variants v JOIN products p ON p.id = v.product_id
+         WHERE p.is_active = TRUE AND v.is_active = TRUE`,
         [LOW_STOCK_THRESHOLD]
       ),
       // Where the orders of this window currently sit, for the status strip.
@@ -263,6 +265,26 @@ router.get('/sales-chart', async (req, res) => {
     const data = { chart: result.rows, granularity, from, to, timezone: tz };
     await cache.set(cacheKey, data, TTL.salesChart);
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: safeErr(err) });
+  }
+});
+
+// GET sellable variants at or below the low-stock threshold, emptiest first.
+// Not cached: it is what staff act on right after restocking.
+router.get('/low-stock', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT v.id AS variant_id, v.sku, v.stock, p.id AS product_id, p.name, p.slug,
+              (SELECT string_agg(v.options->>o.name, ' / ' ORDER BY o.position, o.id)
+                 FROM product_options o WHERE o.product_id = p.id) AS variant_label
+       FROM product_variants v JOIN products p ON p.id = v.product_id
+       WHERE p.is_active = TRUE AND v.is_active = TRUE AND v.stock <= $1
+       ORDER BY v.stock ASC, p.name ASC
+       LIMIT 50`,
+      [LOW_STOCK_THRESHOLD]
+    );
+    res.json({ variants: result.rows, threshold: LOW_STOCK_THRESHOLD });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }

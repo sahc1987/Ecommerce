@@ -1,4 +1,4 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
   Dimensions,
   Image,
@@ -15,12 +15,18 @@ import {productsApi} from '../../api';
 import {useAsync} from '../../hooks/useAsync';
 import {Button, ErrorState, Icon, Loading, StatusBadge} from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
-import {effectivePrice, formatMoney, isDiscounted, sellableStock} from '../../utils/format';
+import {applyDiscount, effectivePriceRange, formatMoney, sellableStock} from '../../utils/format';
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
-import {addItem} from '../../store/slices/cartSlice';
+import {addItem, lineKey} from '../../store/slices/cartSlice';
 import type {ShopStackParams} from '../../navigation/types';
-import type {ProductImage} from '../../types';
+import type {ProductImage, ProductOption, Variant} from '../../types';
 import {mediaUrl} from '../../utils/media';
+import {
+  findVariant,
+  initialSelection,
+  valueState,
+  type Selection,
+} from '../../utils/variants';
 
 type Props = NativeStackScreenProps<ShopStackParams, 'ProductDetail'>;
 
@@ -93,15 +99,77 @@ const StockRow = ({sellable, stock}: Readonly<{sellable: number; stock: number}>
   </View>
 );
 
+/**
+ * One row of chips per option (Color, Talla…), exposed as radio groups to
+ * screen readers. Values without stock stay pressable so the shopper can still
+ * switch the other option, but are dimmed and announced as out of stock.
+ */
+const OptionPicker = ({
+  options,
+  variants,
+  selection,
+  onChange,
+}: Readonly<{
+  options: ProductOption[];
+  variants: Variant[];
+  selection: Selection;
+  onChange: (next: Selection) => void;
+}>) => (
+  <View style={styles.options}>
+    {options.map(option => (
+      <View key={option.name} accessibilityRole="radiogroup" accessibilityLabel={option.name}>
+        <Text style={styles.optionLabel}>
+          {option.name}: <Text style={styles.optionValue}>{selection[option.name] ?? 'choose one'}</Text>
+        </Text>
+        <View style={styles.optionChips}>
+          {option.values.map(value => {
+            const {exists, inStock} = valueState(variants, options, selection, option.name, value);
+            const checked = selection[option.name] === value;
+            const soldOut = !exists || !inStock;
+            let note = '';
+            if (!exists) {
+              note = ', not available';
+            } else if (!inStock) {
+              note = ', out of stock';
+            }
+            return (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{checked}}
+                accessibilityLabel={`${value}${note}`}
+                onPress={() => onChange({...selection, [option.name]: value})}
+                hitSlop={4}
+                style={[
+                  styles.optionChip,
+                  checked && styles.optionChipActive,
+                  soldOut && styles.optionChipSoldOut,
+                ]}>
+                <Text
+                  style={[
+                    styles.optionChipText,
+                    checked && styles.optionChipTextActive,
+                    soldOut && styles.optionChipTextSoldOut,
+                  ]}>
+                  {value}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
 const ProductDetailScreen = ({route}: Props) => {
   const {id} = route.params;
   const dispatch = useAppDispatch();
   const rootNav = useNavigation();
-  const inCart = useAppSelector(
-    s => s.cart.items.find(i => i.product_id === id)?.quantity ?? 0,
-  );
+  const cartItems = useAppSelector(s => s.cart.items);
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
+  const [selection, setSelection] = useState<Selection>({});
 
   const run = useCallback(async () => {
     const {data} = await productsApi.detail(id);
@@ -109,6 +177,16 @@ const ProductDetailScreen = ({route}: Props) => {
   }, [id]);
 
   const {data: product, loading, refreshing, error, refresh} = useAsync(run, [id]);
+
+  // Open on the first combination that can be bought.
+  const productKey = product?.id;
+  useEffect(() => {
+    if (product) {
+      setSelection(initialSelection(product.variants ?? []));
+      setQuantity(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productKey]);
 
   if (loading) {
     return <Loading />;
@@ -118,14 +196,46 @@ const ProductDetailScreen = ({route}: Props) => {
   }
 
   const images = product.images ?? [];
-  const price = effectivePrice(product);
-  const discounted = isDiscounted(product);
-  const sellable = sellableStock(product); // stock minus other carts' holds
+  const options = product.options ?? [];
+  const variants = product.variants ?? [];
+  const hasOptions = options.length > 0;
+  // The variant being bought: the chosen combination, or the only one.
+  const variant = hasOptions ? findVariant(variants, options, selection) : variants[0] ?? null;
+  const missing = options.filter(o => !selection[o.name]).map(o => o.name.toLowerCase());
+
+  const basePrice = variant?.price ?? Number.parseFloat(product.price);
+  const price = applyDiscount(product, basePrice);
+  const discounted = price < basePrice;
+  const range = effectivePriceRange(product);
+  // Until a full combination is chosen, show the range rather than one price.
+  const showRange = hasOptions && !variant && range.min !== range.max;
+
+  // Stock minus other carts' holds, for the chosen variant.
+  let sellable = 0;
+  if (variant) {
+    sellable = variant.available_stock ?? variant.stock;
+  } else if (!hasOptions) {
+    sellable = sellableStock(product);
+  }
+  const key = lineKey({product_id: product.id, variant_id: variant?.id ?? null});
+  const inCart = cartItems.find(i => lineKey(i) === key)?.quantity ?? 0;
   const remaining = sellable - inCart;
-  const canAdd = remaining > 0;
+  const canAdd = (!hasOptions || variant !== null) && remaining > 0;
+
+  const choose = (next: Selection) => {
+    setSelection(next);
+    setQuantity(1);
+  };
+
+  let ctaTitle = 'Add to cart';
+  if (hasOptions && !variant) {
+    ctaTitle = missing.length ? `Choose ${missing.join(' and ')}` : 'Not available';
+  } else if (!canAdd) {
+    ctaTitle = 'Unavailable';
+  }
 
   const add = () => {
-    dispatch(addItem({product, quantity: Math.min(quantity, remaining)}));
+    dispatch(addItem({product, variant, quantity: Math.min(quantity, remaining)}));
     // @ts-expect-error — jumping across tab navigators is untyped here
     rootNav.navigate('CartTab', {screen: 'Cart'});
   };
@@ -149,10 +259,14 @@ const ProductDetailScreen = ({route}: Props) => {
         <Text style={styles.name}>{product.name}</Text>
 
         <View style={styles.priceRow}>
-          <Text style={styles.price}>{formatMoney(price)}</Text>
-          {discounted ? (
+          <Text style={styles.price}>
+            {showRange
+              ? `${formatMoney(range.min)} – ${formatMoney(range.max)}`
+              : formatMoney(price)}
+          </Text>
+          {discounted && !showRange ? (
             <>
-              <Text style={styles.strike}>{formatMoney(product.price)}</Text>
+              <Text style={styles.strike}>{formatMoney(basePrice)}</Text>
               <View style={styles.saveTag}>
                 <Text style={styles.saveText}>
                   Save {Math.round(Number.parseFloat(product.discount_percent))}%
@@ -162,7 +276,18 @@ const ProductDetailScreen = ({route}: Props) => {
           ) : null}
         </View>
 
-        <StockRow sellable={sellable} stock={product.stock} />
+        {hasOptions ? (
+          <OptionPicker
+            options={options}
+            variants={variants}
+            selection={selection}
+            onChange={choose}
+          />
+        ) : null}
+
+        {!hasOptions || variant ? (
+          <StockRow sellable={sellable} stock={variant?.stock ?? product.stock} />
+        ) : null}
 
         {product.description ? (
           <View style={styles.section}>
@@ -171,8 +296,8 @@ const ProductDetailScreen = ({route}: Props) => {
           </View>
         ) : null}
 
-        {product.sku ? (
-          <Text style={styles.sku}>SKU {product.sku}</Text>
+        {variant?.sku ?? product.sku ? (
+          <Text style={styles.sku}>SKU {variant?.sku ?? product.sku}</Text>
         ) : null}
 
         {canAdd ? (
@@ -201,7 +326,7 @@ const ProductDetailScreen = ({route}: Props) => {
         ) : null}
 
         <Button
-          title={canAdd ? 'Add to cart' : 'Unavailable'}
+          title={ctaTitle}
           icon="cart-plus"
           onPress={add}
           disabled={!canAdd}
@@ -248,6 +373,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   saveText: {color: colors.danger, fontSize: font.xs, fontWeight: '700'},
+  options: {gap: spacing.lg},
+  optionLabel: {fontSize: font.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm},
+  optionValue: {fontWeight: '400', color: colors.textMuted},
+  optionChips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
+  optionChip: {
+    minWidth: 48,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionChipActive: {borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primarySoft},
+  optionChipSoldOut: {borderStyle: 'dashed', backgroundColor: colors.surfaceAlt},
+  optionChipText: {fontSize: font.sm, fontWeight: '600', color: colors.text},
+  optionChipTextActive: {color: colors.primary},
+  optionChipTextSoldOut: {color: colors.textFaint, textDecorationLine: 'line-through'},
   stockRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
   stockText: {fontSize: font.sm, color: colors.textMuted},
   section: {gap: spacing.sm, marginTop: spacing.sm},

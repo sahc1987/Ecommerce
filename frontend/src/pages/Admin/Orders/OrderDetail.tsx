@@ -276,6 +276,13 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
               </div>
               <div className="flex-1">
                 <p className="font-medium text-slate-900">{item.product_name}</p>
+                {(item.variant_label || item.sku) && (
+                  <p className="text-sm text-slate-600">
+                    {item.variant_label}
+                    {item.variant_label && item.sku && " · "}
+                    {item.sku && <span className="font-mono text-xs text-slate-500">SKU {item.sku}</span>}
+                  </p>
+                )}
                 <p className="text-sm text-slate-500">
                   Qty: {item.quantity} × $
                   {Number.parseFloat(item.unit_price).toFixed(2)}

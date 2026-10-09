@@ -55,6 +55,9 @@ export const productsApi = {
     limit?: number;
   }) => api.get<{products: Product[]} & Page>('/products/admin/all', {params}),
   detail: (idOrSlug: string) => api.get<{product: Product}>('/products/' + idOrSlug),
+  // Includes inactive variants; the admin form must start from all of them
+  // because saving replaces the whole variant list.
+  adminDetail: (id: string) => api.get<{product: Product}>('/products/admin/' + id),
   create: (payload: Record<string, unknown>) =>
     api.post<{product: Product}>('/products', payload),
   update: (id: string, payload: Record<string, unknown>) =>
@@ -119,7 +122,7 @@ export const paymentsApi = {
   // submit return the same order.
   placeOrder: (
     payload: {
-      items: {product_id: string; quantity: number}[];
+      items: CartLine[];
       shipping_address: ShippingAddress;
       notes?: string;
       payment_method: PaymentMethod;
@@ -140,13 +143,21 @@ export const paymentsApi = {
     api.post<PaymentState>('/payments/' + orderId + '/cancel'),
 };
 
+/** A cart line as the server takes it: by variant, or (older carts) by product. */
+export type CartLine =
+  | {variant_id: string; quantity: number}
+  | {product_id: string; quantity: number};
+
 export interface ReservationLine {
-  product_id: string;
+  product_id: string | null;
+  variant_id?: string | null;
   requested?: number;
   reserved?: number;
   quantity?: number;
   available?: number;
   expires_at: string | null;
+  /** 'variant_required': the line names a product with several variants */
+  error?: string;
 }
 
 export interface ReservationResponse {
@@ -157,7 +168,7 @@ export interface ReservationResponse {
 
 // Stock holds for this device's cart (X-Cart-Token is added by the client).
 export const reservationsApi = {
-  sync: (items: {product_id: string; quantity: number}[]) =>
+  sync: (items: CartLine[]) =>
     api.put<ReservationResponse>('/reservations', {items}),
   renew: () => api.post<ReservationResponse>('/reservations/renew'),
   release: () => api.delete('/reservations'),

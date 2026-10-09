@@ -19,8 +19,13 @@ import {formatMoney} from '../../utils/format';
 import {useAppSelector} from '../../store/hooks';
 import type {AdminStackParams} from '../../navigation/types';
 import {mediaUrl} from '../../utils/media';
+import type {Product} from '../../types';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminProducts'>;
+
+/** Sold-out variants of a product with options: a healthy total can hide a sold-out size. */
+const soldOutVariants = (p: Product) =>
+  p.options?.length ? (p.variants ?? []).filter(v => v.is_active && v.stock === 0).length : 0;
 
 const AdminProductsScreen = ({navigation}: Props) => {
   const isAdmin = useAppSelector(s => s.auth.user?.role === 'admin');
@@ -100,6 +105,7 @@ const AdminProductsScreen = ({navigation}: Props) => {
               <Text style={styles.meta}>
                 {item.category_name ?? 'Uncategorised'}
                 {item.sku ? ` · ${item.sku}` : ''}
+                {item.options?.length ? ` · ${item.variants?.length ?? 0} variants` : ''}
               </Text>
               <View style={styles.tags}>
                 <Text style={styles.price}>{formatMoney(item.price)}</Text>
@@ -111,6 +117,11 @@ const AdminProductsScreen = ({navigation}: Props) => {
                   ]}>
                   {item.stock} in stock
                 </Text>
+                {soldOutVariants(item) > 0 ? (
+                  <Text style={[styles.stock, styles.stockOut]}>
+                    {soldOutVariants(item)} sold out
+                  </Text>
+                ) : null}
                 {item.is_active ? null : (
                   <Text style={styles.hidden}>Hidden</Text>
                 )}
