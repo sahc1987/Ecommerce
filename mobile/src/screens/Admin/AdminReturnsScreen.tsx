@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -34,7 +35,23 @@ const FILTERS: {label: string; value: ReturnStatus | null}[] = [
   {label: 'Refunded', value: 'refunded'},
 ];
 
-const DECISIONS: ReturnStatus[] = ['approved', 'rejected', 'refunded'];
+// Decisions allowed from each return status (mirrors the server's rules);
+// rejected and refunded returns are final.
+const DECISIONS: Partial<Record<ReturnStatus, {value: ReturnStatus; label: string}[]>> = {
+  requested: [
+    {value: 'approved', label: 'Approve'},
+    {value: 'rejected', label: 'Reject'},
+    {value: 'refunded', label: 'Approve & refund'},
+  ],
+  approved: [{value: 'refunded', label: 'Issue refund'}],
+};
+
+/** What can still be refunded on the return's order. */
+const refundableLeft = (r: ReturnRequest) =>
+  Math.max(
+    0,
+    Number.parseFloat(r.order_total ?? '0') - Number.parseFloat(r.order_refunded_amount ?? '0'),
+  );
 
 const AdminReturnsScreen = () => {
   const [status, setStatus] = useState<ReturnStatus | null>(null);
@@ -42,6 +59,7 @@ const AdminReturnsScreen = () => {
   const [decision, setDecision] = useState<ReturnStatus>('approved');
   const [refundAmount, setRefundAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [restock, setRestock] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const run = useCallback(async () => {
@@ -55,24 +73,35 @@ const AdminReturnsScreen = () => {
   const {data: returns, loading, refreshing, error, refresh} = useAsync(run, [status]);
 
   const openReview = (item: ReturnRequest) => {
+    const options = DECISIONS[item.status];
+    if (!options) {
+      Alert.alert('Return closed', `This return was ${item.status} and can no longer change.`);
+      return;
+    }
     setActive(item);
-    setDecision(item.status === 'requested' ? 'approved' : item.status);
-    setRefundAmount(item.refund_amount ?? item.order_total ?? '');
+    setDecision(options[0].value);
+    // An amount set when approving is reused; otherwise what's left to refund.
+    setRefundAmount(item.refund_amount ?? refundableLeft(item).toFixed(2));
     setNotes(item.admin_notes ?? '');
+    setRestock(true);
   };
 
+  const amountNeeded = decision === 'refunded' && !refundAmount.trim();
+
   const save = async () => {
-    if (!active) {
+    if (!active || amountNeeded) {
       return;
     }
     setSaving(true);
     try {
       await returnsApi.process(active.id, {
         status: decision,
-        ...(decision === 'refunded' && refundAmount
+        // Optional when approving (saved for the refund later); required to refund.
+        ...(decision !== 'rejected' && refundAmount.trim()
           ? {refund_amount: Number.parseFloat(refundAmount)}
           : {}),
         admin_notes: notes.trim() || undefined,
+        ...(decision === 'refunded' ? {restock} : {}),
       });
       setActive(null);
       await refresh();
@@ -129,7 +158,12 @@ const AdminReturnsScreen = () => {
             </Text>
             {item.refund_amount ? (
               <Text style={styles.refund}>
-                Refunded {formatMoney(item.refund_amount)}
+                {item.status === 'refunded' ? 'Refunded' : 'Refund'} {formatMoney(item.refund_amount)}
+                {item.status === 'refunded' ? (
+                  <Text style={styles.meta}>
+                    {item.restocked ? ' · restocked' : ' · not restocked'}
+                  </Text>
+                ) : null}
               </Text>
             ) : null}
           </Pressable>
@@ -151,24 +185,44 @@ const AdminReturnsScreen = () => {
               <Text style={styles.modalReason}>{active.reason}</Text>
             ) : null}
             <View style={styles.chipWrap}>
-              {DECISIONS.map(d => (
+              {(active ? DECISIONS[active.status] ?? [] : []).map(d => (
                 <Chip
-                  key={d}
-                  label={d}
-                  active={decision === d}
-                  onPress={() => setDecision(d)}
+                  key={d.value}
+                  label={d.label}
+                  active={decision === d.value}
+                  onPress={() => setDecision(d.value)}
                 />
               ))}
             </View>
-            {decision === 'refunded' ? (
+            {active && decision !== 'rejected' ? (
               <Field
-                label="Refund amount"
+                label={decision === 'refunded' ? 'Refund amount' : 'Refund amount (optional)'}
                 value={refundAmount}
                 onChangeText={setRefundAmount}
                 placeholder="0.00"
                 keyboardType="decimal-pad"
+                hint={`Up to ${formatMoney(refundableLeft(active))}${
+                  active.order_payment_method === 'stripe'
+                    ? ' · refunded to the card through Stripe'
+                    : ' · cash on delivery: give the money back yourself; this records it'
+                }`}
+                error={amountNeeded ? 'Required to refund' : null}
                 style={styles.spaced}
               />
+            ) : null}
+            {decision === 'refunded' ? (
+              <View style={styles.restockRow}>
+                <View style={styles.flex}>
+                  <Text style={styles.restockLabel}>Return items to stock</Text>
+                  <Text style={styles.meta}>Turn off if the items are damaged.</Text>
+                </View>
+                <Switch
+                  value={restock}
+                  onValueChange={setRestock}
+                  trackColor={{true: colors.primary, false: colors.border}}
+                  accessibilityLabel="Return items to stock"
+                />
+              </View>
             ) : null}
             <Field
               label="Note to the customer"
@@ -187,7 +241,13 @@ const AdminReturnsScreen = () => {
                 onPress={() => setActive(null)}
                 style={styles.flex}
               />
-              <Button title="Save" onPress={save} loading={saving} style={styles.flex} />
+              <Button
+                title="Save"
+                onPress={save}
+                loading={saving}
+                disabled={amountNeeded}
+                style={styles.flex}
+              />
             </View>
           </View>
         </View>
@@ -240,6 +300,13 @@ const styles = StyleSheet.create({
   },
   chipWrap: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
   spaced: {marginTop: spacing.lg},
+  restockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  restockLabel: {fontSize: font.sm, fontWeight: '600', color: colors.text},
   modalActions: {flexDirection: 'row', gap: spacing.md},
 });
 

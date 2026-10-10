@@ -21,15 +21,6 @@ const returnStatusColors: Record<string, string> = {
   refunded: "bg-green-100 text-green-800",
 };
 
-const STATUSES = [
-  "pending",
-  "paid",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-];
-
 const STEPS = [
   { label: 'Order Placed', reach: ['pending', 'paid', 'processing', 'shipped', 'delivered'] },
   { label: 'Processing',   reach: ['paid', 'processing', 'shipped', 'delivered'] },
@@ -50,6 +41,21 @@ const paymentBadge: Record<string, string> = {
   paid: 'bg-emerald-100 text-emerald-800',
   unpaid: 'bg-amber-100 text-amber-800',
   canceled: 'bg-rose-100 text-rose-800',
+  refunded: 'bg-slate-200 text-slate-800',
+  partially_refunded: 'bg-sky-100 text-sky-800',
+};
+
+const paymentLabel = (s?: string) => (s ?? 'unpaid').replace('_', ' ');
+
+// A paid card order is refunded in full when cancelled.
+const refundOnCancel = (order: any) =>
+  order.payment_method === 'stripe' && ['paid', 'partially_refunded'].includes(order.payment_status);
+
+const cancelPrompt = (order: any, byCustomer: boolean) => {
+  const refund = refundOnCancel(order)
+    ? ` The ${byCustomer ? 'payment' : 'customer'} will be refunded to the card.`
+    : '';
+  return `Cancel this order? This cannot be undone.${refund}`;
 };
 
 interface Props {
@@ -102,6 +108,33 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
     }
   };
 
+  // Status responses don't include the items; keep the ones already loaded.
+  const mergeOrder = (next: any) => setOrder((prev: any) => ({ ...prev, ...next, items: prev.items }));
+
+  // The server rejects changes that aren't allowed or were overtaken by
+  // another change (409, with the current order): show that order instead.
+  const handleUpdateError = (err: any) => {
+    toast.error(errorMessage(err, "Update failed"));
+    const fresh = err.response?.data?.order;
+    if (err.response?.status === 409 && fresh) mergeOrder(fresh);
+  };
+
+  const updateStatus = async (body: Record<string, unknown>, success: string) => {
+    setUpdatingStatus(true);
+    try {
+      // expected_status: refuse if the order changed since this page loaded.
+      const res = await api.put(`/orders/${id}/status`, { ...body, expected_status: order.status });
+      mergeOrder(res.data.order);
+      toast.success(success);
+      return true;
+    } catch (err: any) {
+      handleUpdateError(err);
+      return false;
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const handleStatusChange = async (status: string) => {
     if (status === 'shipped') {
       setTrackingNumber(order.tracking_number ?? '');
@@ -109,29 +142,29 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       setShowShipModal(true);
       return;
     }
-    if (status === 'cancelled' && !globalThis.confirm('Cancel this order? This cannot be undone.')) return;
-    setUpdatingStatus(true);
-    try {
-      await api.put(`/orders/${id}/status`, { status });
-      setOrder((prev: any) => ({ ...prev, status }));
-      toast.success("Status updated");
-    } catch (err: any) {
-      toast.error(errorMessage(err, "Update failed"));
-    } finally {
-      setUpdatingStatus(false);
-    }
+    if (status === 'cancelled' && !globalThis.confirm(cancelPrompt(order, false))) return;
+    await updateStatus({ status }, status === 'cancelled' ? 'Order cancelled' : 'Status updated');
   };
 
   const handleShipSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const ok = await updateStatus(
+      { status: 'shipped', tracking_number: trackingNumber, carrier },
+      'Order marked as shipped',
+    );
+    if (ok) setShowShipModal(false);
+  };
+
+  // Customer cancel: allowed until the store starts preparing the order.
+  const handleCustomerCancel = async () => {
+    if (!globalThis.confirm(cancelPrompt(order, true))) return;
     setUpdatingStatus(true);
     try {
-      const res = await api.put(`/orders/${id}/status`, { status: 'shipped', tracking_number: trackingNumber, carrier });
-      setOrder(res.data.order);
-      setShowShipModal(false);
-      toast.success("Order marked as shipped");
+      const res = await api.post(`/orders/${id}/cancel`);
+      mergeOrder(res.data.order);
+      toast.success(refundOnCancel(order) ? 'Order cancelled — your refund is on its way' : 'Order cancelled');
     } catch (err: any) {
-      toast.error(errorMessage(err, "Update failed"));
+      handleUpdateError(err);
     } finally {
       setUpdatingStatus(false);
     }
@@ -203,26 +236,60 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         </div>
       )}
 
-      {/* Status changer (admin only) */}
+      {/* Status changer (admin only): only the moves the server allows next */}
       {!isCustomer && (
         <div className="card">
           <h2 className="font-semibold text-slate-900 mb-3">Update Status</h2>
-          <div className="flex flex-wrap gap-2">
-            {STATUSES.map((s) => (
-              <button
-                key={s}
-                disabled={order.status === s || updatingStatus}
-                onClick={() => handleStatusChange(s)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  order.status === s
-                    ? `${statusColors[s]} border-transparent`
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-                }`}
-              >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
+          {order.allowed_next?.length ? (
+            <>
+              <p className="text-sm text-slate-500 mb-3">Move this order to:</p>
+              <div className="flex flex-wrap gap-2">
+                {order.allowed_next.map((s: string) => (
+                  <button
+                    key={s}
+                    disabled={updatingStatus}
+                    onClick={() => handleStatusChange(s)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
+                      s === 'cancelled'
+                        ? 'bg-white border-rose-200 text-rose-600 hover:bg-rose-50'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {s === 'cancelled' ? 'Cancel order' : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {order.payment_method === 'stripe' && order.status === 'pending' && (
+                <p className="text-xs text-slate-400 mt-3">Card orders move to paid automatically once Stripe confirms the payment.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">
+              This order is {order.status} and can no longer change.
+              {order.status === 'delivered' && ' Problems after delivery are handled as returns.'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Customer cancel, until the store starts preparing the order */}
+      {isCustomer && order.can_cancel && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Changed your mind?</h2>
+            <p className="text-sm text-slate-500">
+              You can cancel until we start preparing your order
+              {refundOnCancel(order) ? '; the payment is refunded to your card.' : '.'}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={handleCustomerCancel}
+            disabled={updatingStatus}
+            className="px-4 py-2 rounded-lg text-sm font-semibold border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+          >
+            {updatingStatus ? 'Cancelling…' : 'Cancel order'}
+          </button>
         </div>
       )}
 
@@ -328,10 +395,16 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             <span className="flex items-center gap-2">
               {order.payment_method === 'stripe' ? 'Card (Stripe)' : 'Cash on Delivery'}
               <span className={`badge ${paymentBadge[order.payment_status] ?? 'bg-slate-100 text-slate-700'}`}>
-                {order.payment_status ?? 'unpaid'}
+                {paymentLabel(order.payment_status)}
               </span>
             </span>
           </div>
+          {Number.parseFloat(order.refunded_amount ?? '0') > 0 && (
+            <div className="flex justify-between text-sm text-slate-600">
+              <span>Refunded</span>
+              <span>-${Number.parseFloat(order.refunded_amount).toFixed(2)}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -394,7 +467,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
               </div>
               <div>
                 <label htmlFor="ship-tracking" className="block text-sm font-medium text-slate-700 mb-1">
-                  Tracking Number
+                  Tracking Number *
                 </label>
                 <input
                   id="ship-tracking"
@@ -403,9 +476,10 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
                   placeholder="Enter tracking number"
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
+                  required
                 />
               </div>
-              <p className="text-xs text-slate-400">Both fields are optional but recommended. The customer will be notified.</p>
+              <p className="text-xs text-slate-400">The customer is notified with the carrier and tracking number.</p>
               <div className="flex gap-3 pt-1">
                 <button type="submit" className="btn-primary" disabled={updatingStatus}>
                   {updatingStatus ? 'Saving...' : 'Confirm Shipment'}
@@ -419,8 +493,8 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         </div>
       )}
 
-      {/* Return & Refund (customer only, eligible orders) */}
-      {isCustomer && ['delivered', 'paid'].includes(order.status) && (
+      {/* Return & Refund (customer only, delivered orders; before that they cancel) */}
+      {isCustomer && order.status === 'delivered' && (
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
             <RotateCcw size={18} className="text-slate-500" />

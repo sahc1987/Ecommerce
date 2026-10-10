@@ -1,7 +1,8 @@
-import React, {useCallback} from 'react';
-import {Image, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
+import React, {useCallback, useState} from 'react';
+import {Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {ordersApi, returnsApi} from '../../api';
+import {errorMessage} from '../../api/client';
 import {useAsync} from '../../hooks/useAsync';
 import {
   Button,
@@ -40,7 +41,22 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
     };
   }, [id]);
 
-  const {data, loading, refreshing, error, refresh} = useAsync(run, [id]);
+  const {data, setData, loading, refreshing, error, refresh} = useAsync(run, [id]);
+  const [cancelling, setCancelling] = useState(false);
+
+  const cancel = async () => {
+    setCancelling(true);
+    try {
+      const {data: res} = await ordersApi.cancel(id);
+      // The cancel response has no items — keep ours.
+      setData(prev => (prev ? {...prev, order: {...prev.order, ...res.order, items: prev.order.items}} : prev));
+    } catch (err) {
+      Alert.alert('Could not cancel', errorMessage(err));
+      void refresh();
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   if (loading) {
     return <Loading />;
@@ -122,7 +138,14 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
         />
         <View style={styles.divider} />
         <Row label="Total" value={formatMoney(order.total)} strong />
+        {Number.parseFloat(order.refunded_amount ?? '0') > 0 ? (
+          <Row label="Refunded" value={`- ${formatMoney(order.refunded_amount)}`} />
+        ) : null}
       </Card>
+
+      {order.can_cancel ? (
+        <CancelSection order={order} cancelling={cancelling} onCancel={cancel} />
+      ) : null}
 
       {address ? (
         <>
@@ -152,16 +175,62 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
         </>
       ) : null}
 
-      <SectionTitle title="Returns" />
-      <Card>
-        <ReturnSection
+      {order.status === 'cancelled' ? null : (
+        <>
+          <SectionTitle title="Returns" />
+          <Card>
+            <ReturnSection
           order={order}
           existingReturn={existingReturn}
           returnWindow={returnWindow}
           onRequest={() => navigation.navigate('RequestReturn', {orderId: order.id})}
+            />
+          </Card>
+        </>
+      )}
+    </ScrollView>
+  );
+};
+
+// A paid card order is refunded in full when cancelled.
+const refundsOnCancel = (o: Order) =>
+  o.payment_method === 'stripe' &&
+  (o.payment_status === 'paid' || o.payment_status === 'partially_refunded');
+
+/** Cancel button, shown until the store starts preparing the order. */
+const CancelSection = ({
+  order,
+  cancelling,
+  onCancel,
+}: Readonly<{order: Order; cancelling: boolean; onCancel: () => void}>) => {
+  const refund = refundsOnCancel(order);
+  const confirm = () =>
+    Alert.alert(
+      'Cancel this order?',
+      `This cannot be undone.${refund ? ' Your payment will be refunded to your card.' : ''}`,
+      [
+        {text: 'Keep order', style: 'cancel'},
+        {text: 'Cancel order', style: 'destructive', onPress: onCancel},
+      ],
+    );
+  return (
+    <>
+      <SectionTitle title="Changed your mind?" />
+      <Card>
+        <Text style={styles.itemMeta}>
+          You can cancel until we start preparing your order
+          {refund ? '; the payment is refunded to your card.' : '.'}
+        </Text>
+        <Button
+          title="Cancel order"
+          variant="danger"
+          icon="close-circle-outline"
+          onPress={confirm}
+          loading={cancelling}
+          style={styles.returnCta}
         />
       </Card>
-    </ScrollView>
+    </>
   );
 };
 
@@ -191,9 +260,9 @@ const ReturnSection = ({
     );
   }
 
-  const returnable = ['delivered', 'paid'].includes(order.status);
-  if (!returnable) {
-    return <Text style={styles.itemMeta}>Returns open once the order is paid or delivered.</Text>;
+  // Before delivery the order is cancelled instead of returned.
+  if (order.status !== 'delivered') {
+    return <Text style={styles.itemMeta}>Returns open once the order is delivered.</Text>;
   }
 
   const daysSince = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 86400000);

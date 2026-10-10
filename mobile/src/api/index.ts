@@ -102,10 +102,20 @@ export const ordersApi = {
   list: (params: {status?: OrderStatus; page?: number; limit?: number}) =>
     api.get<{orders: Order[]} & Page>('/orders', {params}),
   detail: (id: string) => api.get<{order: Order}>('/orders/' + id),
+  // Only the changes in order.allowed_next succeed; `expected_status` (the
+  // status on screen) turns a change made meanwhile into a 409, not an overwrite.
   updateStatus: (
     id: string,
-    payload: {status: OrderStatus; tracking_number?: string; carrier?: string},
+    payload: {
+      status: OrderStatus;
+      expected_status?: OrderStatus;
+      tracking_number?: string;
+      carrier?: string;
+    },
   ) => api.put<{order: Order}>('/orders/' + id + '/status', payload),
+  // Customer cancels their own order (while order.can_cancel): stock is
+  // released and a paid card order is refunded.
+  cancel: (id: string) => api.post<{order: Order}>('/orders/' + id + '/cancel'),
 };
 
 export interface PaymentState {
@@ -185,7 +195,13 @@ export const returnsApi = {
   }) => api.post<{return: ReturnRequest}>('/returns', payload),
   process: (
     id: string,
-    payload: {status: ReturnStatus; refund_amount?: number; admin_notes?: string},
+    payload: {
+      status: ReturnStatus;
+      refund_amount?: number;
+      admin_notes?: string;
+      /** When refunding: put the returned units back on sale (default true). */
+      restock?: boolean;
+    },
   ) => api.put<{return: ReturnRequest}>('/returns/' + id, payload),
 };
 

@@ -12,12 +12,26 @@ const statusColors: Record<string, string> = {
   refunded: 'bg-green-100 text-green-800',
 };
 
+// Decisions allowed from each return status (mirrors the server's rules).
+const DECISIONS: Record<string, { value: string; label: string }[]> = {
+  requested: [
+    { value: 'approved', label: 'Approve' },
+    { value: 'rejected', label: 'Reject' },
+    { value: 'refunded', label: 'Approve & Issue Refund' },
+  ],
+  approved: [{ value: 'refunded', label: 'Issue Refund' }],
+};
+
+// What can still be refunded on the return's order.
+const refundableLeft = (ret: any) =>
+  Math.max(0, Number.parseFloat(ret.order_total ?? '0') - Number.parseFloat(ret.order_refunded_amount ?? '0'));
+
 export default function ReturnsList() {
   const [returns, setReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [selectedReturn, setSelectedReturn] = useState<any>(null);
-  const [processForm, setProcessForm] = useState({ status: 'approved', refund_amount: '', admin_notes: '' });
+  const [processForm, setProcessForm] = useState({ status: 'approved', refund_amount: '', admin_notes: '', restock: true });
   const [processing, setProcessing] = useState(false);
 
   const fetchReturns = async (s = status) => {
@@ -35,9 +49,11 @@ export default function ReturnsList() {
   const openProcess = (ret: any) => {
     setSelectedReturn(ret);
     setProcessForm({
-      status: 'approved',
-      refund_amount: ret.order_total ?? '',
-      admin_notes: '',
+      status: DECISIONS[ret.status][0].value,
+      // An amount set when approving is reused; otherwise what's left to refund.
+      refund_amount: ret.refund_amount ?? refundableLeft(ret).toFixed(2),
+      admin_notes: ret.admin_notes ?? '',
+      restock: true,
     });
   };
 
@@ -45,7 +61,13 @@ export default function ReturnsList() {
     e.preventDefault();
     setProcessing(true);
     try {
-      const res = await api.put(`/returns/${selectedReturn.id}`, processForm);
+      const { refund_amount, restock, ...rest } = processForm;
+      const res = await api.put(`/returns/${selectedReturn.id}`, {
+        ...rest,
+        // Optional when approving (saved for the refund later); required to refund.
+        ...(rest.status !== 'rejected' && refund_amount !== '' ? { refund_amount: Number(refund_amount) } : {}),
+        ...(rest.status === 'refunded' ? { restock } : {}),
+      });
       setReturns((prev) => prev.map((r) => r.id === selectedReturn.id ? { ...r, ...res.data.return } : r));
       toast.success('Return processed');
       setSelectedReturn(null);
@@ -105,7 +127,14 @@ export default function ReturnsList() {
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-slate-700 max-w-[200px] truncate">{r.reason}</p>
-                    {r.refund_amount && <p className="text-xs text-green-600 font-medium">Refund: ${Number.parseFloat(r.refund_amount).toFixed(2)}</p>}
+                    {r.refund_amount && (
+                      <p className="text-xs text-green-600 font-medium">
+                        {r.status === 'refunded' ? 'Refunded' : 'Refund'}: ${Number.parseFloat(r.refund_amount).toFixed(2)}
+                        {r.status === 'refunded' && (
+                          <span className="text-slate-400 font-normal"> · {r.restocked ? 'restocked' : 'not restocked'}</span>
+                        )}
+                      </p>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-slate-500 hidden sm:table-cell">
                     {formatDate(r.created_at)}
@@ -116,9 +145,9 @@ export default function ReturnsList() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    {r.status === 'requested' && (
+                    {DECISIONS[r.status] && (
                       <button onClick={() => openProcess(r)} className="text-primary-600 hover:underline text-sm font-medium">
-                        Process
+                        {r.status === 'approved' ? 'Refund' : 'Process'}
                       </button>
                     )}
                   </td>
@@ -140,16 +169,48 @@ export default function ReturnsList() {
               <div>
                 <label htmlFor="r_status" className="block text-sm font-medium text-slate-700 mb-1">Decision</label>
                 <select id="r_status" className="input" value={processForm.status} onChange={(e) => setProcessForm({ ...processForm, status: e.target.value })}>
-                  <option value="approved">Approve</option>
-                  <option value="rejected">Reject</option>
-                  <option value="refunded">Approve & Issue Refund</option>
+                  {DECISIONS[selectedReturn.status].map((d) => (
+                    <option key={d.value} value={d.value}>{d.label}</option>
+                  ))}
                 </select>
               </div>
-              {processForm.status === 'refunded' && (
+              {processForm.status !== 'rejected' && (
                 <div>
-                  <label htmlFor="r_refund" className="block text-sm font-medium text-slate-700 mb-1">Refund Amount ($)</label>
-                  <input id="r_refund" type="number" min="0" step="0.01" className="input" value={processForm.refund_amount} onChange={(e) => setProcessForm({ ...processForm, refund_amount: e.target.value })} required />
+                  <label htmlFor="r_refund" className="block text-sm font-medium text-slate-700 mb-1">
+                    Refund Amount ($){processForm.status === 'approved' && ' — optional, used when refunding'}
+                  </label>
+                  <input
+                    id="r_refund"
+                    type="number"
+                    min="0.01"
+                    max={refundableLeft(selectedReturn).toFixed(2)}
+                    step="0.01"
+                    className="input"
+                    value={processForm.refund_amount}
+                    onChange={(e) => setProcessForm({ ...processForm, refund_amount: e.target.value })}
+                    required={processForm.status === 'refunded'}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Up to ${refundableLeft(selectedReturn).toFixed(2)}
+                    {selectedReturn.order_payment_method === 'stripe'
+                      ? ' · refunded to the customer’s card through Stripe'
+                      : ' · cash on delivery: give the money back yourself; this records it'}
+                  </p>
                 </div>
+              )}
+              {processForm.status === 'refunded' && (
+                <label className="flex items-start gap-2.5 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 mt-0.5 rounded text-primary-600"
+                    checked={processForm.restock}
+                    onChange={(e) => setProcessForm({ ...processForm, restock: e.target.checked })}
+                  />
+                  <span>
+                    Return items to stock
+                    <span className="block text-xs text-slate-400">Untick if the items are damaged and can’t be sold again.</span>
+                  </span>
+                </label>
               )}
               <div>
                 <label htmlFor="r_notes" className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>

@@ -97,7 +97,7 @@ export type OrderStatus =
   | 'cancelled';
 
 export type PaymentMethod = 'cod' | 'stripe';
-export type PaymentStatus = 'unpaid' | 'paid' | 'canceled';
+export type PaymentStatus = 'unpaid' | 'paid' | 'canceled' | 'refunded' | 'partially_refunded';
 
 /** Matches the shape the web checkout posts, so both clients render alike. */
 export interface ShippingAddress {
@@ -142,6 +142,12 @@ export interface Order {
   carrier: string | null;
   payment_method?: PaymentMethod;
   payment_status?: PaymentStatus;
+  /** Money given back so far (cancellation or returns). */
+  refunded_amount?: string;
+  /** Status changes an admin may make next (empty for customers). */
+  allowed_next?: OrderStatus[];
+  /** Whether the customer may still cancel their own order. */
+  can_cancel?: boolean;
   created_at: string;
   updated_at: string;
   customer_name?: string | null;
@@ -165,6 +171,10 @@ export interface ReturnRequest {
   customer_name?: string | null;
   customer_email?: string | null;
   order_total?: string | null;
+  order_refunded_amount?: string | null;
+  order_payment_method?: PaymentMethod | null;
+  /** Whether a refunded return put its items back on sale. */
+  restocked?: boolean;
 }
 
 export interface AppNotification {

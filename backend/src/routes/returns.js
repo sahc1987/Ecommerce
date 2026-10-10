@@ -80,7 +80,8 @@ router.get('/', authenticate, async (req, res) => {
       params.slice(0, -2)
     );
     const result = await db.query(
-      `SELECT r.*, u.name as customer_name, u.email as customer_email, o.total as order_total
+      `SELECT r.*, u.name as customer_name, u.email as customer_email, o.total as order_total,
+              o.refunded_amount as order_refunded_amount, o.payment_method as order_payment_method
        FROM returns r
        LEFT JOIN users u ON r.user_id = u.id
        LEFT JOIN orders o ON r.order_id = o.id
@@ -192,10 +193,10 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
-// requested → approved | rejected, approved → refunded; rejected and refunded
-// are final.
+// requested → approved | rejected | refunded (approve and refund in one step),
+// approved → refunded; rejected and refunded are final.
 const RETURN_TRANSITIONS = {
-  requested: ['approved', 'rejected'],
+  requested: ['approved', 'rejected', 'refunded'],
   approved: ['refunded'],
   rejected: [],
   refunded: [],

@@ -27,25 +27,62 @@ import {
 } from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
 import {formatDateTime, formatMoney, shortId} from '../../utils/format';
-import type {OrderStatus} from '../../types';
+import type {Order, OrderStatus} from '../../types';
 import type {AdminStackParams} from '../../navigation/types';
 import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminOrderDetail'>;
 
-const STATUSES: OrderStatus[] = [
-  'pending',
-  'paid',
-  'processing',
-  'shipped',
-  'delivered',
-  'cancelled',
-];
+const statusLabel = (s: OrderStatus) => (s === 'cancelled' ? 'Cancel order' : s);
+
+// A paid card order is refunded in full when cancelled.
+const refundsOnCancel = (o: Order) =>
+  o.payment_method === 'stripe' &&
+  (o.payment_status === 'paid' || o.payment_status === 'partially_refunded');
+
+const confirmCancel = (o: Order) =>
+  new Promise<boolean>(resolve =>
+    Alert.alert(
+      'Cancel this order?',
+      `Its items go back into stock.${refundsOnCancel(o) ? ' The customer is refunded to their card.' : ''} This cannot be undone.`,
+      [
+        {text: 'Keep order', style: 'cancel', onPress: () => resolve(false)},
+        {text: 'Cancel order', style: 'destructive', onPress: () => resolve(true)},
+      ],
+    ),
+  );
+
+/** The current order sent with a 409 (change not allowed or overtaken), if any. */
+const conflictOrder = (err: unknown): Order | null => {
+  const res = (err as {response?: {status?: number; data?: {order?: Order}}}).response;
+  return res?.status === 409 && res.data?.order ? res.data.order : null;
+};
+
+/** "Update status" while the order can still move; otherwise why it can't. */
+const StatusAction = ({order, onEdit}: Readonly<{order: Order; onEdit: () => void}>) => {
+  if (order.allowed_next?.length) {
+    return (
+      <Button
+        title="Update status"
+        variant="secondary"
+        icon="progress-check"
+        onPress={onEdit}
+        style={styles.updateCta}
+      />
+    );
+  }
+  return (
+    <Text style={[styles.meta, styles.updateCta]}>
+      This order is {order.status} and can no longer change.
+      {order.status === 'delivered' ? ' Problems after delivery are handled as returns.' : ''}
+    </Text>
+  );
+};
 
 const AdminOrderDetailScreen = ({route}: Props) => {
   const {id} = route.params;
   const [editing, setEditing] = useState(false);
-  const [nextStatus, setNextStatus] = useState<OrderStatus>('paid');
+  const [nextStatus, setNextStatus] = useState<OrderStatus | null>(null);
   const [tracking, setTracking] = useState('');
   const [carrier, setCarrier] = useState('');
   const [saving, setSaving] = useState(false);
@@ -64,25 +101,43 @@ const AdminOrderDetailScreen = ({route}: Props) => {
     if (!order) {
       return;
     }
-    setNextStatus(order.status);
+    setNextStatus(order.allowed_next?.[0] ?? null);
     setTracking(order.tracking_number ?? '');
     setCarrier(order.carrier ?? '');
     setEditing(true);
   };
 
+  // The status endpoint returns the order without its items — keep ours.
+  const mergeOrder = (next: Order) =>
+    setData(prev => (prev ? {...prev, ...next, items: prev.items} : prev));
+
+  const missingTracking = nextStatus === 'shipped' && !tracking.trim();
+
   const save = async () => {
+    if (!order || !nextStatus || missingTracking) {
+      return;
+    }
+    if (nextStatus === 'cancelled' && !(await confirmCancel(order))) {
+      return;
+    }
     setSaving(true);
     try {
       const {data} = await ordersApi.updateStatus(id, {
         status: nextStatus,
+        expected_status: order.status,
         ...(nextStatus === 'shipped'
           ? {tracking_number: tracking.trim(), carrier: carrier.trim()}
           : {}),
       });
-      // The status endpoint returns the order without its items — keep ours.
-      setData(prev => (prev ? {...prev, ...data.order, items: prev.items} : prev));
+      mergeOrder(data.order);
       setEditing(false);
     } catch (err) {
+      // Not allowed any more or changed meanwhile: show the current order.
+      const fresh = conflictOrder(err);
+      if (fresh) {
+        mergeOrder(fresh);
+        setEditing(false);
+      }
       Alert.alert('Could not update', errorMessage(err));
     } finally {
       setSaving(false);
@@ -125,13 +180,7 @@ const AdminOrderDetailScreen = ({route}: Props) => {
               value={`${order.carrier ? order.carrier + ' · ' : ''}${order.tracking_number}`}
             />
           ) : null}
-          <Button
-            title="Update status"
-            variant="secondary"
-            icon="progress-check"
-            onPress={openEditor}
-            style={styles.updateCta}
-          />
+          <StatusAction order={order} onEdit={openEditor} />
         </Card>
 
         <SectionTitle title="Items" />
@@ -179,6 +228,9 @@ const AdminOrderDetailScreen = ({route}: Props) => {
           />
           <View style={styles.divider} />
           <Row label="Total" value={formatMoney(order.total)} strong />
+          {Number.parseFloat(order.refunded_amount ?? '0') > 0 ? (
+            <Row label="Refunded" value={`- ${formatMoney(order.refunded_amount)}`} />
+          ) : null}
         </Card>
 
         {address ? (
@@ -211,17 +263,22 @@ const AdminOrderDetailScreen = ({route}: Props) => {
       <Modal visible={editing} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Update order status</Text>
+            <Text style={styles.modalTitle}>Move this order to</Text>
             <View style={styles.chipWrap}>
-              {STATUSES.map(s => (
+              {(order.allowed_next ?? []).map(s => (
                 <Chip
                   key={s}
-                  label={s}
+                  label={statusLabel(s)}
                   active={nextStatus === s}
                   onPress={() => setNextStatus(s)}
                 />
               ))}
             </View>
+            {order.payment_method === 'stripe' && order.status === 'pending' ? (
+              <Text style={[styles.meta, styles.modalHint]}>
+                Card orders move to paid automatically once Stripe confirms the payment.
+              </Text>
+            ) : null}
             {nextStatus === 'shipped' ? (
               <View style={styles.shipFields}>
                 <Field
@@ -231,12 +288,13 @@ const AdminOrderDetailScreen = ({route}: Props) => {
                   placeholder="e.g. UPS"
                 />
                 <Field
-                  label="Tracking number"
+                  label="Tracking number (required)"
                   value={tracking}
                   onChangeText={setTracking}
                   placeholder="1Z999AA10123456784"
                   autoCapitalize="characters"
                   hint="The customer is notified with these details."
+                  error={missingTracking ? 'Required to mark the order shipped' : null}
                 />
               </View>
             ) : null}
@@ -247,7 +305,13 @@ const AdminOrderDetailScreen = ({route}: Props) => {
                 onPress={() => setEditing(false)}
                 style={styles.flex}
               />
-              <Button title="Save" onPress={save} loading={saving} style={styles.flex} />
+              <Button
+                title="Save"
+                onPress={save}
+                loading={saving}
+                disabled={!nextStatus || missingTracking}
+                style={styles.flex}
+              />
             </View>
           </View>
         </View>
@@ -269,6 +333,7 @@ const styles = StyleSheet.create({
   meta: {fontSize: font.xs, color: colors.textMuted, marginTop: 2},
   divider: {height: 1, backgroundColor: colors.border, marginVertical: spacing.md},
   updateCta: {marginTop: spacing.md},
+  modalHint: {marginTop: spacing.sm},
   item: {
     flexDirection: 'row',
     alignItems: 'center',
