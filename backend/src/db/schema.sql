@@ -163,7 +163,6 @@ CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
 CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_returns_user_id ON returns(user_id);
-CREATE INDEX IF NOT EXISTS idx_returns_order_id ON returns(order_id);
 CREATE INDEX IF NOT EXISTS idx_returns_status ON returns(status);
 -- Temporary stock holds created when a product is added to a cart.
 -- Available stock = product_variants.stock - SUM(quantity) of non-expired rows
@@ -328,3 +327,8 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_amount DECIMAL(10,2) NOT NU
 
 -- Whether a refunded return put its items back on sale (the admin chooses).
 ALTER TABLE returns ADD COLUMN IF NOT EXISTS restocked BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- One return per order, so simultaneous requests can't both get through.
+-- It also serves lookups by order, replacing the plain idx_returns_order_id.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_returns_one_per_order ON returns(order_id);
+DROP INDEX IF EXISTS idx_returns_order_id;

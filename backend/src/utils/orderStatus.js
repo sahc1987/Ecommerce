@@ -43,18 +43,10 @@ function transitionError(order, status) {
   return `Can't change a ${order.status} order to ${status}`;
 }
 
-// Order fields the apps need to offer the right actions.
-const withActions = (order, { forCustomer = false } = {}) => ({
-  ...order,
-  allowed_next: forCustomer ? [] : allowedNext(order),
-  can_cancel: forCustomer ? canCustomerCancel(order) : canTransition(order, 'cancelled'),
-});
-
 module.exports = {
   STATUSES,
   allowedNext,
   canTransition,
   canCustomerCancel,
   transitionError,
-  withActions,
 };

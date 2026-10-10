@@ -10,6 +10,8 @@ const { RefundError } = require("../utils/refunds");
 
 const MAX_LIMIT = 100;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const STATUS_LABELS = {
   pending: "pending review",
   paid: "paid",
@@ -53,9 +55,10 @@ function sendCancelError(res, err, user) {
 
 // GET orders (admin: all, customer: own)
 router.get("/", authenticate, async (req, res) => {
-  const { status, page = 1 } = req.query;
-  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
-  const offset = (Number.parseInt(page) - 1) * limit;
+  const { status } = req.query;
+  const page = Math.max(1, Number.parseInt(req.query.page) || 1);
+  const limit = Math.min(Math.max(1, Number.parseInt(req.query.limit) || 20), MAX_LIMIT);
+  const offset = (page - 1) * limit;
   const isAdmin = ["admin", "staff"].includes(req.user.role);
 
   const conditions = [];
@@ -91,7 +94,7 @@ router.get("/", authenticate, async (req, res) => {
     res.json({
       orders: result.rows,
       total,
-      page: Number.parseInt(page),
+      page,
       pages: Math.ceil(total / limit),
     });
   } catch (err) {
@@ -101,6 +104,8 @@ router.get("/", authenticate, async (req, res) => {
 
 // GET single order
 router.get("/:id", authenticate, async (req, res) => {
+  if (!UUID_RE.test(req.params.id))
+    return res.status(404).json({ error: "Order not found" });
   try {
     const result = await db.query(
       `SELECT o.*, u.name as customer_name, u.email as customer_email
@@ -124,8 +129,6 @@ router.get("/:id", authenticate, async (req, res) => {
     res.status(500).json({ error: safeErr(err) });
   }
 });
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const trimmed = (v) => (typeof v === "string" ? v.trim() : "");
 

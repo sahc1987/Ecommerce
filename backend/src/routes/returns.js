@@ -10,6 +10,8 @@ const refunds = require('../utils/refunds');
 const MAX_LIMIT = 100;
 const MAX_RETURN_LINES = 100;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Only lines that belong to this order may be returned, and never more
 // units than were bought — otherwise a client could reference another
 // customer's order_item_id or inflate the refund.
@@ -32,6 +34,33 @@ async function validateReturnLines(orderId, items) {
     lines.push({ order_item_id: item.order_item_id, quantity: qty, reason: item.reason ?? null });
   }
   return { lines };
+}
+
+// Saves a return with its lines, all or nothing. Returns null when the order
+// already has a return (the unique index catches simultaneous requests).
+async function insertReturn({ orderId, userId, reason, lines }) {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const ret = (await client.query(
+      'INSERT INTO returns (order_id, user_id, reason) VALUES ($1,$2,$3) RETURNING *',
+      [orderId, userId, reason]
+    )).rows[0];
+    for (const line of lines) {
+      await client.query(
+        'INSERT INTO return_items (return_id, order_item_id, quantity, reason) VALUES ($1,$2,$3,$4)',
+        [ret.id, line.order_item_id, line.quantity, line.reason]
+      );
+    }
+    await client.query('COMMIT');
+    return ret;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.code === '23505' && err.constraint === 'idx_returns_one_per_order') return null;
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 function buildReturnNotification(status, orderShort, refund_amount, admin_notes) {
@@ -60,9 +89,11 @@ function buildReturnNotification(status, orderShort, refund_amount, admin_notes)
 
 // GET returns
 router.get('/', authenticate, async (req, res) => {
-  const { status, order_id, page = 1 } = req.query;
-  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
-  const offset = (Number.parseInt(page) - 1) * limit;
+  const { status, order_id } = req.query;
+  if (order_id && !UUID_RE.test(order_id)) return res.status(400).json({ error: 'Invalid order_id' });
+  const page = Math.max(1, Number.parseInt(req.query.page) || 1);
+  const limit = Math.min(Math.max(1, Number.parseInt(req.query.limit) || 20), MAX_LIMIT);
+  const offset = (page - 1) * limit;
   const isAdmin = ['admin', 'staff'].includes(req.user.role);
 
   const conditions = [];
@@ -94,7 +125,7 @@ router.get('/', authenticate, async (req, res) => {
     res.json({
       returns: result.rows,
       total,
-      page: Number.parseInt(page),
+      page,
       pages: Math.ceil(total / limit),
     });
   } catch (err) {
@@ -104,6 +135,7 @@ router.get('/', authenticate, async (req, res) => {
 
 // GET single return
 router.get('/:id', authenticate, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Return not found' });
   try {
     const result = await db.query(
       `SELECT r.*, u.name as customer_name, u.email as customer_email
@@ -129,6 +161,8 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   const { order_id, reason, items } = req.body;
   if (!order_id || !reason) return res.status(400).json({ error: 'order_id and reason required' });
+  if (typeof order_id !== 'string' || !UUID_RE.test(order_id))
+    return res.status(404).json({ error: 'Order not found' });
   try {
     const order = await db.query(
       'SELECT * FROM orders WHERE id = $1 AND user_id = $2',
@@ -156,19 +190,9 @@ router.post('/', authenticate, async (req, res) => {
     const { lines, error: linesError } = await validateReturnLines(order_id, items);
     if (linesError) return res.status(400).json({ error: linesError });
 
-    const returnRes = await db.query(
-      'INSERT INTO returns (order_id, user_id, reason) VALUES ($1,$2,$3) RETURNING *',
-      [order_id, req.user.id, reason]
-    );
-    const ret = returnRes.rows[0];
+    const ret = await insertReturn({ orderId: order_id, userId: req.user.id, reason, lines });
+    if (!ret) return res.status(400).json({ error: 'A return request already exists for this order' });
     await cache.invalidateDashboard();
-
-    for (const line of lines) {
-      await db.query(
-        'INSERT INTO return_items (return_id, order_item_id, quantity, reason) VALUES ($1,$2,$3,$4)',
-        [ret.id, line.order_item_id, line.quantity, line.reason]
-      );
-    }
 
     const orderShort = order_id.slice(0, 8).toUpperCase();
     await Promise.all([
@@ -201,8 +225,6 @@ const RETURN_TRANSITIONS = {
   rejected: [],
   refunded: [],
 };
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // A response to send instead of continuing; thrown inside the transaction.
 class ReturnRejected extends Error {
