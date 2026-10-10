@@ -32,12 +32,13 @@ router.get('/summary', async (req, res) => {
   if (cached) return res.json(cached);
 
   const PAID = "('paid','processing','shipped','delivered')";
+  // Revenue is net of refunds (cancellations and returns).
 
   try {
     const [totals, period, inventory, breakdown] = await Promise.all([
       db.query(`
         SELECT
-          (SELECT COALESCE(SUM(total),0) FROM orders WHERE status IN ${PAID}) AS total_revenue,
+          (SELECT COALESCE(SUM(total - refunded_amount),0) FROM orders WHERE status IN ${PAID}) AS total_revenue,
           (SELECT COUNT(*) FROM orders) AS total_orders,
           (SELECT COUNT(*) FROM users WHERE role = 'customer') AS total_customers,
           (SELECT COUNT(*) FROM products WHERE is_active = TRUE) AS active_products,
@@ -51,7 +52,7 @@ router.get('/summary', async (req, res) => {
                   NOW() - (($1::int * 2) || ' days')::interval AS prev_start
          )
          SELECT
-           (SELECT COALESCE(SUM(o.total),0) FROM orders o, windows w
+           (SELECT COALESCE(SUM(o.total - o.refunded_amount),0) FROM orders o, windows w
               WHERE o.status IN ${PAID} AND o.created_at >= w.cur_start) AS revenue,
            (SELECT COUNT(*) FROM orders o, windows w
               WHERE o.status IN ${PAID} AND o.created_at >= w.cur_start) AS orders,
@@ -60,7 +61,7 @@ router.get('/summary', async (req, res) => {
               WHERE o.status IN ${PAID} AND o.created_at >= w.cur_start) AS units,
            (SELECT COUNT(*) FROM users u, windows w
               WHERE u.role = 'customer' AND u.created_at >= w.cur_start) AS new_customers,
-           (SELECT COALESCE(SUM(o.total),0) FROM orders o, windows w
+           (SELECT COALESCE(SUM(o.total - o.refunded_amount),0) FROM orders o, windows w
               WHERE o.status IN ${PAID} AND o.created_at >= w.prev_start AND o.created_at < w.cur_start) AS prev_revenue,
            (SELECT COUNT(*) FROM orders o, windows w
               WHERE o.status IN ${PAID} AND o.created_at >= w.prev_start AND o.created_at < w.cur_start) AS prev_orders,
@@ -247,7 +248,7 @@ router.get('/sales-chart', async (req, res) => {
          -- created_at is stored in UTC; shift to the store's zone before bucketing
          SELECT DATE_TRUNC($1, (created_at AT TIME ZONE 'UTC') AT TIME ZONE $4) AS date,
                 COUNT(*) AS orders,
-                COALESCE(SUM(total), 0) AS revenue
+                COALESCE(SUM(total - refunded_amount), 0) AS revenue
          FROM orders
          WHERE status IN ('paid','processing','shipped','delivered')
            AND created_at >= ($2::date::timestamp AT TIME ZONE $4) AT TIME ZONE 'UTC'

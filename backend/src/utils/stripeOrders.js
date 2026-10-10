@@ -1,6 +1,7 @@
 const db = require('../config/database');
 const stripe = require('../config/stripe');
 const cache = require('./cache');
+const inventory = require('./inventory');
 const { createNotification, notifyAdmins } = require('./notifications');
 
 // Checkout sessions live this long; Stripe's minimum is 30 minutes. Stock is
@@ -68,20 +69,11 @@ async function cancelUnpaid(orderId) {
       await client.query('ROLLBACK');
       return false;
     }
-    // Summed per variant: UPDATE … FROM applies only one matching line per row.
-    const restored = await client.query(
-      `UPDATE product_variants v SET stock = v.stock + oi.quantity, updated_at = NOW()
-       FROM (SELECT variant_id, SUM(quantity) AS quantity FROM order_items
-             WHERE order_id = $1 AND variant_id IS NOT NULL GROUP BY variant_id) oi,
-            products p
-       WHERE v.id = oi.variant_id AND p.id = v.product_id
-       RETURNING p.id, p.slug`,
-      [orderId]
-    );
+    const restored = await inventory.restockOrder(client, orderId);
     await client.query('COMMIT');
 
     await Promise.all([
-      cache.invalidateProducts(...restored.rows.flatMap(({ id, slug }) => [id, slug])),
+      cache.invalidateProducts(...restored.flatMap(({ id, slug }) => [id, slug])),
       cache.invalidateDashboard(),
     ]);
     return true;
