@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,8 +9,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Reachable from this machine only (for local tools and `npm run dev`).
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ecommerce_user} -d ${DB_NAME:-ecommerce}"]
       interval: 10s
@@ -27,9 +26,9 @@ services:
     image: redis:7-alpine
     container_name: ecommerce_redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-change_this_redis_password} --save 60 1 --loglevel warning
+    command: redis-server --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env} --save 60 1 --loglevel warning
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-change_this_redis_password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -56,16 +55,19 @@ services:
     environment:
       PORT: ${BACKEND_PORT:-5000}
       DATABASE_URL: postgresql://${DB_USER:-ecommerce_user}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-ecommerce}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-change_this_redis_password}@redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret_in_production}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       CLIENT_URL: ${CLIENT_URL:-http://localhost:8080}
       NODE_ENV: ${NODE_ENV:-production}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - uploads_data:/app/uploads
+    # The API trusts X-Forwarded-For from one proxy (app.set('trust proxy', 1)),
+    # so outside this machine it must only be reached through nginx; otherwise
+    # clients could fake their IP and dodge the rate limits.
     ports:
-      - "${BACKEND_PORT:-8000}:5000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:5000"
     networks:
       - ecommerce
     security_opt:
@@ -85,7 +87,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "${FRONTEND_PORT:-8080}:8080"
     networks:
       - ecommerce
     security_opt:

@@ -1,4 +1,12 @@
 require('dotenv').config();
+
+// Sign-in tokens are signed with this; refuse to run without it rather than
+// failing on every login.
+if (!process.env.JWT_SECRET) {
+  console.error('JWT_SECRET is not set. Add it to backend/.env (see .env.example).');
+  process.exit(1);
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

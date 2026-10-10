@@ -2,14 +2,13 @@ const router = require("express").Router();
 const db = require("../config/database");
 const { authenticate } = require("../middleware/auth");
 const safeErr = require("../utils/safeErr");
+const { pagination, uuidParam } = require("../utils/validate");
 
-const MAX_LIMIT = 100;
+router.param("id", uuidParam("Notification not found"));
 
 // GET notifications for current user
 router.get("/", authenticate, async (req, res) => {
-  const { page = 1 } = req.query;
-  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
-  const offset = (Number.parseInt(page) - 1) * limit;
+  const { limit, offset } = pagination(req.query);
   try {
     const [countRes, unreadRes, listRes] = await Promise.all([
       db.query("SELECT COUNT(*) FROM notifications WHERE user_id = $1", [

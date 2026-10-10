@@ -4,17 +4,17 @@ const db = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const safeErr = require('../utils/safeErr');
 const cache = require('../utils/cache');
+const { pagination, uuidParam } = require('../utils/validate');
 
-const MAX_LIMIT = 100;
 const ROLES = new Set(['admin', 'staff', 'customer']);
 
 router.use(authenticate, requireRole('admin'));
+router.param('id', uuidParam('User not found'));
 
 // GET all users
 router.get('/', async (req, res) => {
-  const { role, search, page = 1 } = req.query;
-  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
-  const offset = (Number.parseInt(page) - 1) * limit;
+  const { role, search } = req.query;
+  const { page, limit, offset } = pagination(req.query);
   const conditions = [];
   const params = [];
   if (role) { params.push(role); conditions.push(`role = $${params.length}`); }
@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
     res.json({
       users: result.rows,
       total,
-      page: Number.parseInt(page),
+      page,
       pages: Math.ceil(total / limit),
     });
   } catch (err) {

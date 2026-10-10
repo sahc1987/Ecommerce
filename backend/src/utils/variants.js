@@ -1,7 +1,8 @@
 // Product variants: validation of admin input, pricing, and mapping cart lines
 // to the variant they buy. See db/migrations/add_product_variants.sql.
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const { UUID_RE } = require('./validate');
+
 const MAX_QTY = 1000;
 const MAX_OPTIONS = 3;
 const MAX_VALUES = 50;

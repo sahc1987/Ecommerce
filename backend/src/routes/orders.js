@@ -8,9 +8,7 @@ const orderStatus = require("../utils/orderStatus");
 const { OrderConflict, cancelOrder } = require("../utils/orderCancel");
 const { RefundError } = require("../utils/refunds");
 
-const MAX_LIMIT = 100;
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const { UUID_RE, pagination } = require("../utils/validate");
 
 const STATUS_LABELS = {
   pending: "pending review",
@@ -56,9 +54,7 @@ function sendCancelError(res, err, user) {
 // GET orders (admin: all, customer: own)
 router.get("/", authenticate, async (req, res) => {
   const { status } = req.query;
-  const page = Math.max(1, Number.parseInt(req.query.page) || 1);
-  const limit = Math.min(Math.max(1, Number.parseInt(req.query.limit) || 20), MAX_LIMIT);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = pagination(req.query);
   const isAdmin = ["admin", "staff"].includes(req.user.role);
 
   const conditions = [];

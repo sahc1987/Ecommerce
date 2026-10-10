@@ -7,10 +7,9 @@ const cache = require('../utils/cache');
 const inventory = require('../utils/inventory');
 const refunds = require('../utils/refunds');
 
-const MAX_LIMIT = 100;
-const MAX_RETURN_LINES = 100;
+const { UUID_RE, pagination } = require('../utils/validate');
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_RETURN_LINES = 100;
 
 // Only lines that belong to this order may be returned, and never more
 // units than were bought — otherwise a client could reference another
@@ -91,9 +90,7 @@ function buildReturnNotification(status, orderShort, refund_amount, admin_notes)
 router.get('/', authenticate, async (req, res) => {
   const { status, order_id } = req.query;
   if (order_id && !UUID_RE.test(order_id)) return res.status(400).json({ error: 'Invalid order_id' });
-  const page = Math.max(1, Number.parseInt(req.query.page) || 1);
-  const limit = Math.min(Math.max(1, Number.parseInt(req.query.limit) || 20), MAX_LIMIT);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = pagination(req.query);
   const isAdmin = ['admin', 'staff'].includes(req.user.role);
 
   const conditions = [];

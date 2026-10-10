@@ -15,7 +15,7 @@ const limiter = rateLimit({
 });
 
 const MAX_ITEMS = 50;
-const { UUID_RE } = variants;
+const { UUID_RE } = require('../utils/validate');
 
 // Every route needs a cart token to identify whose holds these are.
 router.use(limiter, optionalAuth, (req, res, next) => {

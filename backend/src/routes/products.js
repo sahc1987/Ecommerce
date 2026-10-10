@@ -6,10 +6,16 @@ const cache = require('../utils/cache');
 const safeErr = require('../utils/safeErr');
 const slugify = require('../utils/slugify');
 const variantsUtil = require('../utils/variants');
+const { isUuid, pagination, uuidParam } = require('../utils/validate');
 
 // Short TTLs: responses include live availability (stock minus active cart holds)
 const TTL = { list: 30, detail: 30 }; // seconds
-const MAX_LIMIT = 100;
+
+// Checked before the handlers (and before image uploads are received).
+// `:idOrSlug` is not covered: a slug is a valid value there.
+router.param('id', uuidParam('Product not found'));
+router.param('variantId', uuidParam('Variant not found'));
+router.param('imageId', uuidParam('Image not found'));
 
 // SELECT columns for a product's options and variants (with live availability).
 // The shop only sees active variants; the admin sees all of them.
@@ -113,14 +119,13 @@ function conflictMessage(err) {
 
 // GET all products (public, with filters)
 router.get('/', async (req, res) => {
-  const { category, subcategory, search, discount, page = 1 } = req.query;
-  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
+  const { category, subcategory, search, discount } = req.query;
+  const { page, limit, offset } = pagination(req.query);
   const cacheKey = cache.queryKey('products:list', req.query);
 
   const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
-  const offset = (Number.parseInt(page) - 1) * limit;
   const conditions = ['p.is_active = TRUE'];
   const params = [];
 
@@ -154,7 +159,7 @@ router.get('/', async (req, res) => {
     const data = {
       products: result.rows.map(withVariantTotals),
       total,
-      page: Number.parseInt(page),
+      page,
       pages: Math.ceil(total / limit),
     };
     await cache.set(cacheKey, data, TTL.list);
@@ -166,9 +171,8 @@ router.get('/', async (req, res) => {
 
 // GET all products for admin (includes inactive — not cached)
 router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req, res) => {
-  const { category, subcategory, search, page = 1 } = req.query;
-  const limit = Math.min(Number.parseInt(req.query.limit) || 20, MAX_LIMIT);
-  const offset = (Number.parseInt(page) - 1) * limit;
+  const { category, subcategory, search } = req.query;
+  const { page, limit, offset } = pagination(req.query);
   const conditions = [];
   const params = [];
 
@@ -201,7 +205,7 @@ router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req
     res.json({
       products: result.rows.map(withVariantTotals),
       total,
-      page: Number.parseInt(page),
+      page,
       pages: Math.ceil(total / limit),
     });
   } catch (err) {
@@ -212,7 +216,6 @@ router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req
 // GET single product for the admin form: every variant, inactive ones included
 // (saving the form replaces the variant list, so it must see all of them).
 router.get('/admin/:id', authenticate, requireRole('admin', 'staff'), async (req, res) => {
-  if (!variantsUtil.UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Product not found' });
   try {
     const product = await fetchProduct(db, req.params.id);
     if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -230,7 +233,7 @@ router.get('/:idOrSlug', async (req, res) => {
   const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
-  const isUUID = /^[0-9a-f-]{36}$/.test(idOrSlug);
+  const isUUID = isUuid(idOrSlug);
   try {
     const result = await db.query(
       `SELECT p.*, c.name as category_name, s.name as subcategory_name,
@@ -407,8 +410,6 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
 // PUT quick edit of one variant: any of sku, price (null = product price),
 // stock, is_active.
 router.put('/:id/variants/:variantId', authenticate, requireRole('admin', 'staff'), async (req, res) => {
-  if (!variantsUtil.UUID_RE.test(req.params.id) || !variantsUtil.UUID_RE.test(req.params.variantId))
-    return res.status(404).json({ error: 'Variant not found' });
   const { sku, price, stock, is_active } = req.body;
   const sets = [];
   const params = [];

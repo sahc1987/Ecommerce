@@ -1,8 +1,9 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-ARG VITE_API_URL=http://localhost:5000
+# Empty = use the relative /api path that nginx proxies (see src/config.ts).
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 
 COPY package*.json ./
@@ -11,19 +12,14 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
-
-USER nginx:nginx
-
-RUN apk add --no-cache curl
+# Runs as the non-root nginx user out of the box, so it listens on 8080 (ports
+# below 1024 need root).
+FROM nginxinc/nginx-unprivileged:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
-
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost/health || exit 1
-
-CMD ["nginx", "-g", "daemon off;"]
+  CMD wget -q --spider http://127.0.0.1:8080/health || exit 1

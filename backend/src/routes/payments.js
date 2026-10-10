@@ -9,6 +9,7 @@ const { idempotent } = require('../middleware/idempotency');
 const stripe = require('../config/stripe');
 const stripeOrders = require('../utils/stripeOrders');
 const variants = require('../utils/variants');
+const { isUuid } = require('../utils/validate');
 
 const PAYMENT_METHODS = new Set(['cod', 'stripe']);
 const toCents = (amount) => Math.round(amount * 100);
@@ -91,8 +92,9 @@ div{max-width:360px}h1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:0}</
 });
 
 async function findOwnOrder(req, res) {
-  const result = await db.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-  const order = result.rows[0];
+  const order = isUuid(req.params.id)
+    ? (await db.query('SELECT * FROM orders WHERE id = $1', [req.params.id])).rows[0]
+    : null;
   if (!order || order.user_id !== req.user.id) {
     res.status(404).json({ error: 'Order not found' });
     return null;

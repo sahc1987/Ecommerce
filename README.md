@@ -26,12 +26,12 @@
 
 A full online store built the way real shops need it to work, not a simple demo:
 
-- **Customers** browse products, pick sizes and colors, add to cart, and pay by card or cash on delivery. They can track shipments and request returns.
-- **Staff** manage products, process orders, add tracking numbers, and handle returns.
+- **Customers** browse products, pick sizes and colors, add to cart, and pay by card or cash on delivery. They can cancel an order before it's prepared, track shipments, and request returns.
+- **Staff** manage products, process orders, add tracking numbers, cancel orders, and handle returns and refunds.
 - **Admins** also manage users and store settings, and see how sales are going.
 - Everything works on the **web** and on a **mobile app** for iOS and Android, both talking to the same server.
 
-**What makes it different:** two people can't buy the last item at the same time, a double-tap on "Place order" never creates two orders, and abandoned card payments give their stock back on their own.
+**What makes it different:** two people can't buy the last item at the same time, a double-tap on "Place order" never creates two orders, abandoned card payments give their stock back on their own, and a refund can never be more than what the customer paid.
 
 ## Screenshots
 
@@ -63,7 +63,9 @@ A full online store built the way real shops need it to work, not a simple demo:
 | 🛒 **Cart** | Shop without an account. Items in your cart are held for you for a few minutes, with a countdown. |
 | 💳 **Checkout** | Pay by card through Stripe or choose cash on delivery. Tax is added from the store's settings. |
 | 🚚 **Shipping** | Staff add the carrier and tracking number, and the customer gets a working tracking link. |
-| ↩️ **Returns** | Customers request a return for specific items, inside the store's return window. Staff approve, reject, or refund. |
+| ❌ **Cancellations** | Customers cancel their own order until the store starts preparing it; staff can cancel until it ships. Items go back on sale and a card payment is refunded automatically. |
+| ↩️ **Returns** | Customers request a return for specific items of a delivered order, inside the store's return window. Staff approve, reject, or refund, and choose whether the items go back on sale. |
+| 💸 **Refunds** | Card refunds go back through Stripe; cash-on-delivery refunds are recorded. Every order shows how much was refunded, and sales figures subtract it. |
 | 🔔 **Notifications** | Customers get alerts for order, shipping, and return updates, with unread badges. |
 | 🏷️ **Product management** | Add products, options, and versions. Upload up to 10 photos at a time and pick the main one. |
 | 📦 **Order management** | Filter orders, move them through each status, and see full details. |
@@ -76,11 +78,11 @@ A full online store built the way real shops need it to work, not a simple demo:
 | | 🛍️ Customer | 🧑‍💼 Staff | 👑 Admin |
 | --- | :---: | :---: | :---: |
 | Browse, cart, checkout | ✅ | ✅ | ✅ |
-| Own orders, returns, notifications | ✅ | ✅ | ✅ |
+| Own orders, cancellations, returns, notifications | ✅ | ✅ | ✅ |
 | Add and edit products and categories | | ✅ | ✅ |
 | Delete products and categories | | | ✅ |
-| Process orders and shipping | | ✅ | ✅ |
-| Review returns | | ✅ | ✅ |
+| Process, ship, and cancel orders | | ✅ | ✅ |
+| Review returns and issue refunds | | ✅ | ✅ |
 | Dashboard | | ✅ | ✅ |
 | Manage users and roles | | | ✅ |
 | Store setup and logo | | | ✅ |
@@ -126,17 +128,28 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A[Pending] -->|Card paid| B[Paid]
-    A -->|Cash on delivery:<br/>staff start it| C[Processing]
-    B --> C
-    C -->|Carrier + tracking added| D[Shipped]
+    A[Pending] -->|Card: Stripe confirms<br/>Cash: staff confirm| B[Paid]
+    B --> C[Processing]
+    B -->|Carrier + tracking added| D[Shipped]
+    C -->|Carrier + tracking added| D
     D --> E[Delivered]
-    A -->|Card payment abandoned| F[Cancelled<br/>stock returned]
+    A -->|Customer, staff, or<br/>card payment abandoned| F[Cancelled]
+    B -->|Customer or staff| F
+    C -->|Staff only| F
 ```
 
-- Card orders move to **Paid** on their own. After that, staff move each order forward from the Orders page.
+- Card orders move to **Paid** on their own once Stripe confirms the payment; staff can't mark them paid by hand. Cash-on-delivery orders are marked paid by staff.
+- After that, staff move each order forward from the Orders page. The page only offers the next steps that are allowed, and a tracking number is required to mark an order shipped.
+- If two people change the same order at once, the second one is told it changed and sees the latest version, instead of overwriting it.
 - Card orders are confirmed by Stripe's signed message. If that's late, the store checks Stripe when the customer comes back, and a background job settles anything left open.
 - An unpaid card checkout expires after 30 minutes and its stock goes back on sale.
+
+### Cancellation
+
+- **Customers** can cancel their own order while it's pending or paid, that is, until the store starts preparing it.
+- **Staff** can cancel any order that hasn't shipped yet. Once shipped, problems are handled as returns.
+- Cancelling puts every item back on sale. A paid card order is **refunded in full** through Stripe at the same moment. If Stripe refuses the refund, nothing changes and the order stays as it was.
+- Cancelling an unpaid card order closes its Stripe checkout first, so it can't be paid afterwards.
 
 ### Return
 
@@ -144,12 +157,16 @@ flowchart LR
 flowchart LR
     A[Requested] -->|Staff approve| B[Approved]
     A -->|Staff reject| C[Rejected]
-    B -->|Money sent back| D[Refunded]
+    A -->|Approve and refund<br/>in one step| D[Refunded]
+    B -->|Money sent back| D
 ```
 
-- Only paid or delivered orders can be returned, one request per order.
-- Requests must come within the store's return window (30 days by default).
-- The customer is notified at each step.
+- Only **delivered** orders can be returned (before that, the order is cancelled instead). There is one request per order, even if the customer taps twice.
+- Requests must come within the store's return window (30 days by default, counted from the order date). Customers can pick which items and how many, never more than they bought.
+- Staff can set the refund amount when approving and refund later, or do both at once. A refund can't be more than what's left of the order total after earlier refunds.
+- Card orders are refunded to the card through Stripe. For cash on delivery, staff give the money back themselves and the store records it.
+- When refunding, staff choose whether the returned items go back on sale (untick it for damaged items).
+- Rejected and refunded returns are final. The customer is notified at each step.
 
 ---
 
@@ -181,7 +198,7 @@ flowchart TB
 | Data | PostgreSQL 16, Redis 7 |
 | Payments | Stripe Checkout and webhooks |
 | Images | Cloudinary (local disk in development) |
-| Infrastructure | Docker Compose, Nginx |
+| Infrastructure | Docker Compose, Node 24 LTS images, Nginx (unprivileged) |
 | Tooling | nodemon, PostCSS, Jest, ESLint, Prettier |
 
 **Speed:** busy pages (products, categories, dashboard) are cached in Redis and cleared the moment something changes. Product pages cache for only 30 seconds because they show live stock.
@@ -197,8 +214,10 @@ flowchart TB
 | 🖼️ Uploads | Files are checked by their real content, not just their name, before they're accepted |
 | 🪖 Headers | Helmet security headers and CORS limited to the store's own site |
 | 💳 Stripe | Every payment message is signature-checked before it counts |
-| 🙈 Errors | Server errors never leak internal details to the browser |
-| 🐳 Containers | Docker services run with `no-new-privileges` and health checks |
+| 🙈 Errors | Server errors never leak internal details to the browser. Malformed IDs and page numbers get a clean "not found" or a sensible default, never a crash |
+| 🔐 Secrets | The server won't start without its sign-in secret, and Docker won't start without the database, Redis, and sign-in secrets. There are no built-in defaults |
+| 🚪 Single entrance | From outside the machine, the API is reached only through the website's proxy, so nobody can fake their address to get around the rate limits |
+| 🐳 Containers | Every container runs as a non-root user, with `no-new-privileges` and health checks |
 
 ---
 
@@ -212,10 +231,12 @@ flowchart TB
 git clone https://github.com/sahc1987/Ecommerce.git
 cd Ecommerce
 cp .env.example .env
+# Fill in DB_PASSWORD, REDIS_PASSWORD and JWT_SECRET in .env.
+# Generate each one with: openssl rand -hex 32
 docker compose up --build
 ```
 
-This starts the database, Redis, the API, and the website. The first time, the site sends you to **`/setup`** to name your store.
+This starts the database, Redis, the API, and the website. Docker won't start while any of those three secrets is empty, so a copied example can never run with a known password. The first time, the site sends you to **`/setup`** to name your store.
 
 ### Option 2: Run each part yourself
 
@@ -231,6 +252,8 @@ npm install
 npm run db:init   # create the tables
 npm run dev       # http://localhost:5000
 ```
+
+Run `npm run db:init` again after pulling new changes. It's safe to repeat and brings an existing database up to date. With Docker this happens on its own each time the API starts.
 
 **Web**
 
@@ -286,14 +309,15 @@ The webhook isn't strictly needed locally: the store also checks payment when th
 | | `product_options` | Choices a product offers, like Color → Red, Blue |
 | | `product_variants` | Each sellable version: SKU, stock, optional price |
 | Selling | `stock_reservations` | Cart holds and when they expire |
-| | `orders` / `order_items` | Orders, payment status, tracking, and line items |
+| | `orders` / `order_items` | Orders, payment status, amount refunded, tracking, and line items |
 | | `idempotency_keys` | Saved checkout results so repeats don't double-order |
-| Returns | `returns` / `return_items` | Return requests and the items in them |
+| Returns | `returns` / `return_items` | Return requests (one per order), the items in them, and whether they were restocked |
 | Alerts | `notifications` | Customer messages and read state |
 | History | `legacy_product_stock_sku` | Backup of old stock and SKU data from before product options |
 
-**Order status:** `pending` → `paid` → `processing` → `shipped` → `delivered`, or `cancelled`.
-**Return status:** `requested` → `approved` / `rejected` → `refunded`.
+**Order status:** `pending` → `paid` → `processing` → `shipped` → `delivered`, or `cancelled` (before shipping).
+**Payment status:** `unpaid`, `paid`, `canceled`, `partially_refunded`, `refunded`.
+**Return status:** `requested` → `approved` / `rejected` / `refunded`, and `approved` → `refunded`.
 
 Schema: [`backend/src/db/schema.sql`](./backend/src/db/schema.sql). Changes: [`backend/src/db/migrations`](./backend/src/db/migrations).
 
@@ -361,8 +385,9 @@ All paths start with `/api`. 🔒 = signed in, 🧑‍💼 = staff or admin, �
 | GET | `/payments/return` | Back from Stripe: check payment |
 | POST | `/payments/:id/confirm`, `/payments/:id/cancel` | Confirm or cancel a card payment 🔒 |
 | POST | `/payments/webhook` | Stripe events (signature checked) |
-| GET | `/orders`, `/orders/:id` | My orders, or all for staff 🔒 |
-| PUT | `/orders/:id/status` | Change status, add tracking 🧑‍💼 |
+| GET | `/orders`, `/orders/:id` | My orders, or all for staff, with the actions allowed next 🔒 |
+| POST | `/orders/:id/cancel` | Cancel my own order (refunds a card payment) 🔒 |
+| PUT | `/orders/:id/status` | Change status, add tracking, or cancel. Send `expected_status` to avoid overwriting someone else's change 🧑‍💼 |
 
 **Returns**
 
@@ -370,7 +395,7 @@ All paths start with `/api`. 🔒 = signed in, 🧑‍💼 = staff or admin, �
 | --- | --- | --- |
 | GET | `/returns`, `/returns/:id` | My returns, or all for staff 🔒 |
 | POST | `/returns` | Ask for a return 🔒 |
-| PUT | `/returns/:id` | Approve, reject, or refund 🧑‍💼 |
+| PUT | `/returns/:id` | Approve, reject, or refund, with the amount and whether to restock 🧑‍💼 |
 
 **Dashboard** 🧑‍💼
 
@@ -406,7 +431,7 @@ Each part has its own `.env.example`. Copy it to `.env` and fill it in.
 | `PORT` | Optional | API port (default 5000) |
 | `DATABASE_URL` | ✅ Yes | PostgreSQL connection |
 | `REDIS_URL` | ✅ Yes | Redis connection |
-| `JWT_SECRET` | ✅ Yes | Signs sign-in tokens. Use a long random value |
+| `JWT_SECRET` | ✅ Yes | Signs sign-in tokens. Use a long random value (`openssl rand -hex 32`). The server won't start without it |
 | `CLIENT_URL` | ✅ Yes | The website address allowed to call the API |
 | `CROSS_SITE_COOKIES` | Optional | `true` when the website and API are on different domains |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | Optional | Store images in Cloudinary. Without them, images save to disk (development only) |
@@ -418,16 +443,16 @@ Each part has its own `.env.example`. Copy it to `.env` and fill it in.
 
 | Variable | What it's for |
 | --- | --- |
-| `VITE_API_URL` | API address, e.g. `http://localhost:5000/api` |
+| `VITE_API_URL` | API address. Leave empty to use `/api` on the website's own address (the default, and what Docker uses). Set a full URL like `https://api.example.com/api` only when the API is on another domain |
 
 **Docker Compose** (`.env` in the root)
 
 | Variable | What it's for |
 | --- | --- |
-| `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_PORT` | Database container |
-| `REDIS_PASSWORD` | Redis container |
-| `BACKEND_PORT` / `FRONTEND_PORT` | Ports on your machine |
-| `NODE_ENV`, `JWT_SECRET`, `CLIENT_URL`, `VITE_API_URL`, `TZ` | Passed to the apps |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_PORT` | Database container (`DB_PASSWORD` required) |
+| `REDIS_PASSWORD` | Redis container (required) |
+| `BACKEND_PORT` / `FRONTEND_PORT` | Ports on your machine. The database and API ports only accept connections from this machine; the website port is the public one |
+| `NODE_ENV`, `JWT_SECRET` (required), `CLIENT_URL`, `VITE_API_URL`, `TZ` | Passed to the apps |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Card payments |
 
 </details>
@@ -445,8 +470,9 @@ Ecommerce/
 │       │                  stripeWebhook, reservations, returns, dashboard,
 │       │                  users, notifications
 │       ├── middleware/    sign-in and roles, upload checks, no-double-orders
-│       ├── utils/         stock holds, cache, Stripe orders, product versions,
-│       │                  notifications, safe errors
+│       ├── utils/         order status rules, cancellations, refunds, restocking,
+│       │                  stock holds, cache, Stripe orders, product versions,
+│       │                  notifications, request checks, safe errors
 │       ├── db/            schema.sql and migrations
 │       └── config/        PostgreSQL, Redis, Stripe, Cloudinary
 ├── frontend/              React web app (shop + back office)
