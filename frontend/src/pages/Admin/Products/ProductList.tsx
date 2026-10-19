@@ -5,39 +5,34 @@ import { Plus, Pencil, Trash2, Search, Package, Tag } from "lucide-react";
 import api, { errorMessage } from "../../../api";
 import ListContent from '../../../components/Admin/ListContent';
 import { textOr } from '../../../utils/text';
+import { getEffectivePrice, type Product } from '../../../utils/pricing';
+import { useApiGet } from '../../../hooks/useApiGet';
+import type { Page } from '../../../types';
+
+// The admin list also carries drafts and cart holds.
+type AdminProduct = Product & { sku: string | null; is_active: boolean; reserved_stock: number };
 
 export default function ProductList() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // `search` is what's typed; `query` is the search that was submitted.
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(1);
-
-  const fetchProducts = async (p = 1, s = search) => {
-    setLoading(true);
-    try {
-      const res = await api.get("/products/admin/all", {
-        params: { page: p, limit: 15, search: s || undefined },
-      });
-      setProducts(res.data.products);
-      setTotal(res.data.total);
-      setPages(res.data.pages);
-    } catch {
-      toast.error("Failed to load products");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, loading, error, reload } = useApiGet<{ products: AdminProduct[] } & Page>(
+    "/products/admin/all",
+    { page, limit: 15, search: query || undefined },
+  );
+  const products = data?.products ?? [];
+  const total = data?.total ?? 0;
+  const pages = data?.pages ?? 1;
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    if (error) toast.error("Failed to load products");
+  }, [error]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    fetchProducts(1, search);
+    setQuery(search.trim());
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -45,24 +40,10 @@ export default function ProductList() {
     try {
       await api.delete(`/products/${id}`);
       toast.success("Product deleted");
-      fetchProducts(page);
-    } catch (err: any) {
+      reload();
+    } catch (err) {
       toast.error(errorMessage(err, "Delete failed"));
     }
-  };
-
-  const getEffectivePrice = (p: any) => {
-    if (!p.discount_active || !p.discount_percent)
-      return Number.parseFloat(p.price);
-    const now = new Date();
-    if (p.discount_start && new Date(p.discount_start) > now)
-      return Number.parseFloat(p.price);
-    if (p.discount_end && new Date(p.discount_end) < now)
-      return Number.parseFloat(p.price);
-    return (
-      Number.parseFloat(p.price) *
-      (1 - Number.parseFloat(p.discount_percent) / 100)
-    );
   };
 
   return (
@@ -130,7 +111,7 @@ export default function ProductList() {
                   <tr key={p.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
+                        <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden shrink-0">
                           {p.primary_image ? (
                             <img
                               src={p.primary_image}
@@ -153,11 +134,11 @@ export default function ProductList() {
                               SKU: {p.sku}
                             </p>
                           )}
-                          {p.options?.length > 0 && (
+                          {p.options?.length ? (
                             <p className="text-xs text-slate-400">
-                              {p.variants.length} variants · {p.options.map((o: { name: string }) => o.name).join(", ")}
+                              {p.variants?.length ?? 0} variants · {p.options.map((o) => o.name).join(", ")}
                             </p>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     </td>
@@ -198,8 +179,8 @@ export default function ProductList() {
                       </span>
                       {(() => {
                         // Total stock can hide a sold-out size: flag those.
-                        const out = (p.variants ?? []).filter((v: any) => v.is_active && v.stock === 0).length;
-                        return p.options?.length > 0 && out > 0 ? (
+                        const out = (p.variants ?? []).filter((v) => v.is_active && v.stock === 0).length;
+                        return p.options?.length && out > 0 ? (
                           <span className="block text-[11px] text-red-600">{out} sold out</span>
                         ) : null;
                       })()}
@@ -248,10 +229,7 @@ export default function ProductList() {
           <button
             className="btn-secondary py-1.5 px-3 text-sm"
             disabled={page === 1}
-            onClick={() => {
-              setPage(page - 1);
-              fetchProducts(page - 1);
-            }}
+            onClick={() => setPage(page - 1)}
           >
             Previous
           </button>
@@ -261,10 +239,7 @@ export default function ProductList() {
           <button
             className="btn-secondary py-1.5 px-3 text-sm"
             disabled={page === pages}
-            onClick={() => {
-              setPage(page + 1);
-              fetchProducts(page + 1);
-            }}
+            onClick={() => setPage(page + 1)}
           >
             Next
           </button>

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import toast from 'react-hot-toast';
 import {
   Bell, ShoppingBag, Package, RotateCcw, CheckCircle, XCircle, X,
 } from 'lucide-react';
@@ -49,21 +50,21 @@ function NotificationIcon({
 }>) {
   if (type === 'new_order') {
     return (
-      <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+      <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
         <ShoppingBag size={16} className="text-green-600" />
       </div>
     );
   }
   if (type === 'order_status') {
     return (
-      <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+      <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
         <Package size={16} className="text-primary-600" />
       </div>
     );
   }
   if (type === 'return_request') {
     return (
-      <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+      <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
         <RotateCcw size={16} className="text-orange-600" />
       </div>
     );
@@ -71,13 +72,13 @@ function NotificationIcon({
   // return_response
   if (metadata.status === 'rejected') {
     return (
-      <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+      <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
         <XCircle size={16} className="text-red-600" />
       </div>
     );
   }
   return (
-    <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+    <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
       <CheckCircle size={16} className="text-green-600" />
     </div>
   );
@@ -98,20 +99,28 @@ export default function NotificationBell({
   const navigate = useNavigate();
   const isAdmin = user && ['admin', 'staff'].includes(user.role);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const res = await api.get('/notifications');
-      setNotifications(res.data.notifications);
-      setUnread(res.data.unread);
-    } catch {}
-  }, []);
-
   useEffect(() => {
     if (!user) return;
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [user, fetchNotifications]);
+    // Stop applying results once signed out or unmounted.
+    let ignore = false;
+    const poll = () =>
+      api.get<{ notifications: Notification[]; unread: number }>('/notifications').then(
+        (res) => {
+          if (ignore) return;
+          setNotifications(res.data.notifications);
+          setUnread(res.data.unread);
+        },
+        () => {
+          // Background refresh: keep the current list; the next poll retries.
+        },
+      );
+    poll();
+    const interval = setInterval(poll, 30000);
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+    };
+  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -131,7 +140,10 @@ export default function NotificationBell({
         await api.put(`/notifications/${n.id}/read`);
         setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
         setUnread((prev) => Math.max(0, prev - 1));
-      } catch {}
+      } catch {
+        // Not worth interrupting the click: it's still unread and will be
+        // marked next time.
+      }
     }
     setOpen(false);
     if ((n.type === 'new_order' || n.type === 'order_status') && n.metadata.order_id) {
@@ -148,7 +160,9 @@ export default function NotificationBell({
       await api.put('/notifications/read-all');
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnread(0);
-    } catch {}
+    } catch {
+      toast.error('Could not mark notifications as read');
+    }
   };
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
@@ -158,7 +172,9 @@ export default function NotificationBell({
       await api.delete(`/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
       if (target && !target.is_read) setUnread((prev) => Math.max(0, prev - 1));
-    } catch {}
+    } catch {
+      toast.error('Could not delete the notification');
+    }
   };
 
   return (
@@ -170,7 +186,7 @@ export default function NotificationBell({
       >
         <Bell size={22} />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-sm">
+          <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-xs">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
@@ -229,7 +245,7 @@ export default function NotificationBell({
                             {n.title}
                           </p>
                           {!n.is_read && (
-                            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0 mt-1.5" />
+                            <span className="w-2 h-2 rounded-full bg-primary-500 shrink-0 mt-1.5" />
                           )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
@@ -241,7 +257,7 @@ export default function NotificationBell({
                     <button
                       type="button"
                       onClick={(e) => handleDelete(e, n.id)}
-                      className="absolute top-3 right-4 mt-0.5 text-slate-300 hover:text-slate-600 transition-colors p-0.5 rounded"
+                      className="absolute top-3 right-4 mt-0.5 text-slate-300 hover:text-slate-600 transition-colors p-0.5 rounded-sm"
                       aria-label="Delete notification"
                     >
                       <X size={12} />

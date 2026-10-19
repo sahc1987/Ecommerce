@@ -40,7 +40,7 @@ export default function SetupWizard({ onComplete }: Readonly<Props>) {
       onComplete();
       toast.success("Store configured successfully!");
       navigate("/admin");
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, "Setup failed"));
     } finally {
       setLoading(false);
@@ -52,7 +52,7 @@ export default function SetupWizard({ onComplete }: Readonly<Props>) {
   const submitLabel = step === 3 ? launchLabel : "Continue";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-linear-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         {/* Progress */}
         <div className="flex items-center justify-center mb-8 gap-3">
@@ -223,7 +223,7 @@ export default function SetupWizard({ onComplete }: Readonly<Props>) {
                     { label: "Address", value: form.address || "—" },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex gap-4">
-                      <span className="text-sm font-medium text-slate-500 w-32 flex-shrink-0">
+                      <span className="text-sm font-medium text-slate-500 w-32 shrink-0">
                         {label}
                       </span>
                       <span className="text-sm text-slate-900">{value}</span>

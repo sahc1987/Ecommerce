@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DollarSign, ShoppingCart, Users, Package, Clock, RotateCcw, Receipt,
   TrendingUp, TrendingDown, Minus, AlertTriangle, XCircle, Lock, RefreshCw, ArrowRight,
 } from 'lucide-react';
-import api from '../../api';
+import { useApiGet } from '../../hooks/useApiGet';
 import { formatDate } from '../../utils/dates';
 import { mediaUrl } from '../../utils/media';
 import { textOr } from '../../utils/text';
@@ -127,19 +127,19 @@ function Delta({ value, onColor = false }: Readonly<{ value: number | null; onCo
 
 const STAT_THEMES = {
   revenue: {
-    card: 'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 border-transparent text-white shadow-lg shadow-emerald-500/20',
+    card: 'bg-linear-to-br from-emerald-500 via-emerald-600 to-teal-700 border-transparent text-white shadow-lg shadow-emerald-500/20',
     icon: 'bg-white/20 text-white',
   },
   orders: {
-    card: 'bg-gradient-to-br from-primary-500 via-primary-600 to-indigo-700 border-transparent text-white shadow-lg shadow-primary-500/20',
+    card: 'bg-linear-to-br from-primary-500 via-primary-600 to-indigo-700 border-transparent text-white shadow-lg shadow-primary-500/20',
     icon: 'bg-white/20 text-white',
   },
   aov: {
-    card: 'bg-gradient-to-br from-violet-50 to-fuchsia-50 border-violet-100',
+    card: 'bg-linear-to-br from-violet-50 to-fuchsia-50 border-violet-100',
     icon: 'bg-violet-500 text-white',
   },
   customers: {
-    card: 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-100',
+    card: 'bg-linear-to-br from-orange-50 to-amber-50 border-orange-100',
     icon: 'bg-orange-500 text-white',
   },
 };
@@ -213,7 +213,7 @@ function AlertCard({
   return (
     <Link to={to} className={`card p-4 border-l-4 ${border} hover:shadow-md transition-shadow group`}>
       <div className="flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${icon}`}>
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${icon}`}>
           <Icon size={18} />
         </div>
         <div className="min-w-0">
@@ -222,7 +222,7 @@ function AlertCard({
         </div>
         <ArrowRight
           size={16}
-          className="ml-auto flex-shrink-0 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all"
+          className="ml-auto shrink-0 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all"
         />
       </div>
       <p className="text-xs text-slate-400 mt-2 truncate">{active ? hint : 'Nothing to do here'}</p>
@@ -231,36 +231,23 @@ function AlertCard({
 }
 
 export default function Dashboard() {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [days, setDays] = useState(30);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const summaryQuery = useApiGet<Summary>('/dashboard/summary', { days });
+  const topQuery = useApiGet<{ products: TopProduct[] }>('/dashboard/top-products');
+  const recentQuery = useApiGet<{ orders: RecentOrder[] }>('/dashboard/recent-orders');
+  const summary = summaryQuery.data ?? null;
+  const topProducts = topQuery.data?.products ?? [];
+  const recentOrders = recentQuery.data?.orders ?? [];
+  const refreshing = summaryQuery.loading || topQuery.loading || recentQuery.loading;
+  // Spinner only on the first load (or if it failed); later loads keep the
+  // figures on screen and spin the refresh icon instead.
+  const loading = !summary && summaryQuery.loading;
 
-  const load = useCallback(async () => {
-    const [s, p, o] = await Promise.all([
-      api.get(`/dashboard/summary?days=${days}`),
-      api.get('/dashboard/top-products'),
-      api.get('/dashboard/recent-orders'),
-    ]);
-    setSummary(s.data);
-    setTopProducts(p.data.products);
-    setRecentOrders(o.data.orders);
-  }, [days]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRefreshing(true);
-    load()
-      .catch(() => {})
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-        setRefreshing(false);
-      });
-    return () => { cancelled = true; };
-  }, [load]);
+  const refresh = () => {
+    summaryQuery.reload();
+    topQuery.reload();
+    recentQuery.reload();
+  };
 
   if (loading) {
     return (
@@ -332,7 +319,7 @@ export default function Dashboard() {
                 key={p.days}
                 onClick={() => setDays(p.days)}
                 className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
-                  days === p.days ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  days === p.days ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 {p.label}
@@ -340,7 +327,7 @@ export default function Dashboard() {
             ))}
           </div>
           <button
-            onClick={() => { setRefreshing(true); load().finally(() => setRefreshing(false)); }}
+            onClick={refresh}
             className="p-2 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
             title="Refresh"
           >
@@ -466,7 +453,7 @@ export default function Dashboard() {
                 return (
                   <div key={p.id} className="flex items-center gap-3">
                     <span className="w-5 text-sm font-bold text-slate-300 tabular-nums">{i + 1}</span>
-                    <div className="w-11 h-11 bg-slate-100 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    <div className="w-11 h-11 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
                       {p.image ? (
                         <img src={mediaUrl(p.image)} alt={p.name} className="w-full h-full object-cover" />
                       ) : (
@@ -482,7 +469,7 @@ export default function Dashboard() {
                         />
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
+                    <div className="text-right shrink-0">
                       <p className="text-sm font-semibold text-slate-900 tabular-nums">{money(revenue)}</p>
                       <p className="text-xs text-slate-500 tabular-nums">{p.units_sold} sold</p>
                     </div>
@@ -512,7 +499,7 @@ export default function Dashboard() {
                   to={`/admin/orders/${o.id}`}
                   className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-xl hover:bg-slate-50 transition-colors"
                 >
-                  <div className="w-9 h-9 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center text-xs font-bold shrink-0">
                     {textOr(o.customer_name, 'G').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -521,7 +508,7 @@ export default function Dashboard() {
                       #{String(o.id).slice(0, 8).toUpperCase()} · {o.item_count} item{Number(o.item_count) === 1 ? '' : 's'} · {relativeTime(o.created_at)}
                     </p>
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  <div className="text-right shrink-0">
                     <p className="text-sm font-semibold tabular-nums">{exactMoney(Number.parseFloat(o.total) || 0)}</p>
                     <span className={`badge ${statusColors[o.status] ?? 'bg-slate-100 text-slate-800'}`}>
                       {o.status}

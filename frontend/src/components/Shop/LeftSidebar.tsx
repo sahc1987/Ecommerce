@@ -30,7 +30,7 @@ export default function LeftSidebar({ categories, storeName }: Readonly<Props>) 
   const activeCategory = params.get('category') ?? '';
 
   return (
-    <aside className="hidden lg:flex flex-col gap-4 w-52 flex-shrink-0">
+    <aside className="hidden lg:flex flex-col gap-4 w-52 shrink-0">
       {/* Main nav */}
       <nav className="bg-white rounded-2xl border border-slate-200 p-2">
         {NAV.map(({ label, to, icon: Icon, match }) => {
@@ -40,7 +40,7 @@ export default function LeftSidebar({ categories, storeName }: Readonly<Props>) 
               key={label}
               to={to}
               className={`flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-medium transition-colors ${
-                active ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-primary-600'
+                active ? 'bg-primary-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50 hover:text-primary-600'
               }`}
             >
               <Icon size={15} className={active ? 'text-white' : 'text-slate-400'} />
@@ -84,7 +84,7 @@ export default function LeftSidebar({ categories, storeName }: Readonly<Props>) 
 
       {/* Help card */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
           <Headset size={18} className="text-primary-600" />
         </div>
         <div className="leading-tight">
@@ -96,7 +96,7 @@ export default function LeftSidebar({ categories, storeName }: Readonly<Props>) 
       {/* Promo card */}
       <Link
         to="/?discount=true"
-        className="block rounded-2xl bg-gradient-to-br from-[#0b1a3d] via-[#10306e] to-primary-700 p-5 text-white shadow-lg shadow-primary-900/20 hover:shadow-xl transition-shadow"
+        className="block rounded-2xl bg-linear-to-br from-[#0b1a3d] via-[#10306e] to-primary-700 p-5 text-white shadow-lg shadow-primary-900/20 hover:shadow-xl transition-shadow"
       >
         <p className="text-lg font-bold leading-snug">Upgrade Your Tech, Upgrade Your Life</p>
         <p className="text-[11px] text-white/70 mt-2">Exclusive deals at {storeName}</p>

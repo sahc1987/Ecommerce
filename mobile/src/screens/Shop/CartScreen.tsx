@@ -32,7 +32,9 @@ const CartScreen = ({navigation}: Props) => {
 
   // Opening the cart counts as activity: extend the stock hold.
   useEffect(() => {
-    const unsub = navigation.addListener('focus', () => void dispatch(renewReservations()));
+    const unsub = navigation.addListener('focus', () => {
+      void dispatch(renewReservations());
+    });
     void dispatch(renewReservations());
     return unsub;
   }, [navigation, dispatch]);

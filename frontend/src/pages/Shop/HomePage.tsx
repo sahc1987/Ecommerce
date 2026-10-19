@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useApiGet } from '../../hooks/useApiGet';
+import type { Page } from '../../types';
 import { Link, useSearchParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, Package, X, Zap, Check, Crown, Tag, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import api from '../../api';
 import { RootState } from '../../store';
 import { addItem } from '../../store/slices/cartSlice';
 import {
@@ -99,7 +100,7 @@ function Hero({ products }: Readonly<{ products: Product[] }>) {
   const discounted = p ? hasActiveDiscount(p) : false;
 
   return (
-    <section className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#0b1a3d] via-[#0f2c6b] to-primary-600 text-white min-h-[280px] shadow-lg shadow-primary-900/20">
+    <section className="relative rounded-2xl overflow-hidden bg-linear-to-r from-[#0b1a3d] via-[#0f2c6b] to-primary-600 text-white min-h-[280px] shadow-lg shadow-primary-900/20">
       <div className="absolute -right-16 -top-16 w-72 h-72 rounded-full bg-primary-400/20 blur-3xl" />
       <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 p-7 md:p-9 items-center min-h-[280px]">
         <div>
@@ -212,49 +213,32 @@ export default function HomePage() {
   const { store, categories } = useOutletContext<ShopOutletContext>();
   const cartItems = useSelector((s: RootState) => s.cart.items);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [deals, setDeals] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [total, setTotal] = useState(0);
-
   const urlSearch = searchParams.get('search') ?? '';
   const urlCategory = searchParams.get('category') ?? '';
   const urlDiscount = searchParams.get('discount') === 'true';
   const urlSort = searchParams.get('sort') ?? '';
   const isFiltered = !!(urlSearch || urlCategory || urlDiscount || urlSort);
 
-  const fetchProducts = async (p: number) => {
-    setLoading(true);
-    try {
-      const res = await api.get('/products', {
-        params: {
-          page: p,
-          limit: isFiltered ? 12 : 24,
-          search: urlSearch || undefined,
-          category: urlCategory || undefined,
-          discount: urlDiscount ? 'true' : undefined,
-        },
-      });
-      setProducts(res.data.products);
-      setTotal(res.data.total);
-      setPages(res.data.pages);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // The page number belongs to one set of filters; new filters start on page 1.
+  const filterKey = [urlSearch, urlCategory, urlDiscount, urlSort].join('|');
+  const [paging, setPaging] = useState({ filterKey, page: 1 });
+  const page = paging.filterKey === filterKey ? paging.page : 1;
 
-  useEffect(() => {
-    setPage(1);
-    fetchProducts(1);
-  }, [urlSearch, urlCategory, urlDiscount, urlSort]); // eslint-disable-line react-hooks/exhaustive-deps
+  const productsQuery = useApiGet<{ products: Product[] } & Page>('/products', {
+    page,
+    limit: isFiltered ? 12 : 24,
+    search: urlSearch || undefined,
+    category: urlCategory || undefined,
+    discount: urlDiscount ? 'true' : undefined,
+  });
+  const products = useMemo(() => productsQuery.data?.products ?? [], [productsQuery.data]);
+  const loading = productsQuery.loading;
+  const total = productsQuery.data?.total ?? 0;
+  const pages = productsQuery.data?.pages ?? 1;
 
-  useEffect(() => {
-    api.get('/products', { params: { discount: 'true', limit: 8 } })
-      .then((res) => setDeals(res.data.products.filter(hasActiveDiscount)))
-      .catch(() => {});
-  }, []);
+  // The deals strip is extra: if it fails the page just shows without it.
+  const dealsQuery = useApiGet<{ products: Product[] }>('/products', { discount: 'true', limit: 8 });
+  const deals = useMemo(() => (dealsQuery.data?.products ?? []).filter(hasActiveDiscount), [dealsQuery.data]);
 
   // Products with options (size, color…) need a choice first: open their page.
   const handleAddToCart = (p: Product) => {
@@ -279,8 +263,7 @@ export default function HomePage() {
   };
 
   const goToPage = (n: number) => {
-    setPage(n);
-    fetchProducts(n);
+    setPaging({ filterKey, page: n });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -295,16 +278,21 @@ export default function HomePage() {
     () => products.filter((p) => !cartItems.some((i) => i.product_id === p.id) && sellableStock(p) > 0).slice(0, 4),
     [products, cartItems]
   );
-  const flashEnd = useMemo(() => {
-    const ends = flashSale
-      .map((p) => (p.discount_end ? new Date(p.discount_end) : null))
-      .filter((d): d is Date => !!d && d.getTime() > Date.now())
-      .sort((a, b) => a.getTime() - b.getTime());
-    if (ends[0]) return ends[0];
+  // Fallback countdown target, fixed when the page opens.
+  const [endOfToday] = useState(() => {
     const eod = new Date();
     eod.setHours(23, 59, 59, 0);
     return eod;
-  }, [flashSale]);
+  });
+  // The soonest-ending deal. Deals are already filtered to running discounts
+  // (hasActiveDiscount), so their end dates are in the future.
+  const flashEnd = useMemo(() => {
+    const ends = flashSale
+      .map((p) => (p.discount_end ? new Date(p.discount_end) : null))
+      .filter((d): d is Date => d !== null)
+      .sort((a, b) => a.getTime() - b.getTime());
+    return ends[0] ?? endOfToday;
+  }, [flashSale, endOfToday]);
 
   const promoCats = categories.slice(0, 2);
 
@@ -389,7 +377,7 @@ export default function HomePage() {
                 <Link
                   key={cat.id}
                   to={`/?category=${cat.id}`}
-                  className="flex flex-col items-center gap-2 flex-shrink-0 w-[88px] group"
+                  className="flex flex-col items-center gap-2 shrink-0 w-[88px] group"
                 >
                   <div className="w-16 h-16 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden group-hover:border-primary-400 group-hover:shadow-md transition-all">
                     {cat.image_url ? (
@@ -409,7 +397,7 @@ export default function HomePage() {
         <section className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <Link
             to={promoCats[0] ? `/?category=${promoCats[0].id}` : '/?discount=true'}
-            className="sm:col-span-3 rounded-2xl bg-gradient-to-r from-[#0b1a3d] to-primary-700 text-white p-6 flex items-center justify-between gap-4 min-h-[140px] hover:shadow-lg transition-shadow"
+            className="sm:col-span-3 rounded-2xl bg-linear-to-r from-[#0b1a3d] to-primary-700 text-white p-6 flex items-center justify-between gap-4 min-h-[140px] hover:shadow-lg transition-shadow"
           >
             <div>
               <p className="text-lg font-bold leading-snug">
@@ -419,7 +407,7 @@ export default function HomePage() {
                 Explore Now <ArrowRight size={12} />
               </span>
             </div>
-            <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center shrink-0">
               {promoCats[0] ? (() => { const I = categoryIcon(promoCats[0].name); return <I size={40} className="text-white/80" />; })() : <Zap size={40} className="text-white/80" />}
             </div>
           </Link>
@@ -436,7 +424,7 @@ export default function HomePage() {
                 Shop Now <ArrowRight size={12} />
               </span>
             </div>
-            <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center flex-shrink-0">
+            <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
               {promoCats[1] ? (() => { const I = categoryIcon(promoCats[1].name); return <I size={28} className="text-primary-600" />; })() : <Package size={28} className="text-primary-600" />}
             </div>
           </Link>

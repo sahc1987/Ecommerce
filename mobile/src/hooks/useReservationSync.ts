@@ -30,7 +30,9 @@ export const useReservationSync = () => {
       return;
     }
     lastSig.current = signature;
-    const t = setTimeout(() => void dispatch(syncReservations()), 250);
+    const t = setTimeout(() => {
+      void dispatch(syncReservations());
+    }, 250);
     return () => clearTimeout(t);
   }, [signature, tokenReady, hydrated, dispatch]);
 

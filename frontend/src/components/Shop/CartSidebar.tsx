@@ -26,7 +26,7 @@ interface Props {
 
 function Thumb({ src, alt, size = 'w-14 h-14' }: Readonly<{ src?: string | null; alt: string; size?: string }>) {
   return (
-    <div className={`${size} rounded-lg bg-slate-50 border border-slate-100 flex-shrink-0 overflow-hidden flex items-center justify-center`}>
+    <div className={`${size} rounded-lg bg-slate-50 border border-slate-100 shrink-0 overflow-hidden flex items-center justify-center`}>
       {src ? (
         <img src={src} alt={alt} className="w-full h-full object-contain p-1" />
       ) : (
@@ -44,7 +44,7 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
   const subtotal = items.reduce((sum, i) => sum + i.effective_price * i.quantity, 0);
 
   return (
-    <aside className="hidden xl:flex flex-col gap-4 w-64 flex-shrink-0">
+    <aside className="hidden xl:flex flex-col gap-4 w-64 shrink-0">
       {/* Cart */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4">
         <h3 className="text-sm font-bold text-slate-900 mb-3">My Cart ({count})</h3>
@@ -125,7 +125,7 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
           to={items.length && !blocked ? '/checkout' : '/cart'}
           className={`mt-3 flex items-center justify-center gap-1.5 w-full text-xs font-semibold py-2.5 rounded-xl transition-colors ${
             items.length && !blocked
-              ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm'
+              ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-xs'
               : 'bg-slate-100 text-slate-400 pointer-events-none'
           }`}
         >
@@ -186,7 +186,7 @@ export default function CartSidebar({ suggestions, storeName, onAddToCart }: Rea
         <div className="space-y-3">
           {PERKS.map(({ icon: Icon, title, text }) => (
             <div key={title} className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-primary-50 flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
                 <Icon size={16} className="text-primary-600" />
               </div>
               <div className="leading-tight">

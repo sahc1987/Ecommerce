@@ -33,7 +33,7 @@ export default function StoreSettings() {
       await api.post('/setup/complete', form);
       setStoreTimeZone(form.timezone);
       toast.success('Store settings saved');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, 'Save failed'));
     } finally {
       setSaving(false);
@@ -136,7 +136,7 @@ export default function StoreSettings() {
               onClick={() => setForm({ ...form, tax_enabled: !form.tax_enabled })}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.tax_enabled ? 'bg-primary-600' : 'bg-slate-200'}`}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.tax_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${form.tax_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
           {form.tax_enabled && (

@@ -57,7 +57,11 @@ export default function ShopLayout() {
   }, []);
 
   const handleLogout = async () => {
-    try { await api.post('/auth/logout'); } catch {}
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Sign out locally even if the server can't be reached; the cookie expires on its own.
+    }
     dispatch(logout());
     navigate('/login');
   };
@@ -73,14 +77,14 @@ export default function ShopLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
-      <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-sm">
+      <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-xs">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-3 sm:gap-6 h-[68px]">
             {/* Logo */}
             <Link
               to="/"
               onClick={() => setSearchQuery('')}
-              className="flex-shrink-0 flex items-center gap-2.5"
+              className="shrink-0 flex items-center gap-2.5"
             >
               <StoreLogo logoUrl={store.logo_url} name={store.name} size={40} />
               <div className="leading-tight">
@@ -97,11 +101,11 @@ export default function ShopLayout() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search for laptops, phones, accessories..."
-                  className="flex-1 min-w-0 bg-transparent text-slate-900 placeholder-slate-400 px-4 py-2.5 text-sm focus:outline-none"
+                  className="flex-1 min-w-0 bg-transparent text-slate-900 placeholder-slate-400 px-4 py-2.5 text-sm focus:outline-hidden"
                 />
                 <button
                   type="submit"
-                  className="bg-primary-600 hover:bg-primary-700 text-white h-[42px] px-4 sm:px-5 transition-colors flex items-center gap-1.5 text-sm font-semibold flex-shrink-0"
+                  className="bg-primary-600 hover:bg-primary-700 text-white h-[42px] px-4 sm:px-5 transition-colors flex items-center gap-1.5 text-sm font-semibold shrink-0"
                   aria-label="Search"
                 >
                   <Search size={16} />
@@ -110,7 +114,7 @@ export default function ShopLayout() {
             </form>
 
             {/* Actions */}
-            <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
               <NotificationBell buttonClassName="text-slate-500 hover:text-primary-600 hover:bg-slate-100 rounded-lg" />
               <Link
                 to="/cart"
@@ -119,7 +123,7 @@ export default function ShopLayout() {
               >
                 <ShoppingCart size={22} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-sm">
+                  <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-xs">
                     {cartCount > 9 ? '9+' : cartCount}
                   </span>
                 )}
@@ -132,7 +136,7 @@ export default function ShopLayout() {
                     className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-slate-100 transition-colors"
                     aria-label="Account menu"
                   >
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
+                    <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
                       {user.name[0].toUpperCase()}
                     </div>
                     <div className="hidden md:block text-left leading-tight">
@@ -202,7 +206,7 @@ export default function ShopLayout() {
               <Link
                 to="/"
                 onClick={() => setSearchQuery('')}
-                className="flex-shrink-0 text-slate-600 hover:text-primary-600 text-sm font-medium px-3 py-2.5 whitespace-nowrap"
+                className="shrink-0 text-slate-600 hover:text-primary-600 text-sm font-medium px-3 py-2.5 whitespace-nowrap"
               >
                 All
               </Link>
@@ -210,7 +214,7 @@ export default function ShopLayout() {
                 <Link
                   key={cat.id}
                   to={`/?category=${cat.id}`}
-                  className="flex-shrink-0 text-slate-600 hover:text-primary-600 text-sm font-medium px-3 py-2.5 whitespace-nowrap"
+                  className="shrink-0 text-slate-600 hover:text-primary-600 text-sm font-medium px-3 py-2.5 whitespace-nowrap"
                 >
                   {cat.name}
                 </Link>

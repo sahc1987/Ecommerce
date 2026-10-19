@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { formatDate } from '../../../utils/dates';
 import { textOr } from '../../../utils/text';
 import { Link, useSearchParams } from "react-router-dom";
 import { ShoppingCart } from "lucide-react";
-import api from "../../../api";
 import ListContent from '../../../components/Admin/ListContent';
+import { useApiGet } from '../../../hooks/useApiGet';
+import type { Order, Page } from '../../../types';
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -27,30 +28,16 @@ const STATUSES = [
 
 export default function OrdersList() {
   const [searchParams] = useSearchParams();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState(searchParams.get("status") ?? "");
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(1);
-
-  const fetchOrders = async (p = page, s = status) => {
-    setLoading(true);
-    try {
-      const res = await api.get("/orders", {
-        params: { page: p, limit: 15, status: s || undefined },
-      });
-      setOrders(res.data.orders);
-      setTotal(res.data.total);
-      setPages(res.data.pages);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders(1, status);
-  }, [status]);
+  const { data, loading } = useApiGet<{ orders: Order[] } & Page>("/orders", {
+    page,
+    limit: 15,
+    status: status || undefined,
+  });
+  const orders = data?.orders ?? [];
+  const total = data?.total ?? 0;
+  const pages = data?.pages ?? 1;
 
   return (
     <div className="space-y-6">
@@ -152,10 +139,7 @@ export default function OrdersList() {
           <button
             className="btn-secondary py-1.5 px-3 text-sm"
             disabled={page === 1}
-            onClick={() => {
-              setPage(page - 1);
-              fetchOrders(page - 1);
-            }}
+            onClick={() => setPage(page - 1)}
           >
             Previous
           </button>
@@ -165,10 +149,7 @@ export default function OrdersList() {
           <button
             className="btn-secondary py-1.5 px-3 text-sm"
             disabled={page === pages}
-            onClick={() => {
-              setPage(page + 1);
-              fetchOrders(page + 1);
-            }}
+            onClick={() => setPage(page + 1)}
           >
             Next
           </button>

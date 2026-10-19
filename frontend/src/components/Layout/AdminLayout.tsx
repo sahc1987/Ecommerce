@@ -41,7 +41,7 @@ function Sidebar({ onClose }: SidebarProps) {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-medium transition-colors ${
                 isActive
-                  ? 'bg-primary-600 text-white shadow-sm'
+                  ? 'bg-primary-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-primary-600'
               }`
             }
@@ -61,7 +61,7 @@ function Sidebar({ onClose }: SidebarProps) {
         onClick={onClose}
         className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3 hover:border-primary-200 hover:shadow-md transition-all"
       >
-        <div className="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
           <ExternalLink size={17} className="text-primary-600" />
         </div>
         <div className="leading-tight">
@@ -70,7 +70,7 @@ function Sidebar({ onClose }: SidebarProps) {
         </div>
       </NavLink>
 
-      <div className="rounded-2xl bg-gradient-to-br from-[#0b1a3d] via-[#10306e] to-primary-700 p-5 text-white shadow-lg shadow-primary-900/20 mt-auto">
+      <div className="rounded-2xl bg-linear-to-br from-[#0b1a3d] via-[#10306e] to-primary-700 p-5 text-white shadow-lg shadow-primary-900/20 mt-auto">
         <div className="flex items-center gap-2 mb-2">
           <Headset size={16} className="text-primary-200" />
           <p className="text-sm font-bold">Need Help?</p>
@@ -109,7 +109,11 @@ export default function AdminLayout() {
   }, []);
 
   const handleLogout = async () => {
-    try { await api.post('/auth/logout'); } catch {}
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Sign out locally even if the server can't be reached; the cookie expires on its own.
+    }
     dispatch(logout());
     navigate('/login');
   };
@@ -118,7 +122,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
-      <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-sm">
+      <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-xs">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 flex items-center gap-3 h-[68px]">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -146,7 +150,7 @@ export default function AdminLayout() {
               className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-slate-100 transition-colors"
               aria-label="Account menu"
             >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
+              <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
                 {user?.name[0].toUpperCase()}
               </div>
               <div className="hidden md:block text-left leading-tight">
@@ -187,7 +191,7 @@ export default function AdminLayout() {
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <button
             type="button"
-            className="fixed inset-0 w-full bg-black/40 backdrop-blur-sm cursor-default"
+            className="fixed inset-0 w-full bg-black/40 backdrop-blur-xs cursor-default"
             onClick={() => setSidebarOpen(false)}
             aria-label="Close sidebar"
           />
@@ -208,7 +212,7 @@ export default function AdminLayout() {
 
       <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-5">
         <div className="flex gap-5 items-start">
-          <aside className="hidden lg:block w-52 flex-shrink-0 sticky top-[88px]">
+          <aside className="hidden lg:block w-52 shrink-0 sticky top-[88px]">
             <Sidebar onClose={() => setSidebarOpen(false)} />
           </aside>
           <main className="flex-1 min-w-0">

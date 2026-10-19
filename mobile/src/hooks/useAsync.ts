@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useFocusEffect} from '@react-navigation/native';
 import {errorMessage} from '../api/client';
 
@@ -22,8 +22,14 @@ export function useAsync<T>(
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
+  // The latest `run`, updated after each render (before the effects below use it).
   const runRef = useRef(run);
-  runRef.current = run;
+  useLayoutEffect(() => {
+    runRef.current = run;
+  });
+  // Only the most recent load may apply its result, so a slow earlier response
+  // can't overwrite a newer one (e.g. when `deps` change quickly).
+  const latest = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -33,6 +39,8 @@ export function useAsync<T>(
   }, []);
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+    const id = ++latest.current;
+    const current = () => mounted.current && id === latest.current;
     if (mode === 'refresh') {
       setRefreshing(true);
     } else {
@@ -41,20 +49,19 @@ export function useAsync<T>(
     setError(null);
     try {
       const result = await runRef.current();
-      if (mounted.current) {
+      if (current()) {
         setData(result);
       }
     } catch (err) {
-      if (mounted.current) {
+      if (current()) {
         setError(errorMessage(err));
       }
     } finally {
-      if (mounted.current) {
+      if (current()) {
         setLoading(false);
         setRefreshing(false);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

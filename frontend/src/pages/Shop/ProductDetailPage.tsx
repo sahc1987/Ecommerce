@@ -6,9 +6,23 @@ import { ShoppingCart, Package, ArrowLeft, Minus, Plus, Truck, RotateCcw, Shield
 import api from '../../api';
 import { addItem } from '../../store/slices/cartSlice';
 import {
-  Variant, applyDiscount, formatPrice, effectivePriceRange, sellableStock, variantBasePrice, variantLabel,
+  type Product, applyDiscount, formatPrice, effectivePriceRange, sellableStock, variantBasePrice, variantLabel,
 } from '../../utils/pricing';
-import VariantPicker, { Selection, findVariant, initialSelection } from '../../components/Shop/VariantPicker';
+import VariantPicker from '../../components/Shop/VariantPicker';
+import { type Selection, findVariant, initialSelection } from '../../utils/variantSelection';
+
+interface ProductImage {
+  id: string;
+  url: string;
+  is_primary: boolean;
+}
+
+type ShopProduct = Product & {
+  description: string | null;
+  sku: string | null;
+  subcategory_name: string | null;
+  images: ProductImage[] | null;
+};
 
 const trustBadges = [
   { icon: Truck, label: 'Free shipping', sub: 'On orders over $50' },
@@ -20,22 +34,32 @@ export default function ProductDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const [product, setProduct] = useState<any>(null);
+  const [product, setProduct] = useState<ShopProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selection, setSelection] = useState<Selection>({});
 
   useEffect(() => {
-    api.get(`/products/${slug}`).then((res) => {
+    // Ignore the response if the shopper has already moved to another product.
+    let ignore = false;
+    api.get<{ product: ShopProduct }>(`/products/${slug}`).then((res) => {
+      if (ignore) return;
       setProduct(res.data.product);
       setSelection(initialSelection(res.data.product.variants ?? []));
       setQuantity(1);
+      setSelectedImage(0);
     }).catch(() => {
+      if (ignore) return;
       toast.error('Product not found');
       navigate('/');
-    }).finally(() => setLoading(false));
-  }, [slug]);
+    }).finally(() => {
+      if (!ignore) setLoading(false);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [slug, navigate]);
 
   if (loading) {
     return (
@@ -47,11 +71,11 @@ export default function ProductDetailPage() {
   if (!product) return null;
 
   const options = product.options ?? [];
-  const variants: Variant[] = product.variants ?? [];
+  const variants = product.variants ?? [];
   const hasOptions = options.length > 0;
   // The variant being bought: the chosen combination, or the only one.
   const variant = hasOptions ? findVariant(variants, options, selection) : variants[0] ?? null;
-  const missing = options.filter((o: { name: string }) => !selection[o.name]).map((o: { name: string }) => o.name);
+  const missing = options.filter((o) => !selection[o.name]).map((o) => o.name);
   const label = variant ? variantLabel(options, variant.options) : null;
 
   // Stock minus other carts' active holds, for the chosen variant.
@@ -60,7 +84,7 @@ export default function ProductDetailPage() {
   else if (!hasOptions) sellable = sellableStock(product);
 
   const images = product.images ?? [];
-  const primaryImage = images.find((i: any) => i.is_primary) ?? images[0];
+  const primaryImage = images.find((i) => i.is_primary) ?? images[0];
   const displayImage = images[selectedImage] ?? primaryImage;
   const basePrice = variant ? variantBasePrice(product, variant) : Number.parseFloat(product.price);
   const effectivePrice = applyDiscount(product, basePrice);
@@ -127,13 +151,13 @@ export default function ProductDetailPage() {
           </div>
           {images.length > 1 && (
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {images.map((img: any, i: number) => (
+              {images.map((img, i) => (
                 <button
                   key={img.id}
                   onClick={() => setSelectedImage(i)}
-                  className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
+                  className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
                     selectedImage === i
-                      ? 'border-primary-500 shadow-sm'
+                      ? 'border-primary-500 shadow-xs'
                       : 'border-slate-200 hover:border-primary-300'
                   }`}
                 >

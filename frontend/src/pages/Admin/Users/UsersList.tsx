@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Users, Search, Pencil, UserX } from 'lucide-react';
 import api, { errorMessage } from '../../../api';
 import ListContent from '../../../components/Admin/ListContent';
+import { useApiGet } from '../../../hooks/useApiGet';
+import type { AdminUser, Page, Role } from '../../../types';
+
+type UsersPage = { users: AdminUser[] } & Page;
 
 const roleColors: Record<string, string> = {
   admin: 'bg-red-100 text-red-800',
@@ -11,50 +15,48 @@ const roleColors: Record<string, string> = {
 };
 
 export default function UsersList() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // `search` is what's typed; `query` is the search that was submitted.
   const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(1);
-  const [editUser, setEditUser] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ name: '', email: '', role: 'customer', is_active: true });
+  const { data, loading, setData } = useApiGet<UsersPage>('/users', {
+    page,
+    limit: 15,
+    search: query || undefined,
+  });
+  const users = data?.users ?? [];
+  const total = data?.total ?? 0;
+  const pages = data?.pages ?? 1;
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [editForm, setEditForm] = useState<{ name: string; email: string; role: Role; is_active: boolean }>(
+    { name: '', email: '', role: 'customer', is_active: true },
+  );
   const [saving, setSaving] = useState(false);
 
-  const fetchUsers = async (p = 1, s = search) => {
-    setLoading(true);
-    try {
-      const res = await api.get('/users', { params: { page: p, limit: 15, search: s || undefined } });
-      setUsers(res.data.users);
-      setTotal(res.data.total);
-      setPages(res.data.pages);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchUsers(); }, []);
+  const updateUser = (id: string, changes: Partial<AdminUser>) =>
+    setData((d) => ({ ...d, users: d.users.map((u) => (u.id === id ? { ...u, ...changes } : u)) }));
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    fetchUsers(1, search);
+    setQuery(search.trim());
   };
 
-  const openEdit = (u: any) => {
+  const openEdit = (u: AdminUser) => {
     setEditUser(u);
     setEditForm({ name: u.name, email: u.email, role: u.role, is_active: u.is_active });
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editUser) return;
     setSaving(true);
     try {
-      const res = await api.put(`/users/${editUser.id}`, editForm);
-      setUsers((prev) => prev.map((u) => u.id === editUser.id ? { ...u, ...res.data.user } : u));
+      const res = await api.put<{ user: AdminUser }>(`/users/${editUser.id}`, editForm);
+      updateUser(editUser.id, res.data.user);
       toast.success('User updated');
       setEditUser(null);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, 'Update failed'));
     } finally {
       setSaving(false);
@@ -65,9 +67,9 @@ export default function UsersList() {
     if (!confirm(`Deactivate user "${name}"?`)) return;
     try {
       await api.delete(`/users/${id}`);
-      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, is_active: false } : u));
+      updateUser(id, { is_active: false });
       toast.success('User deactivated');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, 'Failed'));
     }
   };
@@ -106,7 +108,7 @@ export default function UsersList() {
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                      <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0">
                         {u.name[0].toUpperCase()}
                       </div>
                       <div>
@@ -145,9 +147,9 @@ export default function UsersList() {
 
       {pages > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <button className="btn-secondary py-1.5 px-3 text-sm" disabled={page === 1} onClick={() => { setPage(page - 1); fetchUsers(page - 1); }}>Previous</button>
+          <button className="btn-secondary py-1.5 px-3 text-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
           <span className="text-sm text-slate-600">Page {page} of {pages}</span>
-          <button className="btn-secondary py-1.5 px-3 text-sm" disabled={page === pages} onClick={() => { setPage(page + 1); fetchUsers(page + 1); }}>Next</button>
+          <button className="btn-secondary py-1.5 px-3 text-sm" disabled={page === pages} onClick={() => setPage(page + 1)}>Next</button>
         </div>
       )}
 
@@ -168,14 +170,14 @@ export default function UsersList() {
               </div>
               <div>
                 <label htmlFor="u_role" className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                <select id="u_role" className="input" value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}>
+                <select id="u_role" className="input" value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Role })}>
                   <option value="customer">Customer</option>
                   <option value="staff">Staff</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="u_active" checked={editForm.is_active} onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })} className="w-4 h-4 rounded" />
+                <input type="checkbox" id="u_active" checked={editForm.is_active} onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })} className="w-4 h-4 rounded-sm" />
                 <label htmlFor="u_active" className="text-sm font-medium text-slate-700">Active</label>
               </div>
               <div className="flex gap-3 pt-2">

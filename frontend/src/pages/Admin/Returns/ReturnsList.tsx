@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { formatDate } from '../../../utils/dates';
 import toast from 'react-hot-toast';
 import { RotateCcw } from 'lucide-react';
 import api, { errorMessage } from '../../../api';
 import ListContent from '../../../components/Admin/ListContent';
+import { useApiGet } from '../../../hooks/useApiGet';
+import type { Page, ReturnRequest, ReturnStatus } from '../../../types';
+
+type Decision = Exclude<ReturnStatus, 'requested'>;
 
 const statusColors: Record<string, string> = {
   requested: 'bg-yellow-100 text-yellow-800',
@@ -13,7 +17,7 @@ const statusColors: Record<string, string> = {
 };
 
 // Decisions allowed from each return status (mirrors the server's rules).
-const DECISIONS: Record<string, { value: string; label: string }[]> = {
+const DECISIONS: Partial<Record<ReturnStatus, { value: Decision; label: string }[]>> = {
   requested: [
     { value: 'approved', label: 'Approve' },
     { value: 'rejected', label: 'Reject' },
@@ -23,33 +27,33 @@ const DECISIONS: Record<string, { value: string; label: string }[]> = {
 };
 
 // What can still be refunded on the return's order.
-const refundableLeft = (ret: any) =>
+const refundableLeft = (ret: ReturnRequest) =>
   Math.max(0, Number.parseFloat(ret.order_total ?? '0') - Number.parseFloat(ret.order_refunded_amount ?? '0'));
 
+interface ProcessForm {
+  status: Decision;
+  refund_amount: string;
+  admin_notes: string;
+  restock: boolean;
+}
+
 export default function ReturnsList() {
-  const [returns, setReturns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
-  const [selectedReturn, setSelectedReturn] = useState<any>(null);
-  const [processForm, setProcessForm] = useState({ status: 'approved', refund_amount: '', admin_notes: '', restock: true });
+  const { data, loading, reload } = useApiGet<{ returns: ReturnRequest[] } & Page>('/returns', {
+    status: status || undefined,
+    limit: 30,
+  });
+  const returns = data?.returns ?? [];
+  const [selectedReturn, setSelectedReturn] = useState<ReturnRequest | null>(null);
+  const [processForm, setProcessForm] = useState<ProcessForm>({ status: 'approved', refund_amount: '', admin_notes: '', restock: true });
   const [processing, setProcessing] = useState(false);
 
-  const fetchReturns = async (s = status) => {
-    setLoading(true);
-    try {
-      const res = await api.get('/returns', { params: { status: s || undefined, limit: 30 } });
-      setReturns(res.data.returns);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchReturns(); }, []);
-
-  const openProcess = (ret: any) => {
+  const openProcess = (ret: ReturnRequest) => {
+    const decisions = DECISIONS[ret.status];
+    if (!decisions) return;
     setSelectedReturn(ret);
     setProcessForm({
-      status: DECISIONS[ret.status][0].value,
+      status: decisions[0].value,
       // An amount set when approving is reused; otherwise what's left to refund.
       refund_amount: ret.refund_amount ?? refundableLeft(ret).toFixed(2),
       admin_notes: ret.admin_notes ?? '',
@@ -59,19 +63,22 @@ export default function ReturnsList() {
 
   const handleProcess = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedReturn) return;
     setProcessing(true);
     try {
       const { refund_amount, restock, ...rest } = processForm;
-      const res = await api.put(`/returns/${selectedReturn.id}`, {
+      await api.put(`/returns/${selectedReturn.id}`, {
         ...rest,
         // Optional when approving (saved for the refund later); required to refund.
         ...(rest.status !== 'rejected' && refund_amount !== '' ? { refund_amount: Number(refund_amount) } : {}),
         ...(rest.status === 'refunded' ? { restock } : {}),
       });
-      setReturns((prev) => prev.map((r) => r.id === selectedReturn.id ? { ...r, ...res.data.return } : r));
+      // Refetch: the return may leave the current filter, and the order's
+      // refunded total (shown as "up to …") has changed.
+      reload();
       toast.success('Return processed');
       setSelectedReturn(null);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, 'Processing failed'));
     } finally {
       setProcessing(false);
@@ -83,7 +90,7 @@ export default function ReturnsList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Returns & Refunds</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{returns.length} returns</p>
+          <p className="text-slate-500 text-sm mt-0.5">{data?.total ?? 0} returns</p>
         </div>
       </div>
 
@@ -92,7 +99,7 @@ export default function ReturnsList() {
         {['', 'requested', 'approved', 'rejected', 'refunded'].map((s) => (
           <button
             key={s || 'all'}
-            onClick={() => { setStatus(s); fetchReturns(s); }}
+            onClick={() => setStatus(s)}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
               status === s ? 'bg-primary-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
             }`}
@@ -168,8 +175,8 @@ export default function ReturnsList() {
             <form onSubmit={handleProcess} className="space-y-4">
               <div>
                 <label htmlFor="r_status" className="block text-sm font-medium text-slate-700 mb-1">Decision</label>
-                <select id="r_status" className="input" value={processForm.status} onChange={(e) => setProcessForm({ ...processForm, status: e.target.value })}>
-                  {DECISIONS[selectedReturn.status].map((d) => (
+                <select id="r_status" className="input" value={processForm.status} onChange={(e) => setProcessForm({ ...processForm, status: e.target.value as Decision })}>
+                  {(DECISIONS[selectedReturn.status] ?? []).map((d) => (
                     <option key={d.value} value={d.value}>{d.label}</option>
                   ))}
                 </select>
@@ -202,7 +209,7 @@ export default function ReturnsList() {
                 <label className="flex items-start gap-2.5 text-sm text-slate-700">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 mt-0.5 rounded text-primary-600"
+                    className="w-4 h-4 mt-0.5 rounded-sm text-primary-600"
                     checked={processForm.restock}
                     onChange={(e) => setProcessForm({ ...processForm, restock: e.target.checked })}
                   />

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { formatDate } from '../../utils/dates';
 import { Link } from "react-router-dom";
 import { ShoppingCart } from "lucide-react";
-import api from "../../api";
+import { useApiGet } from "../../hooks/useApiGet";
+import type { Order, Page } from "../../types";
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -23,15 +23,8 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function MyOrders() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api
-      .get("/orders")
-      .then((res) => setOrders(res.data.orders))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, loading } = useApiGet<{ orders: Order[] } & Page>("/orders");
+  const orders = data?.orders ?? [];
 
   if (loading)
     return (
@@ -73,7 +66,7 @@ export default function MyOrders() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-slate-900">
-                    {o.item_count} item{o.item_count === 1 ? "" : "s"}
+                    {o.item_count} item{Number(o.item_count) === 1 ? "" : "s"}
                   </p>
                   <p className="text-sm text-slate-400 mt-0.5">
                     {formatDate(o.created_at)}

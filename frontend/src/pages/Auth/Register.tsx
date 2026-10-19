@@ -36,7 +36,7 @@ export default function Register() {
       dispatch(setCredentials(res.data));
       toast.success('Account created!');
       navigate(res.data.user.role === 'admin' ? '/setup' : '/');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
@@ -48,7 +48,7 @@ export default function Register() {
       {/* Brand panel */}
       <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-slate-900 p-10 flex-col justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center shadow-md">
+          <div className="w-9 h-9 bg-linear-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center shadow-md">
             <Store size={18} className="text-white" />
           </div>
           <span className="font-bold text-xl text-white tracking-tight">ShopHub</span>
@@ -64,7 +64,7 @@ export default function Register() {
           <ul className="space-y-3">
             {perks.map((perk) => (
               <li key={perk} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">
                   <Check size={11} className="text-slate-300" />
                 </div>
                 <span className="text-slate-300 text-sm">{perk}</span>
@@ -80,7 +80,7 @@ export default function Register() {
       <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-12 bg-slate-50">
         <div className="w-full max-w-md">
           <Link to="/" className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-linear-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
               <Store size={15} className="text-white" />
             </div>
             <span className="font-bold text-lg text-slate-900">ShopHub</span>
@@ -96,7 +96,7 @@ export default function Register() {
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-xs">
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor="name" className="block text-sm font-semibold text-slate-700 mb-1.5">Full Name</label>
@@ -172,7 +172,7 @@ export default function Register() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 text-sm font-semibold bg-slate-900 hover:bg-slate-700 text-white rounded transition-colors disabled:opacity-60"
+                className="w-full py-3 text-sm font-semibold bg-slate-900 hover:bg-slate-700 text-white rounded-sm transition-colors disabled:opacity-60"
               >
                 {loading ? 'Creating account…' : 'Create account'}
               </button>

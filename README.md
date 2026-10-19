@@ -192,16 +192,16 @@ flowchart TB
 
 | Layer | Technology |
 | --- | --- |
-| Web | React 18, TypeScript, Vite, Redux Toolkit, React Router, Tailwind CSS, Axios, Recharts |
+| Web | React 18, TypeScript, Vite 8, Redux Toolkit, React Router 7, Tailwind CSS 4, Axios, Recharts |
 | Mobile | React Native 0.87 (React 19), TypeScript, React Navigation, Redux Toolkit, react-native-keychain |
 | API | Node.js, Express 4, JWT, bcrypt, Helmet, express-rate-limit, Multer |
 | Data | PostgreSQL 16, Redis 7 |
 | Payments | Stripe Checkout and webhooks |
 | Images | Cloudinary (local disk in development) |
 | Infrastructure | Docker Compose, Node 24 LTS images, Nginx (unprivileged) |
-| Tooling | nodemon, PostCSS, Jest, ESLint, Prettier |
+| Tooling | nodemon, ESLint, Prettier; tests with Node's test runner (API), Vitest (web), and Jest (mobile) |
 
-**Speed:** busy pages (products, categories, dashboard) are cached in Redis and cleared the moment something changes. Product pages cache for only 30 seconds because they show live stock.
+**Speed:** busy pages (products, categories, dashboard) are cached in Redis and cleared the moment something changes. Product pages cache for only 30 seconds because they show live stock. The website loads the back office only for staff, so shoppers download about a third as much code.
 
 ## Security
 
@@ -273,6 +273,18 @@ npm run ios       # or: npm run android
 ```
 
 </details>
+
+### Run the tests
+
+```bash
+cd backend && npm test      # business rules, plus the API tests when TEST_DATABASE_URL is set
+cd frontend && npm test     # web: data loading, prices and product versions
+cd mobile && npm test       # mobile: cart rules, product versions, app start
+```
+
+The backend's API tests place real orders, cancel them, and process returns and refunds against a database of their own. Create an empty database whose name contains `test` (for example `ecommerce_test`) and point `TEST_DATABASE_URL` at it. **Everything in it is erased on each run**, which is why a database without `test` in its name is refused. Without the variable, only the tests that need no database run.
+
+`npm run lint` checks the web and mobile code, and `npm run typecheck` (web) or `npx tsc --noEmit` (mobile) checks the types.
 
 ## Card payments with Stripe
 
@@ -465,23 +477,26 @@ Each part has its own `.env.example`. Copy it to `.env` and fill it in.
 ```
 Ecommerce/
 ├── backend/               Express API
-│   └── src/
-│       ├── routes/        auth, setup, categories, products, orders, payments,
-│       │                  stripeWebhook, reservations, returns, dashboard,
-│       │                  users, notifications
-│       ├── middleware/    sign-in and roles, upload checks, no-double-orders
-│       ├── utils/         order status rules, cancellations, refunds, restocking,
-│       │                  stock holds, cache, Stripe orders, product versions,
-│       │                  notifications, request checks, safe errors
-│       ├── db/            schema.sql and migrations
-│       └── config/        PostgreSQL, Redis, Stripe, Cloudinary
+│   ├── src/
+│   │   ├── routes/        auth, setup, categories, products, orders, payments,
+│   │   │                  stripeWebhook, reservations, returns, dashboard,
+│   │   │                  users, notifications
+│   │   ├── middleware/    sign-in and roles, upload checks, no-double-orders
+│   │   ├── utils/         order status rules, cancellations, refunds, restocking,
+│   │   │                  stock holds, cache, Stripe orders, product versions,
+│   │   │                  notifications, request checks, safe errors
+│   │   ├── db/            schema.sql and migrations
+│   │   └── config/        PostgreSQL, Redis, Stripe, Cloudinary
+│   └── test/              unit tests (rules) and API tests (real database)
 ├── frontend/              React web app (shop + back office)
 │   └── src/
 │       ├── pages/         Shop, Admin, Auth, Setup wizard
 │       ├── components/    layouts, product cards, cart, hold banner,
 │       │                  version picker and editor, sales chart
 │       ├── store/         Redux (cart, auth)
-│       └── hooks/         useReservations (holds and countdown)
+│       ├── hooks/         useApiGet (loading data), useReservations
+│       │                  (holds and countdown)
+│       └── types.ts       shapes of orders, returns and users from the API
 ├── mobile/                React Native app (iOS + Android)
 │   └── src/
 │       ├── screens/       Shop and Admin screens, same as the web

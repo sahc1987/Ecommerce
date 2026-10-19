@@ -58,7 +58,9 @@ const initialState: CartState = {
 const saveCart = (items: CartItem[]) => {
   try {
     localStorage.setItem('cart', JSON.stringify(items));
-  } catch {}
+  } catch {
+    // Storage full or blocked (private mode): the cart still works for this visit.
+  }
 };
 
 interface ReservationResult {
@@ -104,7 +106,11 @@ const cartSlice = createSlice({
       state.reservations = {};
       state.holdExpiresAt = null;
       state.holdStatus = 'none';
-      try { localStorage.removeItem('cart'); } catch {}
+      try {
+        localStorage.removeItem('cart');
+      } catch {
+        // Storage blocked: nothing was saved to remove.
+      }
     },
     // Result of PUT /reservations or POST /reservations/renew.
     setReservations(

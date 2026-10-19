@@ -3,9 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowLeft, Upload, X, Star } from "lucide-react";
 import api, { errorMessage } from "../../../api";
-import VariantEditor, {
-  OptionDraft, VariantDraft, cleanOptions, isStale,
-} from "../../../components/Admin/VariantEditor";
+import VariantEditor from "../../../components/Admin/VariantEditor";
+import { type OptionDraft, type VariantDraft, cleanOptions, isStale } from "../../../components/Admin/variantDrafts";
+import type { Product, Variant } from "../../../utils/pricing";
 
 interface Category {
   id: number;
@@ -23,6 +23,25 @@ interface ProductImage {
   is_primary: boolean;
 }
 
+// GET /products/admin/:id: every variant (inactive too) plus the edit fields.
+type AdminProductDetail = Product & {
+  description: string | null;
+  sku: string | null;
+  subcategory_id: number | null;
+  is_active: boolean;
+  images: ProductImage[] | null;
+  variants: Variant[];
+};
+
+const toDraft = (v: Variant): VariantDraft => ({
+  id: v.id,
+  options: v.options,
+  sku: v.sku ?? "",
+  price: v.price === null ? "" : String(v.price),
+  stock: String(v.stock),
+  is_active: v.is_active,
+});
+
 export default function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -30,7 +49,7 @@ export default function ProductForm() {
   const idleSubmitLabel = isEdit ? "Save Changes" : "Create Product";
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -60,30 +79,27 @@ export default function ProductForm() {
   });
 
   useEffect(() => {
-    api.get("/categories").then((res) => setCategories(res.data.categories));
+    // Ignore responses for a product we've navigated away from.
+    let ignore = false;
+    api.get<{ categories: Category[] }>("/categories").then((res) => {
+      if (!ignore) setCategories(res.data.categories);
+    });
     if (isEdit) {
-      setLoading(true);
       // The admin view includes inactive variants: saving replaces the whole
       // list, so the form must start from all of them.
       api
-        .get(`/products/admin/${id}`)
-        .then((res) => {
+        .get<{ product: AdminProductDetail }>(`/products/admin/${id}`)
+        .then(async (res) => {
+          if (ignore) return;
           const p = res.data.product;
           const loadedOptions: OptionDraft[] = (p.options ?? []).map(
-            (o: { name: string; values: string[] }) => ({ name: o.name, valuesText: o.values.join(", ") }),
+            (o) => ({ name: o.name, valuesText: o.values.join(", ") }),
           );
           setOptions(loadedOptions);
           if (loadedOptions.length) {
-            setVariants((p.variants ?? []).map((v: any) => ({
-              id: v.id,
-              options: v.options,
-              sku: v.sku ?? "",
-              price: v.price === null ? "" : String(v.price),
-              stock: String(v.stock),
-              is_active: v.is_active,
-            })));
+            setVariants(p.variants.map(toDraft));
           } else {
-            setDefaultVariantId(p.variants?.[0]?.id);
+            setDefaultVariantId(p.variants[0]?.id);
           }
           setForm({
             name: p.name,
@@ -103,15 +119,23 @@ export default function ProductForm() {
             discount_end: p.discount_end ? p.discount_end.slice(0, 16) : "",
           });
           setImages(p.images ?? []);
-          if (p.category_id) loadSubcategories(p.category_id);
+          if (p.category_id) {
+            const subs = await api.get<{ subcategories: Subcategory[] }>(`/categories/${p.category_id}/subcategories`);
+            if (!ignore) setSubcategories(subs.data.subcategories);
+          }
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (!ignore) setLoading(false);
+        });
     }
-  }, [id]);
+    return () => {
+      ignore = true;
+    };
+  }, [id, isEdit]);
 
   const loadSubcategories = async (categoryId: string) => {
     if (!categoryId) return setSubcategories([]);
-    const res = await api.get(`/categories/${categoryId}/subcategories`);
+    const res = await api.get<{ subcategories: Subcategory[] }>(`/categories/${categoryId}/subcategories`);
     setSubcategories(res.data.subcategories);
   };
 
@@ -165,25 +189,22 @@ export default function ProductForm() {
         discount_end: form.discount_end || null,
       };
       if (isEdit) {
-        const res = await api.put(`/products/${id}`, payload);
+        const res = await api.put<{ product: AdminProductDetail }>(`/products/${id}`, payload);
         // New variants now have ids; keep them so the next save updates in place.
         const saved = res.data.product;
         if (hasOptions) {
-          setVariants(saved.variants.map((v: any) => ({
-            id: v.id, options: v.options, sku: v.sku ?? "",
-            price: v.price === null ? "" : String(v.price), stock: String(v.stock), is_active: v.is_active,
-          })));
+          setVariants(saved.variants.map(toDraft));
         } else {
-          setDefaultVariantId(saved.variants?.[0]?.id);
+          setDefaultVariantId(saved.variants[0]?.id);
         }
         toast.success("Product updated");
       } else {
-        const res = await api.post("/products", payload);
+        const res = await api.post<{ product: AdminProductDetail }>("/products", payload);
         toast.success("Product created");
         navigate(`/admin/products/${res.data.product.id}/edit`);
         return;
       }
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, "Save failed"));
     } finally {
       setSaving(false);
@@ -196,10 +217,10 @@ export default function ProductForm() {
     const formData = new FormData();
     Array.from(e.target.files).forEach((f) => formData.append("images", f));
     try {
-      const res = await api.post(`/products/${id}/images`, formData);
+      const res = await api.post<{ images: ProductImage[] }>(`/products/${id}/images`, formData);
       setImages((prev) => [...prev, ...res.data.images]);
       toast.success("Images uploaded");
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, "Upload failed"));
     } finally {
       setUploadingImages(false);
@@ -329,7 +350,7 @@ export default function ProductForm() {
               onChange={(e) =>
                 setForm({ ...form, is_active: e.target.checked })
               }
-              className="w-4 h-4 rounded text-primary-600"
+              className="w-4 h-4 rounded-sm text-primary-600"
             />
             <label
               htmlFor="is_active"
@@ -396,7 +417,7 @@ export default function ProductForm() {
                 onChange={(e) =>
                   setForm({ ...form, discount_active: e.target.checked })
                 }
-                className="w-4 h-4 rounded text-primary-600"
+                className="w-4 h-4 rounded-sm text-primary-600"
               />
               <label
                 htmlFor="discount_active"
@@ -570,7 +591,7 @@ export default function ProductForm() {
                       </button>
                     </div>
                     {img.is_primary && (
-                      <span className="absolute top-1 left-1 bg-yellow-400 text-yellow-900 text-xs px-1.5 py-0.5 rounded font-medium">
+                      <span className="absolute top-1 left-1 bg-yellow-400 text-yellow-900 text-xs px-1.5 py-0.5 rounded-sm font-medium">
                         Primary
                       </span>
                     )}

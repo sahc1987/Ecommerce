@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { TrendingUp, CalendarRange } from 'lucide-react';
-import api, { errorMessage } from '../../api';
+import { errorMessage } from '../../api';
+import { useApiGet } from '../../hooks/useApiGet';
 import { formatDate, isoDateInStoreZone } from '../../utils/dates';
 
 type Granularity = 'hour' | 'day' | 'week' | 'month';
@@ -61,10 +62,24 @@ const TOOLTIP_PREFIX: Partial<Record<Granularity, string>> = { week: 'Week of ',
 
 const orderCount = (n: number) => `${n} ${n === 1 ? 'order' : 'orders'}`;
 
-function ChartTooltip({ active, payload, label, metric, granularity }: any) {
+interface SalesResponse {
+  granularity: Granularity;
+  chart: { date: string; revenue: string; orders: string }[];
+}
+
+// Recharts fills in active/payload/label when it renders the tooltip.
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: { payload: Point }[];
+  label?: string;
+  metric: Metric;
+  granularity: Granularity;
+}
+
+function ChartTooltip({ active, payload, label, metric, granularity }: Readonly<ChartTooltipProps>) {
   if (!active || !payload?.length) return null;
-  const p: Point = payload[0].payload;
-  const prefix = TOOLTIP_PREFIX[granularity as Granularity] ?? '';
+  const p = payload[0].payload;
+  const prefix = TOOLTIP_PREFIX[granularity] ?? '';
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 text-xs">
       <p className="font-semibold text-slate-900">{prefix}{label}</p>
@@ -80,11 +95,6 @@ export default function SalesChart() {
   const [metric, setMetric] = useState<Metric>('revenue');
   const [from, setFrom] = useState(toIso(daysAgo(29)));
   const [to, setTo] = useState(toIso(new Date()));
-  const [data, setData] = useState<Point[]>([]);
-  const [granularity, setGranularity] = useState<Granularity>('day');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   // Resolve the effective query for the active filter.
   const query = useMemo(() => {
     if (range === 'custom') {
@@ -94,24 +104,23 @@ export default function SalesChart() {
     return { from: toIso(daysAgo(r.days - 1)), to: toIso(new Date()), granularity: r.granularity };
   }, [range, from, to]);
 
-  useEffect(() => {
-    if (query.from > query.to) { setError('Start date must be before end date'); return; }
-    setError(null);
-    setLoading(true);
-    api.get('/dashboard/sales-chart', { params: query })
-      .then((res) => {
-        const g: Granularity = res.data.granularity;
-        setGranularity(g);
-        setData(res.data.chart.map((d: { date: string; revenue: string; orders: string }) => ({
-          iso: d.date,
-          date: formatLabel(d.date, g),
-          revenue: Number.parseFloat(d.revenue),
-          orders: Number.parseInt(d.orders, 10),
-        })));
-      })
-      .catch((err) => setError(errorMessage(err, 'Failed to load sales data')))
-      .finally(() => setLoading(false));
-  }, [query]);
+  const invalidRange = query.from > query.to;
+  const sales = useApiGet<SalesResponse>(invalidRange ? null : '/dashboard/sales-chart', query);
+  const loading = sales.loading;
+  const granularity = sales.data?.granularity ?? 'day';
+  const data = useMemo<Point[]>(
+    () =>
+      (sales.data?.chart ?? []).map((d) => ({
+        iso: d.date,
+        date: formatLabel(d.date, sales.data!.granularity),
+        revenue: Number.parseFloat(d.revenue),
+        orders: Number.parseInt(d.orders, 10),
+      })),
+    [sales.data],
+  );
+  let error: string | null = null;
+  if (invalidRange) error = 'Start date must be before end date';
+  else if (sales.error) error = errorMessage(sales.error, 'Failed to load sales data');
 
   const totals = useMemo(() => ({
     revenue: data.reduce((s, d) => s + d.revenue, 0),
@@ -122,7 +131,7 @@ export default function SalesChart() {
 
   const chipClass = (active: boolean) =>
     `px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-      active ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+      active ? 'bg-primary-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
     }`;
 
   const renderChart = () => {
@@ -236,7 +245,7 @@ export default function SalesChart() {
             value={from}
             max={to}
             onChange={(e) => setFrom(e.target.value)}
-            className="input !w-auto !py-1.5"
+            className="input w-auto! py-1.5!"
             aria-label="Start date"
           />
           <span className="text-slate-400">to</span>
@@ -246,7 +255,7 @@ export default function SalesChart() {
             min={from}
             max={toIso(new Date())}
             onChange={(e) => setTo(e.target.value)}
-            className="input !w-auto !py-1.5"
+            className="input w-auto! py-1.5!"
             aria-label="End date"
           />
           <span className="text-xs text-slate-400 ml-1">

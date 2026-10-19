@@ -1,7 +1,7 @@
 import type {Product, ProductOption, Variant} from '../types';
 
-// Same rules as the web shop (frontend/src/components/Shop/VariantPicker.tsx
-// and components/Admin/VariantEditor.tsx), so both clients behave alike.
+// Same rules as the web shop (frontend/src/utils/variantSelection.ts and
+// frontend/src/components/Admin/variantDrafts.ts), so both clients behave alike.
 
 export type Selection = Record<string, string>;
 

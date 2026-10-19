@@ -1,0 +1,56 @@
+// The Express app, without starting a server or background jobs, so tests can
+// mount it on a random port. src/index.js starts it for real.
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+const path = require('node:path');
+
+const app = express();
+
+// ponytail: trust the single nginx proxy so req.ip is the real client (rate limiting needs it).
+app.set('trust proxy', 1);
+
+app.use(helmet());
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+app.use(cookieParser());
+// Stripe signs the raw request body, so this route must see it before express.json() parses it.
+app.use('/api/payments/webhook', require('./routes/stripeWebhook'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Static file serving for uploads
+// Helmet defaults to Cross-Origin-Resource-Policy: same-origin, which makes
+// browsers refuse to *display* these images when the web app is served from a
+// different origin than the API (e.g. Vite on :5173 with VITE_API_URL set).
+// Uploaded media is public, so allow it to be embedded from anywhere.
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, '..', 'uploads')));
+
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/setup', require('./routes/setup'));
+app.use('/api/categories', require('./routes/categories'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/orders', require('./routes/orders'));
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/reservations', require('./routes/reservations'));
+app.use('/api/returns', require('./routes/returns'));
+app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/notifications', require('./routes/notifications'));
+
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+  if (err.name === 'MulterError') return res.status(400).json({ error: err.message });
+  const msg = process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message;
+  res.status(500).json({ error: msg });
+});
+
+module.exports = app;

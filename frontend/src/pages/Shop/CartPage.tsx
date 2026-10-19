@@ -67,7 +67,7 @@ export default function CartPage() {
             <div
               key={lineKey(item)}
               className={`bg-white rounded-2xl border p-4 flex gap-4 transition-colors ${status === 'ok' || status === 'pending' ? 'border-slate-100 hover:border-primary-100' : 'border-rose-200 bg-rose-50/30'}`}            >
-              <div className="w-20 h-20 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0">
+              <div className="w-20 h-20 bg-slate-50 rounded-xl overflow-hidden shrink-0">
                 {item.image ? (
                   <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                 ) : (
@@ -100,7 +100,7 @@ export default function CartPage() {
                   <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg p-0.5">
                     <button
                       onClick={() => dispatch(updateQuantity({ key: lineKey(item), quantity: item.quantity - 1 }))}
-                      className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white hover:shadow-sm text-slate-600 transition-all"
+                      className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white hover:shadow-xs text-slate-600 transition-all"
                       aria-label="Decrease quantity"
                     >
                       <Minus size={12} />
@@ -108,7 +108,7 @@ export default function CartPage() {
                     <span className="w-7 text-center text-sm font-bold">{item.quantity}</span>
                     <button
                       onClick={() => dispatch(updateQuantity({ key: lineKey(item), quantity: item.quantity + 1 }))}
-                      className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white hover:shadow-sm text-slate-600 transition-all"
+                      className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white hover:shadow-xs text-slate-600 transition-all"
                       aria-label="Increase quantity"
                     >
                       <Plus size={12} />
@@ -125,7 +125,7 @@ export default function CartPage() {
                 </div>
               </div>
 
-              <div className="text-right flex-shrink-0">
+              <div className="text-right shrink-0">
                 <p className="font-bold text-slate-900">${(item.effective_price * item.quantity).toFixed(2)}</p>
                 {item.price !== item.effective_price && (
                   <p className="text-xs text-emerald-600 font-medium mt-0.5">

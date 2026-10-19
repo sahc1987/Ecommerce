@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
+import { isAxiosError } from "axios";
 import { Package, Lock, MapPin, CheckCircle2, Loader2, X, CreditCard, Banknote } from "lucide-react";
 import { RootState } from "../../store";
 import { clearCart, lineKey } from "../../store/slices/cartSlice";
@@ -219,10 +220,11 @@ export default function CheckoutPage() {
       }
       dispatch(clearCart());
       navigate(`/order-success?order=${res.data.order_id}`);
-    } catch (err: any) {
-      const status = err.response?.status;
+    } catch (err) {
+      const response = isAxiosError<{ available?: number }>(err) ? err.response : undefined;
+      const status = response?.status;
       toast.error(errorMessage(err, "Checkout failed"));
-      if (status === 409 && err.response?.data?.available !== undefined) {
+      if (status === 409 && response?.data?.available !== undefined) {
         // Stock changed under us: refresh holds so the cart shows what's left.
         await sync();
       } else if (status === 422) {
@@ -393,7 +395,7 @@ export default function CheckoutPage() {
                       }`}
                     >
                       <div
-                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
                           selected ? "border-primary-600" : "border-slate-300"
                         }`}
                       >
@@ -424,7 +426,7 @@ export default function CheckoutPage() {
               <div className="space-y-2 mb-4">
                 {items.map((item) => (
                   <div key={lineKey(item)} className="flex gap-3">
-                    <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
+                    <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden shrink-0">
                       {item.image ? (
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       ) : (

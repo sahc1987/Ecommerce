@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useDispatch, useSelector, useStore } from 'react-redux';
 import api from '../api';
 import { RootState } from '../store';
 import {
@@ -27,13 +27,15 @@ const signature = (items: CartItem[]) =>
 
 export function useReservations() {
   const dispatch = useDispatch();
+  const store = useStore<RootState>();
   const items = useSelector((s: RootState) => s.cart.items);
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
+  // The callbacks read the cart when they run (they're also called from timers),
+  // not the one from the render that created them.
+  const currentItems = useCallback(() => store.getState().cart.items, [store]);
 
   // PUT the whole cart: (re)creates holds and restarts the 3-minute timer.
   const sync = useCallback(async () => {
-    const current = itemsRef.current;
+    const current = currentItems();
     if (current.length === 0) {
       dispatch(setReservations({ items: [], expires_at: null }));
       return null;
@@ -49,11 +51,11 @@ export function useReservations() {
       dispatch(setSyncing(false));
       return null;
     }
-  }, [dispatch]);
+  }, [dispatch, currentItems]);
 
   // Extend live holds without changing quantities (used while checking out).
   const renew = useCallback(async () => {
-    if (itemsRef.current.length === 0) return null;
+    if (currentItems().length === 0) return null;
     try {
       const res = await api.post('/reservations/renew');
       if (res.data.items.length === 0) return sync(); // nothing live any more: re-reserve
@@ -62,10 +64,14 @@ export function useReservations() {
     } catch {
       return null;
     }
-  }, [dispatch, sync]);
+  }, [dispatch, sync, currentItems]);
 
   const release = useCallback(async () => {
-    try { await api.delete('/reservations'); } catch {}
+    try {
+      await api.delete('/reservations');
+    } catch {
+      // The server expires unused holds after 3 minutes anyway.
+    }
     dispatch(setReservations({ items: [], expires_at: null }));
   }, [dispatch]);
 
@@ -96,18 +102,22 @@ export function useReservationSync() {
   }, [holdExpiresAt, dispatch]);
 }
 
+// The clock as an external store: the current second, re-read every second
+// while something is subscribed.
+const subscribeEverySecond = (onTick: () => void) => {
+  const id = setInterval(onTick, 1000);
+  return () => clearInterval(id);
+};
+const subscribeNever = () => () => {};
+const currentSecond = () => Math.floor(Date.now() / 1000);
+
 // Seconds left on the cart's hold (null when there is none).
 export function useHoldCountdown(): number | null {
   const holdExpiresAt = useSelector((s: RootState) => s.cart.holdExpiresAt);
-  const [left, setLeft] = useState<number | null>(null);
-  useEffect(() => {
-    if (!holdExpiresAt) { setLeft(null); return; }
-    const tick = () => setLeft(Math.max(0, Math.round((new Date(holdExpiresAt).getTime() - Date.now()) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [holdExpiresAt]);
-  return left;
+  // Only tick while there's a hold to count down.
+  const now = useSyncExternalStore(holdExpiresAt ? subscribeEverySecond : subscribeNever, currentSecond);
+  if (!holdExpiresAt) return null;
+  return Math.max(0, Math.round(new Date(holdExpiresAt).getTime() / 1000 - now));
 }
 
 export const formatCountdown = (s: number) =>

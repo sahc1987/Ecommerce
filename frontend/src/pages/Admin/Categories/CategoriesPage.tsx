@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
 import {
   Plus,
@@ -9,6 +9,7 @@ import {
   Tag,
 } from "lucide-react";
 import api, { errorMessage } from "../../../api";
+import { useApiGet } from "../../../hooks/useApiGet";
 
 interface Category {
   id: number;
@@ -34,28 +35,23 @@ interface ModalState {
 }
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const {
+    data,
+    loading,
+    reload: fetchCategories,
+    setData,
+  } = useApiGet<{ categories: Category[] }>("/categories");
+  const categories = data?.categories ?? [];
   const [expanded, setExpanded] = useState<number | null>(null);
   const [subcategories, setSubcategories] = useState<
     Record<number, Subcategory[]>
   >({});
-  const [loading, setLoading] = useState(true);
 
   // Modal state
   const [modal, setModal] = useState<ModalState | null>(null);
   const [form, setForm] = useState({ name: "", description: "" });
   const [saving, setSaving] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
-
-  const fetchCategories = async () => {
-    const res = await api.get("/categories");
-    setCategories(res.data.categories);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
 
   const toggleExpand = async (id: number) => {
     if (expanded === id) {
@@ -130,7 +126,7 @@ export default function CategoriesPage() {
         fetchCategories();
       }
       setModal(null);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, "Save failed"));
     } finally {
       setSaving(false);
@@ -142,7 +138,7 @@ export default function CategoriesPage() {
       return;
     try {
       await api.delete(`/categories/${id}`);
-      setCategories((prev) => prev.filter((c) => c.id !== id));
+      setData((d) => ({ ...d, categories: d.categories.filter((c) => c.id !== id) }));
       toast.success("Category deleted");
     } catch {
       toast.error("Delete failed");

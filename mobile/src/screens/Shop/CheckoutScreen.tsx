@@ -84,7 +84,9 @@ const CheckoutScreen = ({navigation}: Props) => {
   // Being on the checkout screen keeps the stock hold alive.
   useEffect(() => {
     void dispatch(renewReservations());
-    const id = setInterval(() => void dispatch(renewReservations()), 60_000);
+    const id = setInterval(() => {
+      void dispatch(renewReservations());
+    }, 60_000);
     return () => clearInterval(id);
   }, [dispatch]);
   const store = useAppSelector(s => s.settings.store);
@@ -396,7 +398,9 @@ const CheckoutScreen = ({navigation}: Props) => {
             <Button
               title="I've paid — check status"
               icon="refresh"
-              onPress={() => void checkPayment(pending.orderId)}
+              onPress={() => {
+                void checkPayment(pending.orderId);
+              }}
               loading={checking}
               style={styles.pendingButton}
             />
@@ -404,7 +408,9 @@ const CheckoutScreen = ({navigation}: Props) => {
               title="Open payment page again"
               icon="open-in-new"
               variant="secondary"
-              onPress={() => void Linking.openURL(pending.url)}
+              onPress={() => {
+                void Linking.openURL(pending.url);
+              }}
               disabled={checking}
               style={styles.pendingButton}
             />

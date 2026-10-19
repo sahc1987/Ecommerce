@@ -3,7 +3,9 @@ import { formatDateTime } from '../../../utils/dates';
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowLeft, Check, ExternalLink, Package, RotateCcw, Truck } from "lucide-react";
+import { isAxiosError } from "axios";
 import api, { errorMessage } from "../../../api";
+import type { Order, OrderStatus, ReturnRequest } from "../../../types";
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -48,10 +50,11 @@ const paymentBadge: Record<string, string> = {
 const paymentLabel = (s?: string) => (s ?? 'unpaid').replace('_', ' ');
 
 // A paid card order is refunded in full when cancelled.
-const refundOnCancel = (order: any) =>
-  order.payment_method === 'stripe' && ['paid', 'partially_refunded'].includes(order.payment_status);
+const refundOnCancel = (order: Order) =>
+  order.payment_method === 'stripe' &&
+  (order.payment_status === 'paid' || order.payment_status === 'partially_refunded');
 
-const cancelPrompt = (order: any, byCustomer: boolean) => {
+const cancelPrompt = (order: Order, byCustomer: boolean) => {
   const refund = refundOnCancel(order)
     ? ` The ${byCustomer ? 'payment' : 'customer'} will be refunded to the card.`
     : '';
@@ -65,32 +68,43 @@ interface Props {
 export default function OrderDetail({ isCustomer }: Readonly<Props>) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<any>(null);
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showShipModal, setShowShipModal] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrier, setCarrier] = useState('');
-  const [returnRequest, setReturnRequest] = useState<any>(null);
+  const [returnRequest, setReturnRequest] = useState<ReturnRequest | null>(null);
   const [returnWindowDays, setReturnWindowDays] = useState(30);
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [returnReason, setReturnReason] = useState('');
   const [submittingReturn, setSubmittingReturn] = useState(false);
 
   useEffect(() => {
-    const loadOrder = api.get(`/orders/${id}`).then((res) => setOrder(res.data.order));
+    // Ignore responses for an order we've navigated away from.
+    let ignore = false;
+    const loads: Promise<unknown>[] = [
+      api.get<{ order: Order }>(`/orders/${id}`).then((res) => {
+        if (!ignore) setOrder(res.data.order);
+      }),
+    ];
     if (isCustomer) {
-      Promise.all([
-        loadOrder,
-        api.get('/setup/status').then((res) => setReturnWindowDays(res.data.store?.return_window_days ?? 30)),
-        api.get('/returns', { params: { order_id: id, limit: 1 } }).then((res) => {
-          if (res.data.returns.length > 0) setReturnRequest(res.data.returns[0]);
+      loads.push(
+        api.get('/setup/status').then((res) => {
+          if (!ignore) setReturnWindowDays(res.data.store?.return_window_days ?? 30);
         }),
-      ]).finally(() => setLoading(false));
-    } else {
-      loadOrder.finally(() => setLoading(false));
+        api.get<{ returns: ReturnRequest[] }>('/returns', { params: { order_id: id, limit: 1 } }).then((res) => {
+          if (!ignore) setReturnRequest(res.data.returns[0] ?? null);
+        }),
+      );
     }
-  }, [id]);
+    Promise.allSettled(loads).then(() => {
+      if (!ignore) setLoading(false);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [id, isCustomer]);
 
   const handleReturnSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +115,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       setShowReturnForm(false);
       setReturnReason('');
       toast.success('Return request submitted');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(errorMessage(err, 'Failed to submit return request'));
     } finally {
       setSubmittingReturn(false);
@@ -109,25 +123,26 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
   };
 
   // Status responses don't include the items; keep the ones already loaded.
-  const mergeOrder = (next: any) => setOrder((prev: any) => ({ ...prev, ...next, items: prev.items }));
+  const mergeOrder = (next: Order) =>
+    setOrder((prev) => (prev ? { ...prev, ...next, items: prev.items } : next));
 
   // The server rejects changes that aren't allowed or were overtaken by
   // another change (409, with the current order): show that order instead.
-  const handleUpdateError = (err: any) => {
+  const handleUpdateError = (err: unknown) => {
     toast.error(errorMessage(err, "Update failed"));
-    const fresh = err.response?.data?.order;
-    if (err.response?.status === 409 && fresh) mergeOrder(fresh);
+    if (isAxiosError<{ order?: Order }>(err) && err.response?.status === 409 && err.response.data.order)
+      mergeOrder(err.response.data.order);
   };
 
-  const updateStatus = async (body: Record<string, unknown>, success: string) => {
+  const updateStatus = async (current: Order, body: Record<string, unknown>, success: string) => {
     setUpdatingStatus(true);
     try {
       // expected_status: refuse if the order changed since this page loaded.
-      const res = await api.put(`/orders/${id}/status`, { ...body, expected_status: order.status });
+      const res = await api.put<{ order: Order }>(`/orders/${id}/status`, { ...body, expected_status: current.status });
       mergeOrder(res.data.order);
       toast.success(success);
       return true;
-    } catch (err: any) {
+    } catch (err) {
       handleUpdateError(err);
       return false;
     } finally {
@@ -135,7 +150,8 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
     }
   };
 
-  const handleStatusChange = async (status: string) => {
+  const handleStatusChange = async (status: OrderStatus) => {
+    if (!order) return;
     if (status === 'shipped') {
       setTrackingNumber(order.tracking_number ?? '');
       setCarrier(order.carrier ?? '');
@@ -143,12 +159,14 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       return;
     }
     if (status === 'cancelled' && !globalThis.confirm(cancelPrompt(order, false))) return;
-    await updateStatus({ status }, status === 'cancelled' ? 'Order cancelled' : 'Status updated');
+    await updateStatus(order, { status }, status === 'cancelled' ? 'Order cancelled' : 'Status updated');
   };
 
   const handleShipSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!order) return;
     const ok = await updateStatus(
+      order,
       { status: 'shipped', tracking_number: trackingNumber, carrier },
       'Order marked as shipped',
     );
@@ -157,13 +175,13 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
 
   // Customer cancel: allowed until the store starts preparing the order.
   const handleCustomerCancel = async () => {
-    if (!globalThis.confirm(cancelPrompt(order, true))) return;
+    if (!order || !globalThis.confirm(cancelPrompt(order, true))) return;
     setUpdatingStatus(true);
     try {
-      const res = await api.post(`/orders/${id}/cancel`);
+      const res = await api.post<{ order: Order }>(`/orders/${id}/cancel`);
       mergeOrder(res.data.order);
       toast.success(refundOnCancel(order) ? 'Order cancelled — your refund is on its way' : 'Order cancelled');
-    } catch (err: any) {
+    } catch (err) {
       handleUpdateError(err);
     } finally {
       setUpdatingStatus(false);
@@ -216,7 +234,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
               const lineActive = i < STEPS.length - 1 && STEPS[i + 1].reach.includes(order.status);
               return (
                 <Fragment key={step.label}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${done ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${done ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
                     {done ? <Check size={15} /> : <span className="text-xs font-medium">{i + 1}</span>}
                   </div>
                   {i < STEPS.length - 1 && (
@@ -244,7 +262,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             <>
               <p className="text-sm text-slate-500 mb-3">Move this order to:</p>
               <div className="flex flex-wrap gap-2">
-                {order.allowed_next.map((s: string) => (
+                {order.allowed_next.map((s) => (
                   <button
                     key={s}
                     disabled={updatingStatus}
@@ -328,9 +346,9 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           <h2 className="font-semibold text-slate-900">Items</h2>
         </div>
         <div className="divide-y divide-slate-100">
-          {order.items?.map((item: any) => (
+          {order.items?.map((item) => (
             <div key={item.id} className="flex items-center gap-4 px-6 py-4">
-              <div className="w-12 h-12 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
+              <div className="w-12 h-12 bg-slate-100 rounded-lg overflow-hidden shrink-0">
                 {item.product_image ? (
                   <img
                     src={item.product_image}
@@ -394,7 +412,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             <span>Payment</span>
             <span className="flex items-center gap-2">
               {order.payment_method === 'stripe' ? 'Card (Stripe)' : 'Cash on Delivery'}
-              <span className={`badge ${paymentBadge[order.payment_status] ?? 'bg-slate-100 text-slate-700'}`}>
+              <span className={`badge ${paymentBadge[order.payment_status ?? 'unpaid'] ?? 'bg-slate-100 text-slate-700'}`}>
                 {paymentLabel(order.payment_status)}
               </span>
             </span>
@@ -402,7 +420,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           {Number.parseFloat(order.refunded_amount ?? '0') > 0 && (
             <div className="flex justify-between text-sm text-slate-600">
               <span>Refunded</span>
-              <span>-${Number.parseFloat(order.refunded_amount).toFixed(2)}</span>
+              <span>-${Number.parseFloat(order.refunded_amount ?? '0').toFixed(2)}</span>
             </div>
           )}
         </div>
@@ -500,13 +518,13 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             <RotateCcw size={18} className="text-slate-500" />
             <h2 className="font-semibold text-slate-900">Return & Refund</h2>
           </div>
-          {renderReturnBody()}
+          {renderReturnBody(order)}
         </div>
       )}
     </div>
   );
 
-  function renderReturnBody() {
+  function renderReturnBody(order: Order) {
     if (returnRequest) {
       return (
         <div className="space-y-2">

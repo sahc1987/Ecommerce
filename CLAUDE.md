@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Three independent npm projects share one API; there is no root `package.json` or workspace.
 
-- `backend/` — Express 4 API (plain CommonJS JavaScript, no build step, no test suite)
-- `frontend/` — React 18 + Vite + TypeScript web app: storefront and back office in one SPA
+- `backend/` — Express 4 API (plain CommonJS JavaScript, no build step; tests use Node's built-in `node:test`)
+- `frontend/` — React 18 + Vite 8 + TypeScript + Tailwind 4 + React Router 7 web app: storefront and back office in one SPA
 - `mobile/` — React Native 0.87 app (iOS/Android): storefront and back office
 
 ## Commands
@@ -19,22 +19,30 @@ docker compose up -d postgres redis
 # Backend (needs backend/.env with DATABASE_URL; Redis is optional, see Caching)
 cd backend && npm run db:init     # applies src/db/schema.sql
 cd backend && npm run dev         # nodemon, http://localhost:5000
-node --check src/routes/orders.js # quickest syntax check; there is no lint/test script
+cd backend && npm run test:unit   # business rules, no database needed
+cd backend && npm test            # unit + API tests (API tests need TEST_DATABASE_URL, else skipped)
+node --test test/api/orders.test.js   # single file
 
 # Web
 cd frontend && npm run dev        # http://localhost:5173, proxies /api and /uploads to :5000
-cd frontend && npx tsc --noEmit   # typecheck; `npm run build` = tsc + vite build
+cd frontend && npm run typecheck  # `npm run build` = tsc + vite build
+cd frontend && npm run lint       # ESLint 10 flat config: typescript-eslint, react-hooks, react-refresh
+cd frontend && npm test           # Vitest (jsdom); single file: npx vitest run src/hooks/useApiGet.test.ts
 
 # Mobile
 cd mobile && npm run android      # or: npm run ios
 cd mobile && npx tsc --noEmit
 cd mobile && npm run lint
-cd mobile && npx jest path/to/file.test.tsx   # single test
+cd mobile && npx jest __tests__/cartSlice.test.ts   # single test
 ```
 
 In local dev, the root `.env` maps Postgres to host port **5433**, not 5432, to avoid a native PostgreSQL install. `backend/.env` points `DATABASE_URL` at that port.
 
-The mobile Jest suite currently fails to load `react-redux` (a transform config issue), so `__tests__/App.test.tsx` does not run.
+**Backend API tests** (`backend/test/api/`) wipe and rebuild the schema of the database in `TEST_DATABASE_URL` on every run, then start the app on a random port (`src/app.js` builds the app; `src/index.js` only starts it). `test/api/helpers.js` refuses any database whose name doesn't contain `test`. Locally: `TEST_DATABASE_URL=postgresql://<user>:<pass>@localhost:5433/ecommerce_test`. Files run one at a time (`--test-concurrency=1`) because they share that database. Card payments are off in tests, so Stripe refunds are covered by unit tests with a fake client.
+
+**Mobile Jest** needs ES-module packages listed in `transformIgnorePatterns` (`jest.config.js`) and native modules mocked in `jest.setup.js`. Add to both when a new native or ESM-only dependency breaks the suite.
+
+**Mobile formatting**: the committed code is not Prettier-formatted (about 1,600 lines differ), so don't run `prettier --write` on existing files as part of unrelated changes; it buries the real diff. Match the surrounding style instead (no spaces inside braces).
 
 ## Database and migrations
 
@@ -46,7 +54,7 @@ The mobile Jest suite currently fails to load `react-redux` (a transform config 
 
 ## Backend architecture
 
-`src/index.js` exits at startup if `JWT_SECRET` is unset, then mounts every router under `/api`. The Stripe webhook is mounted **before** `express.json()` because it needs the raw body.
+`src/app.js` builds the Express app and mounts every router under `/api`; `src/index.js` exits if `JWT_SECRET` is unset, starts the background jobs, listens, and on SIGTERM/SIGINT finishes in-flight requests and closes the database pool. The Stripe webhook is mounted **before** `express.json()` because it needs the raw body.
 
 **Auth** (`middleware/auth.js`): JWT read from the `token` httpOnly cookie (web) or `Authorization: Bearer` (mobile). Sending `X-Client: mobile` makes login/register return the token in the body. `requireRole('admin','staff')` guards back-office routes.
 
@@ -81,7 +89,12 @@ Conventions used across the routes:
 
 Both apps mirror the same features and should stay in sync when an API response changes.
 
-- **Web** (`frontend/src`): axios instance in `api/index.ts` with `withCredentials` (cookie auth), the `X-Cart-Token` header, a 401 → `/login` redirect, and `errorMessage(err, fallback)` for toasts. Several pages serve both roles via an `isCustomer` prop (e.g. `pages/Admin/Orders/OrderDetail.tsx`). Redux Toolkit holds cart/auth; Tailwind for styling.
+- **Web** (`frontend/src`): axios instance in `api/index.ts` with `withCredentials` (cookie auth), the `X-Cart-Token` header, a 401 → `/login` redirect, and `errorMessage(err, fallback)` for toasts. Several pages serve both roles via an `isCustomer` prop (e.g. `pages/Admin/Orders/OrderDetail.tsx`). Redux Toolkit holds cart/auth.
+  - Load data with `hooks/useApiGet.ts` (refetches when url/params change, drops out-of-date responses, derives `loading`, offers `reload()`/`setData()`), not a `fetchX()` called from `useEffect`. Effects that must fetch themselves use an `ignore` flag in their cleanup. The linter enforces React's rules (no synchronous `setState` in effects, no ref writes during render).
+  - API response types live in `types.ts` (orders, returns, users; mirrors `mobile/src/types.ts`) and `utils/pricing.ts` (products). No `any`: narrow errors with `isAxiosError`.
+  - Component files export only components (React Fast Refresh); shared helpers go in plain modules (`utils/variantSelection.ts`, `components/Admin/variantDrafts.ts`).
+  - The back office and setup wizard are `React.lazy` routes in `App.tsx`, so shoppers don't download them. Keep new admin pages lazy.
+  - Tailwind 4 is configured in CSS (`src/index.css`: `@theme` for the `primary` palette, `@utility` for `btn-*`, `input`, `card`, `badge`) through the `@tailwindcss/vite` plugin; there is no `tailwind.config.js` or PostCSS config. The Inter font is linked from `index.html`, not imported in CSS.
 - **Mobile** (`mobile/src`): typed endpoint wrappers in `api/index.ts` over `api/client.ts` (Bearer token from the keychain, `X-Client: mobile`). Shared API types are in `types.ts`. The backend address is chosen by `MODE` in `src/config.ts` (the default `reverse` needs `adb reverse tcp:5000 tcp:5000` on Android; no npm script runs it, despite the comment in `config.ts`).
 - Status endpoints return the order **without** `items`. Clients merge the response into the order they already hold rather than replacing it.
 

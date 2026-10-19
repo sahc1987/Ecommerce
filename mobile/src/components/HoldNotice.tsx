@@ -28,7 +28,9 @@ export const HoldNotice = () => {
           Your hold expired — items may have sold out.
         </Text>
         <Pressable
-          onPress={() => void dispatch(syncReservations())}
+          onPress={() => {
+            void dispatch(syncReservations());
+          }}
           disabled={syncing}
           hitSlop={6}>
           <Text style={styles.action}>{syncing ? 'Checking…' : 'Reserve again'}</Text>
