@@ -51,7 +51,7 @@ function NotificationIcon({
   if (type === 'new_order') {
     return (
       <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-        <ShoppingBag size={16} className="text-green-600" />
+        <ShoppingBag size={16} className="text-green-700" />
       </div>
     );
   }
@@ -65,7 +65,7 @@ function NotificationIcon({
   if (type === 'return_request') {
     return (
       <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-        <RotateCcw size={16} className="text-orange-600" />
+        <RotateCcw size={16} className="text-orange-700" />
       </div>
     );
   }
@@ -73,13 +73,13 @@ function NotificationIcon({
   if (metadata.status === 'rejected') {
     return (
       <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-        <XCircle size={16} className="text-red-600" />
+        <XCircle size={16} className="text-red-700" />
       </div>
     );
   }
   return (
     <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-      <CheckCircle size={16} className="text-green-600" />
+      <CheckCircle size={16} className="text-green-700" />
     </div>
   );
 }
@@ -198,7 +198,7 @@ export default function NotificationBell({
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-slate-900 text-sm">Notifications</h3>
               {unread > 0 && (
-                <span className="bg-rose-100 text-rose-600 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
+                <span className="bg-rose-100 text-rose-700 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
                   {unread} new
                 </span>
               )}
@@ -215,7 +215,7 @@ export default function NotificationBell({
 
           <div className="max-h-96 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-500">
                 <Bell size={28} className="opacity-30" />
                 <p className="text-sm">No notifications yet</p>
               </div>
@@ -251,7 +251,7 @@ export default function NotificationBell({
                         <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
                           {n.message}
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
+                        <p className="text-[11px] text-slate-500 mt-1">{timeAgo(n.created_at)}</p>
                       </div>
                     </button>
                     <button

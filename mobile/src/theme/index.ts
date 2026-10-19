@@ -1,23 +1,26 @@
 /**
- * Single source of design tokens. The web app uses Tailwind's slate/indigo
- * ramp; these values mirror it so the two clients feel like one product.
+ * Single source of design tokens, mirroring the web app (Tailwind slate + the
+ * `primary` blue in frontend/src/index.css) so the two clients feel like one
+ * product. Text colours meet 4.5:1 on `bg`/`surface`; `control` meets the 3:1
+ * needed for input and chip borders.
  */
 export const colors = {
   bg: '#f8fafc',
   surface: '#ffffff',
   surfaceAlt: '#f1f5f9',
   border: '#e2e8f0',
+  control: '#8091a7',
   text: '#0f172a',
-  textMuted: '#64748b',
-  textFaint: '#94a3b8',
-  primary: '#4f46e5',
-  primaryDark: '#4338ca',
-  primarySoft: '#eef2ff',
+  textMuted: '#475569',
+  textFaint: '#64748b',
+  primary: '#2563eb',
+  primaryDark: '#1d4ed8',
+  primarySoft: '#eff6ff',
   danger: '#dc2626',
   dangerSoft: '#fef2f2',
-  success: '#16a34a',
+  success: '#15803d',
   successSoft: '#f0fdf4',
-  warning: '#d97706',
+  warning: '#b45309',
   warningSoft: '#fffbeb',
   info: '#0284c7',
   infoSoft: '#f0f9ff',

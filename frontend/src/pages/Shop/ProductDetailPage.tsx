@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import type { ShopOutletContext } from '../../components/Layout/ShopLayout';
 import { useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
-import { ShoppingCart, Package, ArrowLeft, Minus, Plus, Truck, RotateCcw, Shield } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Minus, Plus, Truck, RotateCcw, Banknote } from 'lucide-react';
 import api from '../../api';
-import { addItem } from '../../store/slices/cartSlice';
+import { addItem, lineKey } from '../../store/slices/cartSlice';
 import {
   type Product, applyDiscount, formatPrice, effectivePriceRange, sellableStock, variantBasePrice, variantLabel,
 } from '../../utils/pricing';
 import VariantPicker from '../../components/Shop/VariantPicker';
+import ProductImage from '../../components/Shop/ProductImage';
 import { type Selection, findVariant, initialSelection } from '../../utils/variantSelection';
 
 interface ProductImage {
@@ -24,14 +26,17 @@ type ShopProduct = Product & {
   images: ProductImage[] | null;
 };
 
-const trustBadges = [
-  { icon: Truck, label: 'Free shipping', sub: 'On orders over $50' },
-  { icon: RotateCcw, label: '30-day returns', sub: 'Hassle-free returns' },
-  { icon: Shield, label: 'Secure payment', sub: 'Encrypted checkout' },
+// Promises the store keeps: shipping is always free, returns follow the store's
+// return window, and cash on delivery is always offered.
+const trustBadges = (returnDays: number) => [
+  { icon: Truck, label: 'Free shipping', sub: 'On every order' },
+  { icon: RotateCcw, label: `${returnDays}-day returns`, sub: 'From your orders page' },
+  { icon: Banknote, label: 'Pay on delivery', sub: 'Cash on delivery available' },
 ];
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
+  const { store, openCart } = useOutletContext<ShopOutletContext>();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [product, setProduct] = useState<ShopProduct | null>(null);
@@ -101,7 +106,7 @@ export default function ProductDetailPage() {
 
   const handleAddToCart = () => {
     if (hasOptions && !variant) return;
-    dispatch(addItem({
+    const line = {
       product_id: product.id,
       variant_id: variant?.id ?? null,
       variant_label: label,
@@ -113,8 +118,9 @@ export default function ProductDetailPage() {
       image: primaryImage?.url,
       quantity,
       stock: sellable,
-    }));
-    toast.success('Added to cart!');
+    };
+    dispatch(addItem(line));
+    openCart(lineKey(line));
   };
 
   const stockStatus = () => {
@@ -122,9 +128,9 @@ export default function ProductDetailPage() {
       const text = missing.length ? `Choose ${missing.join(' and ').toLowerCase()}` : 'This combination is not available';
       return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500"><span className="w-2 h-2 rounded-full bg-slate-300" />{text}</span>;
     }
-    if (sellable === 0) return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-rose-600"><span className="w-2 h-2 rounded-full bg-rose-500" />Out of Stock</span>;
-    if (sellable <= 5) return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-600"><span className="w-2 h-2 rounded-full bg-amber-500" />Only {sellable} left</span>;
-    return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><span className="w-2 h-2 rounded-full bg-emerald-500" />In Stock</span>;
+    if (sellable === 0) return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-rose-700"><span className="w-2 h-2 rounded-full bg-rose-500" />Out of Stock</span>;
+    if (sellable <= 5) return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-500" />Only {sellable} left</span>;
+    return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" />In Stock</span>;
   };
 
   return (
@@ -137,31 +143,33 @@ export default function ProductDetailPage() {
         Back
       </button>
 
-      <div className="grid md:grid-cols-2 gap-10">
+      {/* Image a little narrower than the details, so the photo (or placeholder)
+          doesn't take over the page. */}
+      <div className="grid md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-8 lg:gap-12">
         {/* Images */}
         <div className="space-y-3">
-          <div className="aspect-square bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
-            {displayImage ? (
-              <img src={displayImage.url} alt={product.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Package size={64} className="text-slate-200" />
-              </div>
-            )}
-          </div>
+          <ProductImage
+            src={displayImage?.url}
+            alt={product.name}
+            category={product.category_name}
+            size="large"
+            className="aspect-square w-full"
+            priority
+          />
           {images.length > 1 && (
             <div className="flex gap-2 overflow-x-auto pb-1">
               {images.map((img, i) => (
                 <button
                   key={img.id}
+                  type="button"
                   onClick={() => setSelectedImage(i)}
-                  className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
-                    selectedImage === i
-                      ? 'border-primary-500 shadow-xs'
-                      : 'border-slate-200 hover:border-primary-300'
+                  aria-label={`Show photo ${i + 1} of ${images.length}`}
+                  aria-pressed={selectedImage === i}
+                  className={`shrink-0 rounded-xl p-0.5 border-2 transition-all ${
+                    selectedImage === i ? 'border-primary-600' : 'border-transparent hover:border-control'
                   }`}
                 >
-                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  <ProductImage src={img.url} alt="" size="thumb" className="w-16 h-16" />
                 </button>
               ))}
             </div>
@@ -187,17 +195,17 @@ export default function ProductDetailPage() {
               </span>
               {hasDiscount && !showRange && (
                 <>
-                  <span className="text-xl text-slate-400 line-through font-medium">
+                  <span className="text-xl text-slate-500 line-through font-medium">
                     ${basePrice.toFixed(2)}
                   </span>
-                  <span className="bg-rose-100 text-rose-600 text-sm font-bold px-2.5 py-0.5 rounded-lg">
+                  <span className="bg-rose-100 text-rose-700 text-sm font-bold px-2.5 py-0.5 rounded-lg">
                     {product.discount_percent}% OFF
                   </span>
                 </>
               )}
             </div>
             {hasDiscount && !showRange && quantity > 0 && (
-              <p className="text-sm text-emerald-600 font-semibold mt-2">
+              <p className="text-sm text-emerald-700 font-semibold mt-2">
                 You save ${savings.toFixed(2)} on this order
               </p>
             )}
@@ -218,14 +226,14 @@ export default function ProductDetailPage() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 hover:border-slate-300 transition-all"
+                    className="w-10 h-10 rounded-xl border border-control flex items-center justify-center hover:bg-slate-50 hover:border-slate-500 transition-all"
                   >
                     <Minus size={14} />
                   </button>
                   <span className="w-10 text-center font-bold text-lg">{quantity}</span>
                   <button
                     onClick={() => setQuantity(Math.min(sellable, quantity + 1))}
-                    className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 hover:border-slate-300 transition-all"
+                    className="w-10 h-10 rounded-xl border border-control flex items-center justify-center hover:bg-slate-50 hover:border-slate-500 transition-all"
                   >
                     <Plus size={14} />
                   </button>
@@ -243,11 +251,11 @@ export default function ProductDetailPage() {
 
           {/* Trust badges */}
           <div className="grid grid-cols-3 gap-3 pt-2">
-            {trustBadges.map(({ icon: Icon, label, sub }) => (
+            {trustBadges(store.return_window_days ?? 30).map(({ icon: Icon, label, sub }) => (
               <div key={label} className="flex flex-col items-center text-center p-3 bg-slate-50 rounded-xl">
                 <Icon size={18} className="text-primary-500 mb-1.5" />
                 <p className="text-xs font-semibold text-slate-700">{label}</p>
-                <p className="text-xs text-slate-400 mt-0.5 hidden sm:block">{sub}</p>
+                <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">{sub}</p>
               </div>
             ))}
           </div>
@@ -261,7 +269,7 @@ export default function ProductDetailPage() {
           )}
 
           {(variant?.sku ?? product.sku) && (
-            <p className="text-xs text-slate-400">SKU: {variant?.sku ?? product.sku}</p>
+            <p className="text-xs text-slate-500">SKU: {variant?.sku ?? product.sku}</p>
           )}
         </div>
       </div>

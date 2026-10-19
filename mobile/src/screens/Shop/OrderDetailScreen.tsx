@@ -1,5 +1,5 @@
 import React, {useCallback, useState} from 'react';
-import {Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Alert, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {ordersApi, returnsApi} from '../../api';
 import {errorMessage} from '../../api/client';
@@ -15,11 +15,11 @@ import {
   StatusBadge,
 } from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
+import {ProductImage} from '../../components/ProductImage';
 import {formatDateTime, formatMoney, shortId} from '../../utils/format';
 import {useAppSelector} from '../../store/hooks';
 import type {OrdersStackParams} from '../../navigation/types';
 import type {Order, ReturnRequest} from '../../types';
-import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<OrdersStackParams, 'OrderDetail'>;
 
@@ -98,13 +98,7 @@ const OrderDetailScreen = ({route, navigation}: Props) => {
           <View
             key={item.id}
             style={[styles.item, index > 0 && styles.itemBordered]}>
-            {item.product_image ? (
-              <Image source={{uri: mediaUrl(item.product_image)}} style={styles.image} />
-            ) : (
-              <View style={[styles.image, styles.imageFallback]}>
-                <Icon name="image-outline" size={18} color={colors.textFaint} />
-              </View>
-            )}
+            <ProductImage src={item.product_image} alt={item.product_name} size="thumb" style={styles.image} />
             <View style={styles.flex}>
               <Text style={styles.itemName} numberOfLines={2}>
                 {item.product_name}

@@ -1,9 +1,10 @@
 import React, {useEffect} from 'react';
-import {FlatList, Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useNavigation} from '@react-navigation/native';
 import {Button, EmptyState, Icon, Row} from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
+import {ProductImage} from '../../components/ProductImage';
 import {formatMoney} from '../../utils/format';
 import {useAppDispatch, useAppSelector} from '../../store/hooks';
 import {
@@ -18,7 +19,6 @@ import {
 } from '../../store/slices/cartSlice';
 import {HoldNotice} from '../../components/HoldNotice';
 import type {CartStackParams} from '../../navigation/types';
-import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<CartStackParams, 'Cart'>;
 
@@ -71,13 +71,7 @@ const CartScreen = ({navigation}: Props) => {
           const held = reservations[lineKey(item)]?.reserved ?? 0;
           return (
           <View style={[styles.item, status !== 'ok' && status !== 'pending' && styles.itemProblem]}>
-            {item.image ? (
-              <Image source={{uri: mediaUrl(item.image)}} style={styles.image} />
-            ) : (
-              <View style={[styles.image, styles.imageFallback]}>
-                <Icon name="image-outline" size={20} color={colors.textFaint} />
-              </View>
-            )}
+            <ProductImage src={item.image} alt={item.name} size="thumb" style={styles.image} />
             <View style={styles.itemBody}>
               <Text style={styles.itemName} numberOfLines={2}>
                 {item.name}

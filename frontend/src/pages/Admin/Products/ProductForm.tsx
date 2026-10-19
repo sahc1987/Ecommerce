@@ -262,7 +262,7 @@ export default function ProductForm() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate("/admin/products")}
-          className="text-slate-400 hover:text-slate-600"
+          className="text-slate-500 hover:text-slate-600"
         >
           <ArrowLeft size={20} />
         </button>
@@ -370,7 +370,7 @@ export default function ProductForm() {
                 Price *
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                   $
                 </span>
                 <input
@@ -390,7 +390,7 @@ export default function ProductForm() {
                 Compare-at Price
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                   $
                 </span>
                 <input
@@ -445,7 +445,7 @@ export default function ProductForm() {
                         setForm({ ...form, discount_percent: e.target.value })
                       }
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
                       %
                     </span>
                   </div>
@@ -556,7 +556,7 @@ export default function ProductForm() {
         <div className="card space-y-4">
           <h2 className="font-semibold text-slate-900">Images</h2>
           {!isEdit && (
-            <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+            <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
               Save the product first, then you can add images.
             </p>
           )}
@@ -585,7 +585,7 @@ export default function ProductForm() {
                       <button
                         type="button"
                         onClick={() => handleDeleteImage(img.id)}
-                        className="bg-white/90 p-1.5 rounded-lg text-red-600 hover:bg-white"
+                        className="bg-white/90 p-1.5 rounded-lg text-red-700 hover:bg-white"
                       >
                         <X size={14} />
                       </button>
@@ -601,7 +601,7 @@ export default function ProductForm() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={uploadingImages}
-                  className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 hover:border-primary-400 hover:text-primary-500 transition-colors"
+                  className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-500 hover:border-primary-400 hover:text-primary-500 transition-colors"
                 >
                   <Upload size={20} />
                   <span className="text-xs mt-1">

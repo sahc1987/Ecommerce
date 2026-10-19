@@ -35,6 +35,8 @@ export interface Product {
   variants?: Variant[];
   price_min?: number;
   price_max?: number;
+  /** Units in orders that weren't cancelled (public list endpoint). */
+  units_sold?: number;
 }
 
 export interface Category {

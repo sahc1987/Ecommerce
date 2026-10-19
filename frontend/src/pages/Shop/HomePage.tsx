@@ -2,23 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApiGet } from '../../hooks/useApiGet';
 import type { Page } from '../../types';
 import { Link, useSearchParams, useNavigate, useOutletContext } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import toast from 'react-hot-toast';
 import {
-  ArrowRight, Package, X, Zap, Check, Crown, Tag, ChevronLeft, ChevronRight,
+  ArrowRight, Package, X, Zap, Tag, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { RootState } from '../../store';
-import { addItem } from '../../store/slices/cartSlice';
-import {
-  Product, getEffectivePrice, hasActiveDiscount, needsOptions, sellableStock, singleVariant,
-} from '../../utils/pricing';
+import { Product, hasActiveDiscount } from '../../utils/pricing';
 import { categoryIcon } from '../../utils/categoryIcon';
 import { textOr } from '../../utils/text';
+import { useAddToCart } from '../../hooks/useAddToCart';
 import LeftSidebar from '../../components/Shop/LeftSidebar';
-import CartSidebar from '../../components/Shop/CartSidebar';
 import ProductCard from '../../components/Shop/ProductCard';
 import type { ShopOutletContext } from '../../components/Layout/ShopLayout';
-import StoreLogo from '../../components/StoreLogo';
+import ProductImage from '../../components/Shop/ProductImage';
 
 /* ---------- small building blocks ---------- */
 
@@ -29,7 +23,7 @@ function SectionHeader({
     <div className="flex items-end justify-between gap-3 mb-3">
       <div>
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-1.5">{title}{icon}</h2>
-        {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
       </div>
       <div className="flex items-center gap-4">
         {right}
@@ -43,11 +37,21 @@ function SectionHeader({
   );
 }
 
-function ProductGrid({ products, onAddToCart, cols = 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4' }: Readonly<{
-  products: Product[]; onAddToCart: (p: Product) => void; cols?: string;
+// 2 columns on phones, 3 on tablets, 4 next to the sidebar, 5 on wide screens.
+// Home sections show whole rows only: cards past the row(s) are hidden at
+// each width, so a 5-product strip never leaves a lone card on a 4-column row.
+const GRID_COLS = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+const ROWS = {
+  all: '',
+  one: 'max-sm:[&>*:nth-child(n+5)]:hidden sm:max-lg:[&>*:nth-child(n+4)]:hidden lg:max-xl:[&>*:nth-child(n+5)]:hidden',
+  two: 'max-lg:[&>*:nth-child(n+7)]:hidden lg:max-xl:[&>*:nth-child(n+9)]:hidden',
+};
+
+function ProductGrid({ products, onAddToCart, rows = 'all' }: Readonly<{
+  products: Product[]; onAddToCart: (p: Product) => void; rows?: keyof typeof ROWS;
 }>) {
   return (
-    <div className={`grid ${cols} gap-3`}>
+    <div className={`grid ${GRID_COLS} ${ROWS[rows]} gap-3`}>
       {products.map((p) => <ProductCard key={p.id} product={p} onAddToCart={onAddToCart} />)}
     </div>
   );
@@ -78,9 +82,9 @@ function Countdown({ target }: Readonly<{ target: Date | null }>) {
         <div key={label} className="flex items-center gap-1">
           <div className="text-center">
             <div className="bg-rose-500 text-white text-xs font-bold w-8 h-7 rounded-md flex items-center justify-center tabular-nums">{v}</div>
-            <p className="text-[9px] text-slate-400 mt-0.5">{label}</p>
+            <p className="text-[9px] text-slate-500 mt-0.5">{label}</p>
           </div>
-          {i < cells.length - 1 && <span className="text-rose-500 font-bold -mt-3">:</span>}
+          {i < cells.length - 1 && <span className="text-rose-700 font-bold -mt-3">:</span>}
         </div>
       ))}
     </div>
@@ -100,9 +104,9 @@ function Hero({ products }: Readonly<{ products: Product[] }>) {
   const discounted = p ? hasActiveDiscount(p) : false;
 
   return (
-    <section className="relative rounded-2xl overflow-hidden bg-linear-to-r from-[#0b1a3d] via-[#0f2c6b] to-primary-600 text-white min-h-[280px] shadow-lg shadow-primary-900/20">
+    <section className="relative rounded-2xl overflow-hidden bg-linear-to-r from-[#0b1a3d] via-[#0f2c6b] to-primary-600 text-white min-h-70 shadow-lg shadow-primary-900/20">
       <div className="absolute -right-16 -top-16 w-72 h-72 rounded-full bg-primary-400/20 blur-3xl" />
-      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 p-7 md:p-9 items-center min-h-[280px]">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 p-7 md:p-9 items-center min-h-70">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-primary-200 flex items-center gap-1.5">
             <Zap size={12} /> {textOr(p?.category_name, 'Next-Gen Performance')}
@@ -120,7 +124,7 @@ function Hero({ products }: Readonly<{ products: Product[] }>) {
             Shop Now <ArrowRight size={15} />
           </Link>
         </div>
-        <div className="relative hidden md:flex items-center justify-center h-full min-h-[200px]">
+        <div className="relative hidden md:flex items-center justify-center h-full min-h-50">
           {discounted && (
             <div className="absolute top-0 right-2 w-16 h-16 rounded-full bg-rose-500 flex flex-col items-center justify-center text-center leading-none shadow-lg rotate-6">
               <span className="text-[9px] font-semibold">Up to</span>
@@ -128,16 +132,15 @@ function Hero({ products }: Readonly<{ products: Product[] }>) {
               <span className="text-[9px] font-semibold">OFF</span>
             </div>
           )}
-          {p?.primary_image ? (
-            <div key={p.id} className="bg-white/90 rounded-2xl p-3 shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-              <img
-                src={p.primary_image}
-                alt={p.name}
-                className="max-h-48 w-auto object-contain rounded-xl"
-              />
-            </div>
-          ) : (
-            <Package size={96} className="text-white/20" />
+          {p && (
+            <ProductImage
+              key={p.id}
+              src={p.primary_image}
+              alt={p.name}
+              category={p.category_name}
+              className="w-48 h-48 shadow-[0_20px_40px_rgba(0,0,0,0.35)]"
+              priority
+            />
           )}
         </div>
       </div>
@@ -183,7 +186,7 @@ function EmptyState() {
         <Package size={28} className="text-slate-300" />
       </div>
       <p className="text-lg font-semibold text-slate-500">No products found</p>
-      <p className="text-sm text-slate-400 mt-1">Try a different search or category</p>
+      <p className="text-sm text-slate-500 mt-1">Try a different search or category</p>
     </div>
   );
 }
@@ -206,12 +209,14 @@ function ProductResults({ loading, products, onAddToCart }: Readonly<{
   return <ProductGrid products={products} onAddToCart={onAddToCart} />;
 }
 
+// Results per page: fills whole rows at 2, 4 and 5 columns.
+const PAGE_SIZE = 20;
+
 export default function HomePage() {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { store, categories } = useOutletContext<ShopOutletContext>();
-  const cartItems = useSelector((s: RootState) => s.cart.items);
+  const { store, categories, openCart } = useOutletContext<ShopOutletContext>();
+  const handleAddToCart = useAddToCart(openCart);
 
   const urlSearch = searchParams.get('search') ?? '';
   const urlCategory = searchParams.get('category') ?? '';
@@ -226,10 +231,11 @@ export default function HomePage() {
 
   const productsQuery = useApiGet<{ products: Product[] } & Page>('/products', {
     page,
-    limit: isFiltered ? 12 : 24,
+    limit: isFiltered ? PAGE_SIZE : 24,
     search: urlSearch || undefined,
     category: urlCategory || undefined,
     discount: urlDiscount ? 'true' : undefined,
+    sort: urlSort || undefined,
   });
   const products = useMemo(() => productsQuery.data?.products ?? [], [productsQuery.data]);
   const loading = productsQuery.loading;
@@ -240,44 +246,29 @@ export default function HomePage() {
   const dealsQuery = useApiGet<{ products: Product[] }>('/products', { discount: 'true', limit: 8 });
   const deals = useMemo(() => (dealsQuery.data?.products ?? []).filter(hasActiveDiscount), [dealsQuery.data]);
 
-  // Products with options (size, color…) need a choice first: open their page.
-  const handleAddToCart = (p: Product) => {
-    if (needsOptions(p)) {
-      navigate(`/products/${p.slug}`);
-      return;
-    }
-    const only = singleVariant(p);
-    dispatch(addItem({
-      product_id: p.id,
-      variant_id: only?.id ?? null,
-      sku: only?.sku ?? null,
-      slug: p.slug,
-      name: p.name,
-      price: Number.parseFloat(p.price),
-      effective_price: getEffectivePrice(p),
-      image: p.primary_image ?? undefined,
-      quantity: 1,
-      stock: p.available_stock ?? p.stock,
-    }));
-    toast.success('Added to cart');
-  };
+  // Most-bought first (then newest). Feeds Best Sellers, which only counts
+  // products somebody bought, and the "More from the store" row.
+  const popularQuery = useApiGet<{ products: Product[] }>('/products', { sort: 'popular', limit: 10 });
+  const popular = useMemo(() => popularQuery.data?.products ?? [], [popularQuery.data]);
+  const bestSellers = popular.filter((p) => (p.units_sold ?? 0) > 0).slice(0, 5);
 
   const goToPage = (n: number) => {
     setPaging({ filterKey, page: n });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Merchandising slices for the unfiltered home view
+  // Merchandising slices for the unfiltered home view. Each section is what its
+  // title says: running deals, real best sellers, then the newest products
+  // (skipping any already shown above).
   const heroProducts = deals.length ? deals : products;
-  const flashSale = deals.slice(0, 4);
-  const dealIds = new Set(flashSale.map((p) => p.id));
-  const rest = products.filter((p) => !dealIds.has(p.id));
-  const trending = rest.slice(0, 4);
-  const recommended = rest.slice(4, 8).length ? rest.slice(4, 8) : rest.slice(0, 4);
-  const suggestions = useMemo(
-    () => products.filter((p) => !cartItems.some((i) => i.product_id === p.id) && sellableStock(p) > 0).slice(0, 4),
-    [products, cartItems]
-  );
+  const flashSale = deals.slice(0, 5);
+  const shownIds = new Set([...flashSale, ...bestSellers].map((p) => p.id));
+  const newArrivals = products.filter((p) => !shownIds.has(p.id)).slice(0, 10);
+  // A small category or search doesn't fill a row: offer other products under it.
+  const resultIds = new Set(products.map((p) => p.id));
+  const moreFromStore = !loading && products.length < 5
+    ? popular.filter((p) => !resultIds.has(p.id)).slice(0, 5)
+    : [];
   // Fallback countdown target, fixed when the page opens.
   const [endOfToday] = useState(() => {
     const eod = new Date();
@@ -301,6 +292,7 @@ export default function HomePage() {
     if (urlCategory) return textOr(categories.find((c) => String(c.id) === urlCategory)?.name, 'Products');
     if (urlDiscount) return 'Deals';
     if (urlSort === 'new') return 'New Arrivals';
+    if (urlSort === 'popular') return 'Best Sellers';
     return 'All Products';
   })();
 
@@ -309,18 +301,19 @@ export default function HomePage() {
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-slate-900">{filteredTitle}</h1>
-          <p className="text-xs text-slate-400">{total} {total === 1 ? 'item' : 'items'}</p>
+          <p className="text-xs text-slate-500">{total} {total === 1 ? 'item' : 'items'}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
+            aria-pressed={urlDiscount}
             onClick={() => {
               const next = new URLSearchParams(searchParams);
               if (urlDiscount) next.delete('discount'); else next.set('discount', 'true');
               navigate(`/?${next.toString()}`);
             }}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-              urlDiscount ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-600 border-slate-200 hover:border-rose-300'
+              urlDiscount ? 'bg-rose-700 text-white border-rose-700' : 'bg-white text-slate-600 border-control hover:border-rose-300'
             }`}
           >
             <Tag size={11} /> On Sale
@@ -328,7 +321,7 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-control bg-white text-slate-500 hover:text-slate-900 transition-colors"
           >
             <X size={11} /> Clear
           </button>
@@ -341,7 +334,7 @@ export default function HomePage() {
         <div className="flex items-center justify-center gap-3 mt-8">
           <button
             type="button"
-            className="px-4 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 text-sm font-medium border border-control bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             disabled={page === 1}
             onClick={() => goToPage(page - 1)}
           >
@@ -350,13 +343,20 @@ export default function HomePage() {
           <span className="text-sm text-slate-500">Page {page} of {pages}</span>
           <button
             type="button"
-            className="px-4 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 text-sm font-medium border border-control bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             disabled={page === pages}
             onClick={() => goToPage(page + 1)}
           >
             Next
           </button>
         </div>
+      )}
+
+      {moreFromStore.length > 0 && (
+        <section className="mt-8">
+          <SectionHeader title="More from the store" subtitle="Popular with other shoppers" to="/?sort=popular" />
+          <ProductGrid products={moreFromStore} onAddToCart={handleAddToCart} rows="one" />
+        </section>
       )}
     </>
   );
@@ -377,7 +377,7 @@ export default function HomePage() {
                 <Link
                   key={cat.id}
                   to={`/?category=${cat.id}`}
-                  className="flex flex-col items-center gap-2 shrink-0 w-[88px] group"
+                  className="flex flex-col items-center gap-2 shrink-0 w-22 group"
                 >
                   <div className="w-16 h-16 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden group-hover:border-primary-400 group-hover:shadow-md transition-all">
                     {cat.image_url ? (
@@ -397,30 +397,30 @@ export default function HomePage() {
         <section className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <Link
             to={promoCats[0] ? `/?category=${promoCats[0].id}` : '/?discount=true'}
-            className="sm:col-span-3 rounded-2xl bg-linear-to-r from-[#0b1a3d] to-primary-700 text-white p-6 flex items-center justify-between gap-4 min-h-[140px] hover:shadow-lg transition-shadow"
+            className="sm:col-span-3 rounded-2xl bg-primary-50 border border-primary-100 text-slate-900 p-6 flex items-center justify-between gap-4 min-h-35 hover:shadow-lg hover:border-primary-200 transition-all"
           >
             <div>
               <p className="text-lg font-bold leading-snug">
                 Step Into<br />{promoCats[0] ? promoCats[0].name : 'a New Reality'}
               </p>
-              <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold border border-white/40 px-3 py-1.5 rounded-lg hover:bg-white/10">
+              <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary-700 bg-white border border-control px-3 py-1.5 rounded-lg">
                 Explore Now <ArrowRight size={12} />
               </span>
             </div>
-            <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-              {promoCats[0] ? (() => { const I = categoryIcon(promoCats[0].name); return <I size={40} className="text-white/80" />; })() : <Zap size={40} className="text-white/80" />}
+            <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shrink-0">
+              {promoCats[0] ? (() => { const I = categoryIcon(promoCats[0].name); return <I size={40} className="text-primary-600" />; })() : <Zap size={40} className="text-primary-600" />}
             </div>
           </Link>
           <Link
             to={promoCats[1] ? `/?category=${promoCats[1].id}` : '/'}
-            className="sm:col-span-2 rounded-2xl bg-white border border-slate-200 p-6 flex items-center justify-between gap-3 min-h-[140px] hover:shadow-lg hover:border-primary-200 transition-all"
+            className="sm:col-span-2 rounded-2xl bg-white border border-slate-200 p-6 flex items-center justify-between gap-3 min-h-35 hover:shadow-lg hover:border-primary-200 transition-all"
           >
             <div>
               <p className="text-base font-bold text-slate-900 leading-snug">
                 {promoCats[1] ? promoCats[1].name : 'Smart Home'}<br />
                 <span className="text-primary-600">Smarter Living</span>
               </p>
-              <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary-600">
+              <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary-700">
                 Shop Now <ArrowRight size={12} />
               </span>
             </div>
@@ -440,74 +440,36 @@ export default function HomePage() {
               to="/?discount=true"
               right={<Countdown target={flashEnd} />}
             />
-            <ProductGrid products={flashSale} onAddToCart={handleAddToCart} />
+            <ProductGrid products={flashSale} onAddToCart={handleAddToCart} rows="one" />
           </section>
         )}
 
-        {/* Trending */}
-        {trending.length > 0 && (
+        {/* Best sellers: ranked by units actually sold; hidden until something sells */}
+        {bestSellers.length > 0 && (
           <section>
-            <SectionHeader title="Trending Now" subtitle="Most popular tech right now" to="/?sort=new" />
-            <ProductGrid products={trending} onAddToCart={handleAddToCart} />
+            <SectionHeader title="Best Sellers" subtitle="Most bought in our store" to="/?sort=popular" />
+            <ProductGrid products={bestSellers} onAddToCart={handleAddToCart} rows="one" />
           </section>
         )}
 
-        {/* Recommended */}
-        {recommended.length > 0 && (
+        {/* New arrivals: the newest products not already shown above */}
+        {newArrivals.length > 0 && (
           <section>
-            <SectionHeader title="Recommended for You" subtitle="Based on your browsing history" to="/?sort=new" />
-            <ProductGrid products={recommended} onAddToCart={handleAddToCart} />
+            <SectionHeader title="New Arrivals" subtitle="Just added to the store" to="/?sort=new" />
+            <ProductGrid products={newArrivals} onAddToCart={handleAddToCart} rows="two" />
           </section>
         )}
-
-        {/* Rewards banner */}
-        <section className="rounded-2xl bg-[#0b1a3d] text-white p-6 md:p-8 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-6 items-center">
-          <div className="flex items-center gap-3">
-            {store.logo_url ? (
-              <StoreLogo logoUrl={store.logo_url} name={store.name} size={48} />
-            ) : (
-              <div className="w-12 h-12 rounded-xl bg-amber-400 flex items-center justify-center">
-                <Crown size={22} className="text-[#0b1a3d]" />
-              </div>
-            )}
-            <div className="leading-tight">
-              <p className="font-extrabold text-lg">{store.name}</p>
-              <p className="text-amber-400 font-bold text-sm tracking-widest">PLUS</p>
-            </div>
-          </div>
-          <div>
-            <p className="text-lg font-bold">More Tech. More Rewards.</p>
-            <p className="text-xs text-white/60 mt-1 max-w-md">
-              Join {store.name} Plus and get exclusive deals, early access, free shipping and more!
-            </p>
-            <Link
-              to="/register"
-              className="mt-4 inline-block bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
-            >
-              Join Now
-            </Link>
-          </div>
-          <ul className="space-y-1.5 text-xs text-white/80">
-            {['Exclusive Member Prices', 'Early Access to New Launches', 'Free Shipping', 'Special Birthday Offers'].map((t) => (
-              <li key={t} className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full bg-primary-500 flex items-center justify-center"><Check size={10} /></span>
-                {t}
-              </li>
-            ))}
-          </ul>
-        </section>
       </div>
     );
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5">
+    <div className="max-w-350 mx-auto px-4 sm:px-6 py-5">
       <div className="flex gap-5 items-start">
-        <LeftSidebar categories={categories} storeName={store.name} />
+        <LeftSidebar categories={categories} store={store} />
         <div className="flex-1 min-w-0">
           {isFiltered ? renderFiltered() : renderHome()}
         </div>
-        <CartSidebar suggestions={suggestions} storeName={store.name} onAddToCart={handleAddToCart} />
       </div>
     </div>
   );

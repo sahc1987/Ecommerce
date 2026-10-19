@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useState } from "react";
-import { formatDateTime } from '../../../utils/dates';
+import { Fragment, useEffect, useState } from "react";import { formatDateTime } from '../../../utils/dates';
+import ProductImage from '../../../components/Shop/ProductImage';
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, Check, ExternalLink, Package, RotateCcw, Truck } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, RotateCcw, Truck } from "lucide-react";
 import { isAxiosError } from "axios";
 import api, { errorMessage } from "../../../api";
 import type { Order, OrderStatus, ReturnRequest } from "../../../types";
@@ -205,7 +205,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate(isCustomer ? "/orders" : "/admin/orders")}
-          className="text-slate-400 hover:text-slate-600"
+          className="text-slate-500 hover:text-slate-600"
         >
           <ArrowLeft size={20} />
         </button>
@@ -234,7 +234,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
               const lineActive = i < STEPS.length - 1 && STEPS[i + 1].reach.includes(order.status);
               return (
                 <Fragment key={step.label}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${done ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${done ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
                     {done ? <Check size={15} /> : <span className="text-xs font-medium">{i + 1}</span>}
                   </div>
                   {i < STEPS.length - 1 && (
@@ -246,7 +246,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           </div>
           <div className="flex justify-between mt-2.5">
             {STEPS.map((step) => (
-              <span key={step.label} className={`text-xs text-center flex-1 leading-tight ${step.reach.includes(order.status) ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>
+              <span key={step.label} className={`text-xs text-center flex-1 leading-tight ${step.reach.includes(order.status) ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
                 {step.label}
               </span>
             ))}
@@ -269,8 +269,8 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
                     onClick={() => handleStatusChange(s)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
                       s === 'cancelled'
-                        ? 'bg-white border-rose-200 text-rose-600 hover:bg-rose-50'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        ? 'bg-white border-rose-200 text-rose-700 hover:bg-rose-50'
+                        : 'bg-white border-control text-slate-700 hover:bg-slate-50'
                     }`}
                   >
                     {s === 'cancelled' ? 'Cancel order' : s.charAt(0).toUpperCase() + s.slice(1)}
@@ -278,7 +278,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
                 ))}
               </div>
               {order.payment_method === 'stripe' && order.status === 'pending' && (
-                <p className="text-xs text-slate-400 mt-3">Card orders move to paid automatically once Stripe confirms the payment.</p>
+                <p className="text-xs text-slate-500 mt-3">Card orders move to paid automatically once Stripe confirms the payment.</p>
               )}
             </>
           ) : (
@@ -304,7 +304,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             type="button"
             onClick={handleCustomerCancel}
             disabled={updatingStatus}
-            className="px-4 py-2 rounded-lg text-sm font-semibold border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+            className="px-4 py-2 rounded-lg text-sm font-semibold border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
           >
             {updatingStatus ? 'Cancelling…' : 'Cancel order'}
           </button>
@@ -348,17 +348,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         <div className="divide-y divide-slate-100">
           {order.items?.map((item) => (
             <div key={item.id} className="flex items-center gap-4 px-6 py-4">
-              <div className="w-12 h-12 bg-slate-100 rounded-lg overflow-hidden shrink-0">
-                {item.product_image ? (
-                  <img
-                    src={item.product_image}
-                    alt={item.product_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Package size={20} className="m-auto text-slate-400 mt-3" />
-                )}
-              </div>
+              <ProductImage src={item.product_image} alt={item.product_name} size="thumb" className="w-12 h-12" />
               <div className="flex-1">
                 <p className="font-medium text-slate-900">{item.product_name}</p>
                 {(item.variant_label || item.sku) && (
@@ -387,7 +377,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
             <span>${Number.parseFloat(order.subtotal).toFixed(2)}</span>
           </div>
           {Number.parseFloat(order.discount) > 0 && (
-            <div className="flex justify-between text-sm text-green-600">
+            <div className="flex justify-between text-sm text-green-700">
               <span>Discount</span>
               <span>-${Number.parseFloat(order.discount).toFixed(2)}</span>
             </div>
@@ -497,7 +487,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
                   required
                 />
               </div>
-              <p className="text-xs text-slate-400">The customer is notified with the carrier and tracking number.</p>
+              <p className="text-xs text-slate-500">The customer is notified with the carrier and tracking number.</p>
               <div className="flex gap-3 pt-1">
                 <button type="submit" className="btn-primary" disabled={updatingStatus}>
                   {updatingStatus ? 'Saving...' : 'Confirm Shipment'}
@@ -555,7 +545,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
     const daysLeft = returnWindowDays - daysSince;
     if (daysSince > returnWindowDays) {
       return (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-red-700">
           The return window for this order has expired. Returns must be requested within {returnWindowDays} days of the order date.
         </p>
       );
@@ -575,7 +565,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
 
     return (
       <form onSubmit={handleReturnSubmit} className="space-y-3">
-        <p className="text-xs text-slate-400">{remaining}</p>
+        <p className="text-xs text-slate-500">{remaining}</p>
         <div>
           <label htmlFor="return-reason" className="block text-sm font-medium text-slate-700 mb-1">Reason for return</label>
           <textarea

@@ -37,7 +37,7 @@ export default function TimeZoneSelect({ value, onChange, id = 'timezone' }: Rea
           </option>
         ))}
       </select>
-      <div className="flex items-center justify-between text-xs text-slate-400">
+      <div className="flex items-center justify-between text-xs text-slate-500">
         <span>
           Current time there:{' '}
           <span className="font-medium text-slate-600">

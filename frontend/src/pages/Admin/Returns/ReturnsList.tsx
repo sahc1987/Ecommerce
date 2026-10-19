@@ -99,9 +99,10 @@ export default function ReturnsList() {
         {['', 'requested', 'approved', 'rejected', 'refunded'].map((s) => (
           <button
             key={s || 'all'}
+            aria-pressed={status === s}
             onClick={() => setStatus(s)}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              status === s ? 'bg-primary-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              status === s ? 'bg-primary-600 text-white' : 'bg-white border border-control text-slate-600 hover:bg-slate-50'
             }`}
           >
             {s ? s.charAt(0).toUpperCase() + s.slice(1) : 'All'}
@@ -130,15 +131,15 @@ export default function ReturnsList() {
                   </td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <p className="font-medium text-slate-900">{r.customer_name}</p>
-                    <p className="text-xs text-slate-400">{r.customer_email}</p>
+                    <p className="text-xs text-slate-500">{r.customer_email}</p>
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-slate-700 max-w-[200px] truncate">{r.reason}</p>
                     {r.refund_amount && (
-                      <p className="text-xs text-green-600 font-medium">
+                      <p className="text-xs text-green-700 font-medium">
                         {r.status === 'refunded' ? 'Refunded' : 'Refund'}: ${Number.parseFloat(r.refund_amount).toFixed(2)}
                         {r.status === 'refunded' && (
-                          <span className="text-slate-400 font-normal"> · {r.restocked ? 'restocked' : 'not restocked'}</span>
+                          <span className="text-slate-500 font-normal"> · {r.restocked ? 'restocked' : 'not restocked'}</span>
                         )}
                       </p>
                     )}
@@ -197,7 +198,7 @@ export default function ReturnsList() {
                     onChange={(e) => setProcessForm({ ...processForm, refund_amount: e.target.value })}
                     required={processForm.status === 'refunded'}
                   />
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-slate-500 mt-1">
                     Up to ${refundableLeft(selectedReturn).toFixed(2)}
                     {selectedReturn.order_payment_method === 'stripe'
                       ? ' · refunded to the customer’s card through Stripe'
@@ -215,7 +216,7 @@ export default function ReturnsList() {
                   />
                   <span>
                     Return items to stock
-                    <span className="block text-xs text-slate-400">Untick if the items are damaged and can’t be sold again.</span>
+                    <span className="block text-xs text-slate-500">Untick if the items are damaged and can’t be sold again.</span>
                   </span>
                 </label>
               )}

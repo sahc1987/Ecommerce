@@ -53,7 +53,7 @@ export default function VariantEditor({
             <button
               type="button"
               onClick={() => onOptionsChange(options.filter((_, j) => j !== i))}
-              className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50"
+              className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-50"
               aria-label={`Remove option ${o.name || i + 1}`}
             >
               <Trash2 size={16} />
@@ -109,7 +109,7 @@ export default function VariantEditor({
                   || Object.values(v.options).join(' / ');
                 return (
                   <tr key={v.id ?? comboKey(Object.keys(v.options), v.options)} className="border-b border-slate-50 align-middle">
-                    <td className={`py-2 px-1 whitespace-nowrap font-medium ${isStale(options, v) ? 'text-amber-600' : 'text-slate-800'}`}>
+                    <td className={`py-2 px-1 whitespace-nowrap font-medium ${isStale(options, v) ? 'text-amber-700' : 'text-slate-800'}`}>
                       {label}
                     </td>
                     <td className="py-2 px-1">
@@ -152,7 +152,7 @@ export default function VariantEditor({
                       <button
                         type="button"
                         onClick={() => onVariantsChange(variants.filter((_, j) => j !== i))}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-50"
                         aria-label={`Remove variant ${label}`}
                       >
                         <Trash2 size={14} />

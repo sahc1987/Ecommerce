@@ -38,7 +38,7 @@ export default function MyOrders() {
       <h1 className="text-2xl font-bold text-slate-900 mb-6">My Orders</h1>
 
       {orders.length === 0 ? (
-        <div className="text-center py-20 text-slate-400">
+        <div className="text-center py-20 text-slate-500">
           <ShoppingCart size={48} className="mx-auto mb-4 opacity-40" />
           <p className="text-lg">No orders yet</p>
           <Link to="/" className="mt-4 inline-block btn-primary">
@@ -68,7 +68,7 @@ export default function MyOrders() {
                   <p className="font-medium text-slate-900">
                     {o.item_count} item{Number(o.item_count) === 1 ? "" : "s"}
                   </p>
-                  <p className="text-sm text-slate-400 mt-0.5">
+                  <p className="text-sm text-slate-500 mt-0.5">
                     {formatDate(o.created_at)}
                   </p>
                 </div>

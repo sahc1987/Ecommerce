@@ -53,8 +53,8 @@ export default function VariantPicker({ options, variants, selection, onChange }
                       peer-checked:border-primary-600 peer-checked:bg-primary-50 peer-checked:text-primary-700
                       peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2
                       ${soldOut
-                        ? 'border-dashed border-slate-200 text-slate-400 line-through'
-                        : 'border-slate-200 text-slate-700 hover:border-primary-300'}`}
+                        ? 'border-dashed border-slate-200 text-slate-500 line-through'
+                        : 'border-control text-slate-700 hover:border-primary-300'}`}
                   >
                     {value}
                     {unavailableNote && <span className="sr-only">{unavailableNote}</span>}

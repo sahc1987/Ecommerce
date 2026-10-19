@@ -58,9 +58,9 @@ A full online store built the way real shops need it to work, not a simple demo:
 
 | Area | What you can do |
 | --- | --- |
-| 🛍️ **Catalog** | Browse by category and subcategory, search, and view photo galleries. |
+| 🛍️ **Catalog** | Browse by category and subcategory, search, and view photo galleries. The home page shows real best sellers (by units sold) and the newest arrivals. Products without a photo get a neutral "Photo coming soon" frame. |
 | 🎨 **Product options** | Sell one product in many versions (for example color and size). Each version has its own SKU, stock, and optional price. |
-| 🛒 **Cart** | Shop without an account. Items in your cart are held for you for a few minutes, with a countdown. |
+| 🛒 **Cart** | Shop without an account. Adding a product opens a slide-out cart (also opened from the header icon) with the item, a few suggestions, and View cart / Checkout. Items are held for you for a few minutes, with a countdown. |
 | 💳 **Checkout** | Pay by card through Stripe or choose cash on delivery. Tax is added from the store's settings. |
 | 🚚 **Shipping** | Staff add the carrier and tracking number, and the customer gets a working tracking link. |
 | ❌ **Cancellations** | Customers cancel their own order until the store starts preparing it; staff can cancel until it ships. Items go back on sale and a card payment is refunded automatically. |
@@ -369,7 +369,7 @@ All paths start with `/api`. 🔒 = signed in, 🧑‍💼 = staff or admin, �
 | DELETE | `/categories/:id` | Delete 👑 |
 | POST, PUT | `/categories/:categoryId/subcategories`, `/categories/subcategories/:id` | Add or edit subcategory 🧑‍💼 |
 | DELETE | `/categories/subcategories/:id` | Delete subcategory 👑 |
-| GET | `/products` | Browse and search, with live stock |
+| GET | `/products` | Browse and search, with live stock and units sold. `sort=new` (default) or `sort=popular` (best sellers) |
 | GET | `/products/:idOrSlug` | One product |
 | GET | `/products/admin/all`, `/products/admin/:id` | Back-office views 🧑‍💼 |
 | POST, PUT | `/products`, `/products/:id` | Add or edit 🧑‍💼 |

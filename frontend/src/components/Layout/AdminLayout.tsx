@@ -29,7 +29,7 @@ function Sidebar({ onClose }: SidebarProps) {
   return (
     <div className="flex flex-col gap-4 h-full">
       <nav className="bg-white rounded-2xl border border-slate-200 p-2">
-        <p className="px-3 pt-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+        <p className="px-3 pt-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Manage
         </p>
         {navItems.map(({ to, icon: Icon, label, end }) => (
@@ -48,7 +48,7 @@ function Sidebar({ onClose }: SidebarProps) {
           >
             {({ isActive }) => (
               <>
-                <Icon size={15} className={isActive ? 'text-white' : 'text-slate-400'} />
+                <Icon size={15} className={isActive ? 'text-white' : 'text-slate-500'} />
                 {label}
               </>
             )}
@@ -66,7 +66,7 @@ function Sidebar({ onClose }: SidebarProps) {
         </div>
         <div className="leading-tight">
           <p className="text-sm font-semibold text-slate-900">View Store</p>
-          <p className="text-[11px] text-slate-400">Open the storefront</p>
+          <p className="text-[11px] text-slate-500">Open the storefront</p>
         </div>
       </NavLink>
 
@@ -86,7 +86,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const { user } = useSelector((s: RootState) => s.auth);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [storeName, setStoreName] = useState('ShopHub');
+  const [storeName, setStoreName] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -121,7 +121,7 @@ export default function AdminLayout() {
   const firstName = user?.name.split(' ')[0];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100">
+    <div className="min-h-screen flex flex-col bg-slate-50">
       <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-xs">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 flex items-center gap-3 h-[68px]">
           <button
@@ -136,7 +136,7 @@ export default function AdminLayout() {
             <StoreLogo logoUrl={logoUrl} name={storeName} size={40} />
             <div className="leading-tight">
               <p className="font-extrabold text-xl text-primary-700 tracking-tight">{storeName}</p>
-              <p className="text-[10px] text-slate-400">Admin Panel</p>
+              <p className="text-[10px] text-slate-500">Admin Panel</p>
             </div>
           </NavLink>
 
@@ -155,7 +155,7 @@ export default function AdminLayout() {
               </div>
               <div className="hidden md:block text-left leading-tight">
                 <p className="text-sm font-semibold text-slate-900 truncate max-w-[120px]">Hello, {firstName}</p>
-                <p className="text-[11px] text-slate-400 flex items-center gap-0.5 capitalize">{user?.role} <ChevronDown size={11} /></p>
+                <p className="text-[11px] text-slate-500 flex items-center gap-0.5 capitalize">{user?.role} <ChevronDown size={11} /></p>
               </div>
             </button>
 
@@ -170,12 +170,12 @@ export default function AdminLayout() {
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
-                  <ExternalLink size={15} className="text-slate-400" /> View Store
+                  <ExternalLink size={15} className="text-slate-500" /> View Store
                 </NavLink>
                 <div className="border-t border-slate-100 mt-1 pt-1">
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-500 hover:bg-rose-50 transition-colors w-full text-left"
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-700 hover:bg-rose-50 transition-colors w-full text-left"
                   >
                     <LogOut size={15} /> Sign out
                   </button>
@@ -195,9 +195,9 @@ export default function AdminLayout() {
             onClick={() => setSidebarOpen(false)}
             aria-label="Close sidebar"
           />
-          <aside className="relative w-64 z-10 bg-slate-100 p-4 overflow-y-auto">
+          <aside className="relative w-64 z-10 bg-slate-50 p-4 overflow-y-auto">
             <button
-              className="absolute top-3 right-3 p-1 text-slate-400 hover:text-slate-700 z-10"
+              className="absolute top-3 right-3 p-1 text-slate-500 hover:text-slate-700 z-10"
               onClick={() => setSidebarOpen(false)}
               aria-label="Close menu"
             >

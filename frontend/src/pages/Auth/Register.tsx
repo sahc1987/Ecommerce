@@ -2,15 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
-import { Store, Check, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import api, { errorMessage } from '../../api';
 import { setCredentials } from '../../store/slices/authSlice';
-
-const perks = [
-  'Thousands of curated products',
-  'Track orders in real time',
-  'Exclusive member deals & sales',
-];
+import { AuthBrandMark, AuthBrandPanel } from '../../components/AuthBrand';
 
 export default function Register() {
   const dispatch = useDispatch();
@@ -46,45 +41,15 @@ export default function Register() {
   return (
     <div className="min-h-screen flex">
       {/* Brand panel */}
-      <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-slate-900 p-10 flex-col justify-between">
-        <Link to="/" className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-linear-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center shadow-md">
-            <Store size={18} className="text-white" />
-          </div>
-          <span className="font-bold text-xl text-white tracking-tight">ShopHub</span>
-        </Link>
-
-        <div>
-          <h2 className="text-4xl font-bold text-white leading-tight mb-3">
-            Join ShopHub today
-          </h2>
-          <p className="text-slate-400 text-base leading-relaxed mb-8">
-            Create your free account and start shopping from our curated collection of quality products.
-          </p>
-          <ul className="space-y-3">
-            {perks.map((perk) => (
-              <li key={perk} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                  <Check size={11} className="text-slate-300" />
-                </div>
-                <span className="text-slate-300 text-sm">{perk}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <p className="text-slate-600 text-xs">&copy; {new Date().getFullYear()} ShopHub. All rights reserved.</p>
-      </div>
+      <AuthBrandPanel
+        title={(name) => `Join ${name}`}
+        text="Create a free account to check out, track your orders and request returns."
+      />
 
       {/* Form panel */}
       <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-12 bg-slate-50">
         <div className="w-full max-w-md">
-          <Link to="/" className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-linear-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-              <Store size={15} className="text-white" />
-            </div>
-            <span className="font-bold text-lg text-slate-900">ShopHub</span>
-          </Link>
+          <AuthBrandMark />
 
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
@@ -139,7 +104,7 @@ export default function Register() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors"
                     onClick={() => setShowPw(!showPw)}
                     aria-label={showPw ? 'Hide password' : 'Show password'}
                   >
@@ -161,7 +126,7 @@ export default function Register() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors"
                     onClick={() => setShowConfirmPw(!showConfirmPw)}
                     aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
                   >

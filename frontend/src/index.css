@@ -12,7 +12,20 @@
   --color-primary-700: #1d4ed8;
   --color-primary-800: #1e40af;
   --color-primary-900: #1e3a8a;
+
+  /* Border of interactive controls (inputs, outlined buttons, chips): the
+     lightest grey with 3:1 contrast on white and on the slate-50 page, as
+     non-text contrast requires. Decorative card/table borders stay slate-200. */
+  --color-control: #8091a7;
 }
+
+/*
+  Colour roles:
+  - primary-600 (solid): the one main action of a screen.
+  - white + border-control: secondary actions, filters, inputs.
+  - rose: sale prices and errors only. emerald/green: stock and success only.
+  - Small text: slate-500 on white/slate-50, slate-600 on tinted backgrounds.
+*/
 
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
@@ -32,12 +45,21 @@
   }
 }
 
+/* High Contrast mode drops background colours, so a pressed filter chip would
+   look like the others; outline it with the system highlight colour instead. */
+@media (forced-colors: active) {
+  [aria-pressed='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
 @utility btn-primary {
   @apply bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-semibold py-2.5 px-5 rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs hover:shadow-md;
 }
 
 @utility btn-secondary {
-  @apply bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 font-semibold py-2.5 px-5 rounded-xl border border-slate-200 transition-all duration-150 shadow-xs;
+  @apply bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 font-semibold py-2.5 px-5 rounded-xl border border-control hover:border-slate-500 transition-all duration-150 shadow-xs;
 }
 
 @utility btn-danger {
@@ -45,7 +67,7 @@
 }
 
 @utility input {
-  @apply w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-primary-500/40 focus:border-primary-300 transition-all placeholder:text-slate-400 shadow-xs;
+  @apply w-full border border-control rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-primary-500/40 focus:border-primary-600 transition-all placeholder:text-slate-500 shadow-xs;
 }
 
 @utility card {
@@ -69,6 +91,6 @@
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   body {
-    @apply bg-slate-100 text-slate-900 antialiased;
+    @apply bg-slate-50 text-slate-900 antialiased;
   }
 }

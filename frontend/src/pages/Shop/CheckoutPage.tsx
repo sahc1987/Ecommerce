@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";import ProductImage from '../../components/Shop/ProductImage';
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
-import { Package, Lock, MapPin, CheckCircle2, Loader2, X, CreditCard, Banknote } from "lucide-react";
+import { Lock, MapPin, CheckCircle2, Loader2, X, CreditCard, Banknote } from "lucide-react";
 import { RootState } from "../../store";
 import { clearCart, lineKey } from "../../store/slices/cartSlice";
 import api, { errorMessage } from "../../api";
@@ -280,7 +280,7 @@ export default function CheckoutPage() {
                   />
                   <div className="absolute inset-y-0 right-2 flex items-center gap-1.5 pointer-events-none">
                     {loadingSuggestions && (
-                      <Loader2 size={15} className="text-slate-400 animate-spin pointer-events-none" />
+                      <Loader2 size={15} className="text-slate-500 animate-spin pointer-events-none" />
                     )}
                     {addressVerified && !loadingSuggestions && (
                       <CheckCircle2 size={16} className="text-emerald-500 pointer-events-none" />
@@ -289,7 +289,7 @@ export default function CheckoutPage() {
                       <button
                         type="button"
                         onClick={clearLine1}
-                        className="pointer-events-auto text-slate-400 hover:text-slate-600 p-0.5"
+                        className="pointer-events-auto text-slate-500 hover:text-slate-600 p-0.5"
                         tabIndex={-1}
                         aria-label="Clear address"
                       >
@@ -302,7 +302,7 @@ export default function CheckoutPage() {
                 {/* Suggestions dropdown */}
                 {suggestionsOpen && suggestions.length > 0 && (
                   <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                    <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50">
+                    <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">
                       Suggestions
                     </p>
                     <ul>
@@ -338,7 +338,7 @@ export default function CheckoutPage() {
                 )}
 
                 {addressVerified && (
-                  <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
+                  <p className="text-xs text-emerald-700 font-medium mt-1 flex items-center gap-1">
                     <CheckCircle2 size={11} />
                     Address verified
                   </p>
@@ -391,7 +391,7 @@ export default function CheckoutPage() {
                       aria-checked={selected}
                       onClick={() => setPaymentMethod(o.value)}
                       className={`w-full flex items-center gap-3 p-3.5 border rounded-lg text-left transition-colors ${
-                        selected ? "border-primary-200 bg-primary-50" : "border-slate-200 hover:bg-slate-50"
+                        selected ? "border-primary-200 bg-primary-50" : "border-control hover:bg-slate-50"
                       }`}
                     >
                       <div
@@ -403,9 +403,9 @@ export default function CheckoutPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-slate-900">{o.label}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{o.hint}</p>
+                        <p className="text-xs text-slate-600 mt-0.5">{o.hint}</p>
                       </div>
-                      <Icon size={20} className={selected ? "text-primary-600" : "text-slate-400"} />
+                      <Icon size={20} className={selected ? "text-primary-600" : "text-slate-500"} />
                     </button>
                   );
                 })}
@@ -426,13 +426,7 @@ export default function CheckoutPage() {
               <div className="space-y-2 mb-4">
                 {items.map((item) => (
                   <div key={lineKey(item)} className="flex gap-3">
-                    <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden shrink-0">
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package size={16} className="m-auto text-slate-300 mt-2.5" />
-                      )}
-                    </div>
+                    <ProductImage src={item.image} alt={item.name} size="thumb" className="w-10 h-10" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-800 truncate">{item.name}</p>
                       <p className="text-xs text-slate-500">

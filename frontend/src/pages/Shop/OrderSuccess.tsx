@@ -50,7 +50,7 @@ export default function OrderSuccess() {
     return (
       <div className="max-w-lg mx-auto px-4 py-24 text-center">
         <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-6">
-          <XCircle size={40} className="text-rose-600" />
+          <XCircle size={40} className="text-rose-700" />
         </div>
         <h1 className="text-3xl font-bold text-slate-900 mb-2">Payment not completed</h1>
         <p className="text-slate-500 mb-8">No charge was made. Your cart is still saved, so you can try again.</p>
@@ -63,7 +63,7 @@ export default function OrderSuccess() {
   return (
     <div className="max-w-lg mx-auto px-4 py-24 text-center">
       <div className={`w-20 h-20 ${processing ? 'bg-amber-100' : 'bg-green-100'} rounded-full flex items-center justify-center mx-auto mb-6`}>
-        {processing ? <Clock size={40} className="text-amber-600" /> : <CheckCircle size={40} className="text-green-600" />}
+        {processing ? <Clock size={40} className="text-amber-700" /> : <CheckCircle size={40} className="text-green-700" />}
       </div>
       <h1 className="text-3xl font-bold text-slate-900 mb-2">
         {processing ? 'Payment processing' : 'Order Confirmed!'}
@@ -74,7 +74,7 @@ export default function OrderSuccess() {
           : "Thank you for your purchase. We've received your order and will process it shortly."}
       </p>
       {orderId && (
-        <p className="text-sm text-slate-400 mb-8">
+        <p className="text-sm text-slate-500 mb-8">
           Order #{orderId.slice(0, 8).toUpperCase()}
         </p>
       )}

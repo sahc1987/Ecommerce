@@ -2,7 +2,6 @@ import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -15,10 +14,10 @@ import {errorMessage} from '../../api/client';
 import {useAsync} from '../../hooks/useAsync';
 import {Button, EmptyState, ErrorState, Field, Icon, Loading} from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
+import {ProductImage} from '../../components/ProductImage';
 import {formatMoney} from '../../utils/format';
 import {useAppSelector} from '../../store/hooks';
 import type {AdminStackParams} from '../../navigation/types';
-import {mediaUrl} from '../../utils/media';
 import type {Product} from '../../types';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminProducts'>;
@@ -91,13 +90,7 @@ const AdminProductsScreen = ({navigation}: Props) => {
           <Pressable
             style={styles.card}
             onPress={() => navigation.navigate('AdminProductForm', {id: item.id})}>
-            {item.primary_image ? (
-              <Image source={{uri: mediaUrl(item.primary_image)}} style={styles.thumb} />
-            ) : (
-              <View style={[styles.thumb, styles.thumbFallback]}>
-                <Icon name="image-outline" size={18} color={colors.textFaint} />
-              </View>
-            )}
+            <ProductImage src={item.primary_image} alt={item.name} category={item.category_name} size="thumb" style={styles.thumb} />
             <View style={styles.body}>
               <Text style={styles.name} numberOfLines={2}>
                 {item.name}

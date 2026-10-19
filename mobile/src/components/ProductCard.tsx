@@ -1,9 +1,9 @@
 import React from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {colors, font, radius, shadow, spacing} from '../theme';
 import {effectivePriceRange, formatMoney, isDiscounted, sellableStock} from '../utils/format';
 import type {Product} from '../types';
-import {mediaUrl} from '../utils/media';
+import {ProductImage} from './ProductImage';
 
 export const ProductCard = ({
   product,
@@ -24,13 +24,12 @@ export const ProductCard = ({
       onPress={onPress}
       style={({pressed}) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.imageWrap}>
-        {image ? (
-          <Image source={{uri: mediaUrl(image)}} style={styles.image} resizeMode="cover" />
-        ) : (
-          <View style={[styles.image, styles.imageFallback]}>
-            <Text style={styles.imageFallbackText}>No image</Text>
-          </View>
-        )}
+        <ProductImage
+          src={image}
+          alt={product.name}
+          category={product.category_name}
+          style={styles.image}
+        />
         {discounted ? (
           <View style={styles.discountTag}>
             <Text style={styles.discountText}>
@@ -71,10 +70,9 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   pressed: {opacity: 0.85},
-  imageWrap: {position: 'relative', backgroundColor: colors.surfaceAlt},
-  image: {width: '100%', aspectRatio: 1},
-  imageFallback: {alignItems: 'center', justifyContent: 'center'},
-  imageFallbackText: {color: colors.textFaint, fontSize: font.xs},
+  imageWrap: {position: 'relative'},
+  // The card draws the border, so the image frame drops its own.
+  image: {width: '100%', aspectRatio: 1, borderWidth: 0, borderRadius: 0},
   discountTag: {
     position: 'absolute',
     top: spacing.sm,

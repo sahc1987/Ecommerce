@@ -1,7 +1,6 @@
 import React, {useCallback, useState} from 'react';
 import {
   Alert,
-  Image,
   Modal,
   RefreshControl,
   ScrollView,
@@ -19,17 +18,16 @@ import {
   Chip,
   ErrorState,
   Field,
-  Icon,
   Loading,
   Row,
   SectionTitle,
   StatusBadge,
 } from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
+import {ProductImage} from '../../components/ProductImage';
 import {formatDateTime, formatMoney, shortId} from '../../utils/format';
 import type {Order, OrderStatus} from '../../types';
 import type {AdminStackParams} from '../../navigation/types';
-import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'AdminOrderDetail'>;
 
@@ -187,13 +185,7 @@ const AdminOrderDetailScreen = ({route}: Props) => {
         <Card>
           {(order.items ?? []).map((item, index) => (
             <View key={item.id} style={[styles.item, index > 0 && styles.itemBordered]}>
-              {item.product_image ? (
-                <Image source={{uri: mediaUrl(item.product_image)}} style={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbFallback]}>
-                  <Icon name="image-outline" size={18} color={colors.textFaint} />
-                </View>
-              )}
+              <ProductImage src={item.product_image} alt={item.product_name} size="thumb" style={styles.thumb} />
               <View style={styles.flex}>
                 <Text style={styles.itemName} numberOfLines={2}>
                   {item.product_name}

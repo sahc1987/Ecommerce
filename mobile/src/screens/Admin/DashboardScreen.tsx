@@ -1,6 +1,5 @@
 import React, {useCallback} from 'react';
 import {
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,9 +19,9 @@ import {
   StatusBadge,
 } from '../../components/ui';
 import {colors, font, radius, spacing} from '../../theme';
+import {ProductImage} from '../../components/ProductImage';
 import {formatDate, formatMoney, shortId} from '../../utils/format';
 import type {AdminStackParams} from '../../navigation/types';
-import {mediaUrl} from '../../utils/media';
 
 type Props = NativeStackScreenProps<AdminStackParams, 'Dashboard'>;
 
@@ -205,13 +204,7 @@ const DashboardScreen = ({navigation}: Props) => {
             <View
               key={product.id}
               style={[styles.row, index > 0 && styles.rowBordered]}>
-              {product.image ? (
-                <Image source={{uri: mediaUrl(product.image)}} style={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbFallback]}>
-                  <Icon name="image-outline" size={16} color={colors.textFaint} />
-                </View>
-              )}
+              <ProductImage src={product.image} alt={product.name} size="thumb" style={styles.thumb} />
               <View style={styles.flex}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {product.name}

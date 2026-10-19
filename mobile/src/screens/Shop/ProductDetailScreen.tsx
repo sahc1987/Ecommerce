@@ -1,7 +1,6 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   Dimensions,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,7 +19,7 @@ import {useAppDispatch, useAppSelector} from '../../store/hooks';
 import {addItem, lineKey} from '../../store/slices/cartSlice';
 import type {ShopStackParams} from '../../navigation/types';
 import type {ProductImage, ProductOption, Variant} from '../../types';
-import {mediaUrl} from '../../utils/media';
+import {ProductImage as ProductPhoto} from '../../components/ProductImage';
 import {
   findVariant,
   initialSelection,
@@ -36,43 +35,43 @@ const Gallery = ({
   images,
   active,
   onSelect,
+  name,
+  category,
 }: Readonly<{
   images: ProductImage[];
   active: number;
   onSelect: (index: number) => void;
-}>) => {
-  if (images.length === 0) {
-    return (
-      <View style={[styles.hero, styles.heroFallback]}>
-        <Icon name="image-off-outline" size={40} color={colors.textFaint} />
-      </View>
-    );
-  }
-  return (
-    <>
-      <Image
-        source={{uri: mediaUrl(images[active]?.url)}}
-        style={styles.hero}
-        resizeMode="cover"
-      />
-      {images.length > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.thumbs}>
-          {images.map((img, index) => (
-            <Pressable key={img.id} onPress={() => onSelect(index)}>
-              <Image
-                source={{uri: mediaUrl(img.url)}}
-                style={[styles.thumb, index === active && styles.thumbActive]}
-              />
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
-    </>
-  );
-};
+  name: string;
+  category?: string | null;
+}>) => (
+  <>
+    <ProductPhoto
+      src={images[active]?.url}
+      alt={name}
+      category={category}
+      size="large"
+      style={styles.hero}
+    />
+    {images.length > 1 ? (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.thumbs}>
+        {images.map((img, index) => (
+          <Pressable
+            key={img.id}
+            onPress={() => onSelect(index)}
+            accessibilityRole="button"
+            accessibilityLabel={`Show photo ${index + 1} of ${images.length}`}
+            accessibilityState={{selected: index === active}}
+            style={[styles.thumbRing, index === active && styles.thumbActive]}>
+            <ProductPhoto src={img.url} alt="" size="thumb" style={styles.thumb} />
+          </Pressable>
+        ))}
+      </ScrollView>
+    ) : null}
+  </>
+);
 
 const stockLabel = (sellable: number, stock: number) => {
   if (sellable > 0) {
@@ -246,7 +245,13 @@ const ProductDetailScreen = ({route}: Props) => {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
       <View style={styles.gallery}>
-        <Gallery images={images} active={activeImage} onSelect={setActiveImage} />
+        <Gallery
+            images={images}
+            active={activeImage}
+            onSelect={setActiveImage}
+            name={product.name}
+            category={product.category_name}
+          />
       </View>
 
       <View style={styles.body}>
@@ -341,20 +346,11 @@ const styles = StyleSheet.create({
   screen: {flex: 1, backgroundColor: colors.bg},
   content: {paddingBottom: spacing.xxl},
   gallery: {backgroundColor: colors.surface},
-  hero: {width, height: width},
-  heroFallback: {
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // Full-width square photo; the gallery background already frames it.
+  hero: {width, height: width, borderWidth: 0, borderRadius: 0},
   thumbs: {padding: spacing.md, gap: spacing.sm},
-  thumb: {
-    width: 60,
-    height: 60,
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
+  thumbRing: {borderRadius: radius.md, borderWidth: 2, borderColor: 'transparent', padding: 2},
+  thumb: {width: 56, height: 56},
   thumbActive: {borderColor: colors.primary},
   body: {padding: spacing.lg, gap: spacing.md},
   breadcrumb: {fontSize: font.xs, color: colors.textFaint, textTransform: 'uppercase'},

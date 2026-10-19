@@ -85,7 +85,7 @@ export default function UsersList() {
 
       <form onSubmit={handleSearch} className="flex gap-2">
         <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input className="input pl-9" placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <button type="submit" className="btn-secondary">Search</button>
@@ -113,7 +113,7 @@ export default function UsersList() {
                       </div>
                       <div>
                         <p className="font-medium text-slate-900">{u.name}</p>
-                        <p className="text-xs text-slate-400">{u.email}</p>
+                        <p className="text-xs text-slate-500">{u.email}</p>
                       </div>
                     </div>
                   </td>
@@ -128,11 +128,11 @@ export default function UsersList() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 justify-end">
-                      <button onClick={() => openEdit(u)} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg">
+                      <button onClick={() => openEdit(u)} className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg">
                         <Pencil size={14} />
                       </button>
                       {u.is_active && (
-                        <button onClick={() => handleDeactivate(u.id, u.name)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                        <button onClick={() => handleDeactivate(u.id, u.name)} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg">
                           <UserX size={14} />
                         </button>
                       )}

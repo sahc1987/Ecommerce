@@ -20,7 +20,7 @@ export default function ListContent({ loading, isEmpty, emptyIcon: EmptyIcon, em
   }
   if (isEmpty) {
     return (
-      <div className="text-center py-16 text-slate-400">
+      <div className="text-center py-16 text-slate-500">
         <EmptyIcon size={40} className="mx-auto mb-3 opacity-40" />
         <p>{emptyText}</p>
       </div>

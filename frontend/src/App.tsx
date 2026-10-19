@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import api from './api';
 import { setStoreTimeZone } from './utils/dates';
+import { mediaUrl } from './utils/media';
 
 import ProtectedRoute from './components/ProtectedRoute';
 import ShopLayout from './components/Layout/ShopLayout';
@@ -40,6 +41,14 @@ export default function App() {
     api.get('/setup/status').then((res) => {
       setIsConfigured(res.data.configured);
       setStoreTimeZone(res.data.store?.timezone);
+      // The tab shows the real store name (index.html only has a generic fallback).
+      if (res.data.store?.name) document.title = res.data.store.name;
+      const logo = mediaUrl(res.data.store?.logo_url);
+      const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+      if (logo && icon) {
+        icon.type = '';
+        icon.href = logo;
+      }
       setSetupChecked(true);
     }).catch(() => setSetupChecked(true));
   }, []);

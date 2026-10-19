@@ -174,7 +174,7 @@ export default function CategoriesPage() {
     }
     if (categories.length === 0) {
       return (
-        <div className="text-center py-16 text-slate-400">
+        <div className="text-center py-16 text-slate-500">
           <Tag size={40} className="mx-auto mb-3 opacity-40" />
           <p>No categories yet</p>
         </div>
@@ -187,7 +187,7 @@ export default function CategoriesPage() {
             <div className="flex items-center gap-3 px-6 py-4 hover:bg-slate-50">
               <button
                 onClick={() => toggleExpand(cat.id)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-500 hover:text-slate-600"
               >
                 {expanded === cat.id ? (
                   <ChevronDown size={16} />
@@ -204,7 +204,7 @@ export default function CategoriesPage() {
               )}
               <div className="flex-1">
                 <p className="font-medium text-slate-900">{cat.name}</p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   {cat.subcategory_count} subcategories
                 </p>
               </div>
@@ -217,13 +217,13 @@ export default function CategoriesPage() {
                 </button>
                 <button
                   onClick={() => openModal("category", cat)}
-                  className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
+                  className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
                 >
                   <Pencil size={14} />
                 </button>
                 <button
                   onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -233,7 +233,7 @@ export default function CategoriesPage() {
             {expanded === cat.id && (
               <div className="bg-slate-50 border-t border-slate-100">
                 {(subcategories[cat.id] || []).length === 0 ? (
-                  <p className="text-sm text-slate-400 px-16 py-3">
+                  <p className="text-sm text-slate-500 px-16 py-3">
                     No subcategories
                   </p>
                 ) : (
@@ -247,14 +247,14 @@ export default function CategoriesPage() {
                           {sub.name}
                         </p>
                         {sub.description && (
-                          <p className="text-xs text-slate-400 truncate">
+                          <p className="text-xs text-slate-500 truncate">
                             {sub.description}
                           </p>
                         )}
                       </div>
                       <button
                         onClick={() => openModal("subcategory", sub, cat.id)}
-                        className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
+                        className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
                       >
                         <Pencil size={13} />
                       </button>
@@ -262,7 +262,7 @@ export default function CategoriesPage() {
                         onClick={() =>
                           handleDeleteSubcategory(cat.id, sub.id, sub.name)
                         }
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
                       >
                         <Trash2 size={13} />
                       </button>

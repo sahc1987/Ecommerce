@@ -1,14 +1,12 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  DollarSign, ShoppingCart, Users, Package, Clock, RotateCcw, Receipt,
-  TrendingUp, TrendingDown, Minus, AlertTriangle, XCircle, Lock, RefreshCw, ArrowRight,
+import { useState } from 'react';import { Link } from 'react-router-dom';import {
+  DollarSign, ShoppingCart, Users, Clock, RotateCcw, Receipt, TrendingUp, TrendingDown, Minus, AlertTriangle, XCircle, Lock, RefreshCw, ArrowRight,
 } from 'lucide-react';
 import { useApiGet } from '../../hooks/useApiGet';
 import { formatDate } from '../../utils/dates';
-import { mediaUrl } from '../../utils/media';
+
 import { textOr } from '../../utils/text';
 import SalesChart from '../../components/Admin/SalesChart';
+import ProductImage from '../../components/Shop/ProductImage';
 
 interface Period {
   days: number;
@@ -106,7 +104,7 @@ const relativeTime = (iso: string) => {
 function Delta({ value, onColor = false }: Readonly<{ value: number | null; onColor?: boolean }>) {
   const pill = onColor ? 'px-2 py-0.5 rounded-full bg-white/20 text-white' : '';
   if (value === null)
-    return <span className={`text-xs ${onColor ? `${pill} text-white/80` : 'text-slate-400'}`}>no prior data</span>;
+    return <span className={`text-xs ${onColor ? `${pill} text-white/80` : 'text-slate-500'}`}>no prior data</span>;
   if (value === 0)
     return (
       <span className={`inline-flex items-center gap-1 text-xs font-semibold ${onColor ? pill : 'text-slate-500'}`}>
@@ -115,7 +113,7 @@ function Delta({ value, onColor = false }: Readonly<{ value: number | null; onCo
     );
   const up = value > 0;
   const Icon = up ? TrendingUp : TrendingDown;
-  let color = up ? 'text-emerald-600' : 'text-rose-600';
+  let color = up ? 'text-emerald-700' : 'text-rose-700';
   if (onColor) color = pill;
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-semibold ${color}`}>
@@ -192,10 +190,10 @@ function StatCard({
 }
 
 const ALERT_TONES = {
-  amber: { icon: 'bg-amber-50 text-amber-600', border: 'border-l-amber-400' },
-  rose: { icon: 'bg-rose-50 text-rose-600', border: 'border-l-rose-400' },
-  orange: { icon: 'bg-orange-50 text-orange-600', border: 'border-l-orange-400' },
-  clear: { icon: 'bg-slate-50 text-slate-400', border: 'border-l-slate-200' },
+  amber: { icon: 'bg-amber-50 text-amber-700', border: 'border-l-amber-400' },
+  rose: { icon: 'bg-rose-50 text-rose-700', border: 'border-l-rose-400' },
+  orange: { icon: 'bg-orange-50 text-orange-700', border: 'border-l-orange-400' },
+  clear: { icon: 'bg-slate-50 text-slate-500', border: 'border-l-slate-200' },
 };
 
 function AlertCard({
@@ -225,7 +223,7 @@ function AlertCard({
           className="ml-auto shrink-0 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all"
         />
       </div>
-      <p className="text-xs text-slate-400 mt-2 truncate">{active ? hint : 'Nothing to do here'}</p>
+      <p className="text-xs text-slate-500 mt-2 truncate">{active ? hint : 'Nothing to do here'}</p>
     </Link>
   );
 }
@@ -312,14 +310,15 @@ export default function Dashboard() {
             Store performance over the last {periodLabel}, compared with the {periodLabel} before.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex bg-slate-100 rounded-xl p-1">
+        <div className="flex items-center gap-2 max-w-full min-w-0">
+          <div className="flex min-w-0 overflow-x-auto scrollbar-hide bg-slate-100 rounded-xl p-1">
             {PERIODS.map((p) => (
               <button
                 key={p.days}
+                aria-pressed={days === p.days}
                 onClick={() => setDays(p.days)}
-                className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
-                  days === p.days ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                className={`shrink-0 px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
+                  days === p.days ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {p.label}
@@ -328,7 +327,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={refresh}
-            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+            className="shrink-0 p-2 rounded-xl border border-control bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
             title="Refresh"
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -426,17 +425,18 @@ export default function Dashboard() {
                     {s.status}
                   </span>
                   <p className="text-lg font-bold text-slate-900 mt-1 tabular-nums">{s.count}</p>
-                  <p className="text-xs text-slate-400 tabular-nums">{money(s.total)}</p>
+                  <p className="text-xs text-slate-500 tabular-nums">{money(s.total)}</p>
                 </Link>
               ))}
             </div>
           </>
         ) : (
-          <p className="text-center text-slate-400 py-8">No orders in this period</p>
+          <p className="text-center text-slate-500 py-8">No orders in this period</p>
         )}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      {/* grid-cols-1 (not the implicit auto column) lets the cards shrink to the screen, so long rows truncate. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top products */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -453,13 +453,7 @@ export default function Dashboard() {
                 return (
                   <div key={p.id} className="flex items-center gap-3">
                     <span className="w-5 text-sm font-bold text-slate-300 tabular-nums">{i + 1}</span>
-                    <div className="w-11 h-11 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
-                      {p.image ? (
-                        <img src={mediaUrl(p.image)} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package size={18} className="text-slate-400" />
-                      )}
-                    </div>
+                    <ProductImage src={p.image} alt={p.name} size="thumb" className="w-11 h-11" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-900 truncate">{p.name}</p>
                       <div className="h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
@@ -478,7 +472,7 @@ export default function Dashboard() {
               })}
             </div>
           ) : (
-            <p className="text-center text-slate-400 py-8">No sales yet</p>
+            <p className="text-center text-slate-500 py-8">No sales yet</p>
           )}
         </div>
 
@@ -518,7 +512,7 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-slate-400 py-8">No orders yet</p>
+            <p className="text-center text-slate-500 py-8">No orders yet</p>
           )}
         </div>
       </div>

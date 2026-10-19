@@ -74,14 +74,14 @@ export default function StoreSettings() {
             {logoPreview ? (
               <img src={mediaUrl(logoPreview)} alt="Logo" className="w-full h-full object-contain" />
             ) : (
-              <Store size={28} className="text-slate-400" />
+              <Store size={28} className="text-slate-500" />
             )}
           </div>
           <div>
             <button onClick={() => fileRef.current?.click()} className="btn-secondary flex items-center gap-2">
               <Upload size={15} /> Upload Logo
             </button>
-            <p className="text-xs text-slate-400 mt-1.5">PNG, JPG up to 5MB</p>
+            <p className="text-xs text-slate-500 mt-1.5">PNG, JPG up to 5MB</p>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function StoreSettings() {
         <div>
           <label htmlFor="timezone" className="block text-sm font-medium text-slate-700 mb-1">Time Zone</label>
           <TimeZoneSelect value={form.timezone} onChange={(tz) => setForm({ ...form, timezone: tz })} />
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Order dates, notifications and daily sales reports are shown in this zone across the web store, admin panel and mobile app.
           </p>
         </div>
@@ -129,7 +129,7 @@ export default function StoreSettings() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-700">Enable Tax</p>
-              <p className="text-xs text-slate-400 mt-0.5">Apply sales tax to all orders</p>
+              <p className="text-xs text-slate-500 mt-0.5">Apply sales tax to all orders</p>
             </div>
             <button
               type="button"
@@ -156,9 +156,9 @@ export default function StoreSettings() {
                   onChange={(e) => setForm({ ...form, tax_rate: e.target.value })}
                   placeholder="e.g. 8.5"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">%</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">%</span>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Tax is applied on the order subtotal after discounts.
               </p>
             </div>
@@ -182,9 +182,9 @@ export default function StoreSettings() {
                 step="1"
                 onChange={(e) => setForm({ ...form, return_window_days: e.target.value })}
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">days</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">days</span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 mt-1">
               Customers can request a return within this many days of placing the order.
             </p>
           </div>

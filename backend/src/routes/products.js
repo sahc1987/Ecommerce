@@ -117,9 +117,17 @@ function conflictMessage(err) {
   return 'That value is already in use';
 }
 
+// Order of the public list: `new` (default) or `popular` (most units sold in
+// orders that weren't cancelled — the shop's "Best sellers").
+const LIST_ORDER = {
+  new: 'p.created_at DESC',
+  popular: 'units_sold DESC, p.created_at DESC',
+};
+
 // GET all products (public, with filters)
 router.get('/', async (req, res) => {
   const { category, subcategory, search, discount } = req.query;
+  const orderBy = LIST_ORDER[req.query.sort] ?? LIST_ORDER.new;
   const { page, limit, offset } = pagination(req.query);
   const cacheKey = cache.queryKey('products:list', req.query);
 
@@ -146,12 +154,15 @@ router.get('/', async (req, res) => {
       `SELECT p.*, c.name as category_name, s.name as subcategory_name,
         (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image,
         (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images,
+        (SELECT COALESCE(SUM(oi.quantity), 0)::int FROM order_items oi
+           JOIN orders o ON o.id = oi.order_id
+          WHERE oi.product_id = p.id AND o.status <> 'cancelled') as units_sold,
         ${variantColumnsSql(true)}
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
        ${where}
-       ORDER BY p.created_at DESC
+       ORDER BY ${orderBy}
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );

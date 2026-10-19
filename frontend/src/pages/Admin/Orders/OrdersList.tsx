@@ -53,6 +53,7 @@ export default function OrdersList() {
         {STATUSES.map((s) => (
           <button
             key={s || "all"}
+            aria-pressed={status === s}
             onClick={() => {
               setStatus(s);
               setPage(1);
@@ -60,7 +61,7 @@ export default function OrdersList() {
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
               status === s
                 ? "bg-primary-600 text-white"
-                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                : "bg-white border border-control text-slate-600 hover:bg-slate-50"
             }`}
           >
             {s ? s.charAt(0).toUpperCase() + s.slice(1) : "All"}
@@ -101,14 +102,14 @@ export default function OrdersList() {
                     <p className="font-medium text-slate-900">
                       {textOr(o.customer_name, "Guest")}
                     </p>
-                    <p className="text-xs text-slate-400">{o.customer_email}</p>
+                    <p className="text-xs text-slate-500">{o.customer_email}</p>
                   </td>
                   <td className="px-6 py-4 text-slate-500 hidden sm:table-cell">
                     {formatDate(o.created_at)}
                   </td>
                   <td className="px-6 py-4 font-semibold text-slate-900">
                     ${Number.parseFloat(o.total).toFixed(2)}
-                    <span className="text-xs text-slate-400 font-normal ml-1">
+                    <span className="text-xs text-slate-500 font-normal ml-1">
                       ({o.item_count} items)
                     </span>
                   </td>

@@ -10,7 +10,7 @@ import { browserTimeZone, setStoreTimeZone } from "../../utils/dates";
 const stepCircleClass = (s: number, step: number) => {
   if (step > s) return "bg-primary-600 text-white";
   if (step === s) return "bg-primary-600 text-white ring-4 ring-primary-200";
-  return "bg-white text-slate-400 border-2 border-slate-200";
+  return "bg-white text-slate-500 border-2 border-slate-200";
 };
 
 interface Props {
@@ -105,7 +105,7 @@ export default function SetupWizard({ onComplete }: Readonly<Props>) {
               <div className="space-y-5">
                 <div>
                   <label htmlFor="store_name" className="block text-sm font-medium text-slate-700 mb-1">
-                    Store Name <span className="text-red-500">*</span>
+                    Store Name <span className="text-red-700">*</span>
                   </label>
                   <input
                     id="store_name"

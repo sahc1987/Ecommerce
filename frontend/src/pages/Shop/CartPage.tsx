@@ -1,12 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useEffect, useState } from 'react';
-import { ShoppingBag, Trash2, Plus, Minus, ArrowRight, Package } from 'lucide-react';
+import { ShoppingBag, Trash2, Plus, Minus, ArrowRight } from 'lucide-react';
 import { RootState } from '../../store';
 import { lineKey, removeItem, updateQuantity } from '../../store/slices/cartSlice';
 import api from '../../api';
 import HoldBanner from '../../components/Shop/HoldBanner';
 import { lineStatus, useReservations } from '../../hooks/useReservations';
+import ProductImage from '../../components/Shop/ProductImage';
 
 export default function CartPage() {
   const dispatch = useDispatch();
@@ -67,32 +68,24 @@ export default function CartPage() {
             <div
               key={lineKey(item)}
               className={`bg-white rounded-2xl border p-4 flex gap-4 transition-colors ${status === 'ok' || status === 'pending' ? 'border-slate-100 hover:border-primary-100' : 'border-rose-200 bg-rose-50/30'}`}            >
-              <div className="w-20 h-20 bg-slate-50 rounded-xl overflow-hidden shrink-0">
-                {item.image ? (
-                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Package size={24} className="text-slate-300" />
-                  </div>
-                )}
-              </div>
+              <ProductImage src={item.image} alt={item.name} size="thumb" className="w-20 h-20" />
 
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-900 truncate">{item.name}</p>
                 {item.variant_label && <p className="text-xs text-slate-500 mt-0.5">{item.variant_label}</p>}
                 {status === 'needs_option' && (
-                  <p className="text-xs font-semibold text-amber-600 mt-0.5">
+                  <p className="text-xs font-semibold text-amber-700 mt-0.5">
                     This product now comes in options —{' '}
                     {item.slug ? <Link to={`/products/${item.slug}`} className="underline">choose one</Link> : 'remove it and add it again'}
                   </p>
                 )}
-                {status === 'unavailable' && <p className="text-xs font-semibold text-rose-600 mt-0.5">Out of stock — reserved by another shopper</p>}
-                {status === 'partial' && <p className="text-xs font-semibold text-amber-600 mt-0.5">Only {held} available — reduce quantity to continue</p>}
-                {status === 'expired' && <p className="text-xs font-semibold text-amber-600 mt-0.5">Hold expired</p>}
+                {status === 'unavailable' && <p className="text-xs font-semibold text-rose-700 mt-0.5">Out of stock — reserved by another shopper</p>}
+                {status === 'partial' && <p className="text-xs font-semibold text-amber-700 mt-0.5">Only {held} available — reduce quantity to continue</p>}
+                {status === 'expired' && <p className="text-xs font-semibold text-amber-700 mt-0.5">Hold expired</p>}
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="font-bold text-slate-900">${item.effective_price.toFixed(2)}</span>
                   {item.price !== item.effective_price && (
-                    <span className="text-xs text-slate-400 line-through">${item.price.toFixed(2)}</span>
+                    <span className="text-xs text-slate-500 line-through">${item.price.toFixed(2)}</span>
                   )}
                 </div>
 
@@ -116,7 +109,7 @@ export default function CartPage() {
                   </div>
                   <button
                     onClick={() => dispatch(removeItem(lineKey(item)))}
-                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-rose-500 transition-colors"
+                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-rose-500 transition-colors"
                     aria-label="Remove item"
                   >
                     <Trash2 size={13} />
@@ -128,7 +121,7 @@ export default function CartPage() {
               <div className="text-right shrink-0">
                 <p className="font-bold text-slate-900">${(item.effective_price * item.quantity).toFixed(2)}</p>
                 {item.price !== item.effective_price && (
-                  <p className="text-xs text-emerald-600 font-medium mt-0.5">
+                  <p className="text-xs text-emerald-700 font-medium mt-0.5">
                     -{((item.price - item.effective_price) * item.quantity).toFixed(2)} saved
                   </p>
                 )}
@@ -152,14 +145,14 @@ export default function CartPage() {
                 <span className="font-medium text-slate-900">${subtotal.toFixed(2)}</span>
               </div>
               {savings > 0 && (
-                <div className="flex justify-between text-emerald-600 font-semibold">
+                <div className="flex justify-between text-emerald-700 font-semibold">
                   <span>Savings</span>
                   <span>-${savings.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-600">
                 <span>Shipping</span>
-                <span className="text-emerald-600 font-medium">Free</span>
+                <span className="text-emerald-700 font-medium">Free</span>
               </div>
               {tax > 0 && (
                 <div className="flex justify-between text-slate-600">
@@ -184,10 +177,10 @@ export default function CartPage() {
             </button>
 
             {blocked && (
-              <p className="text-center text-xs text-rose-500 font-medium mt-3">Fix the highlighted items to continue</p>
+              <p className="text-center text-xs text-rose-700 font-medium mt-3">Fix the highlighted items to continue</p>
             )}
             {savings > 0 && (
-              <p className="text-center text-xs text-emerald-600 font-semibold mt-3">
+              <p className="text-center text-xs text-emerald-700 font-semibold mt-3">
                 You're saving ${savings.toFixed(2)} on this order!
               </p>
             )}

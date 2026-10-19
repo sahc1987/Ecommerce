@@ -137,7 +137,7 @@ export default function SalesChart() {
   const renderChart = () => {
     const overlay = (msg?: string) => (
       <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-xl">
-        {msg ? <p className={`text-sm ${error ? 'text-rose-500' : 'text-slate-400'}`}>{msg}</p>
+        {msg ? <p className={`text-sm ${error ? 'text-rose-700' : 'text-slate-500'}`}>{msg}</p>
           : <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />}
       </div>
     );
@@ -216,30 +216,31 @@ export default function SalesChart() {
           </div>
           <div className="leading-tight">
             <h2 className="font-bold text-slate-900">Sales</h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               {formatDate(query.from, { dateStyle: 'medium' })} – {formatDate(query.to, { dateStyle: 'medium' })}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex bg-slate-50 border border-slate-200 rounded-xl p-1">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          {/* On narrow screens the range chips scroll within their own row. */}
+          <div className="inline-flex max-w-full overflow-x-auto scrollbar-hide bg-slate-50 border border-control rounded-xl p-1">
             {RANGES.map((r) => (
-              <button key={r.key} type="button" onClick={() => setRange(r.key)} className={chipClass(range === r.key)}>
+              <button key={r.key} type="button" aria-pressed={range === r.key} onClick={() => setRange(r.key)} className={`shrink-0 ${chipClass(range === r.key)}`}>
                 {r.label}
               </button>
             ))}
           </div>
-          <div className="inline-flex bg-slate-50 border border-slate-200 rounded-xl p-1">
-            <button type="button" onClick={() => setMetric('revenue')} className={chipClass(metric === 'revenue')}>Revenue</button>
-            <button type="button" onClick={() => setMetric('orders')} className={chipClass(metric === 'orders')}>Orders</button>
+          <div className="inline-flex bg-slate-50 border border-control rounded-xl p-1">
+            <button type="button" aria-pressed={metric === 'revenue'} onClick={() => setMetric('revenue')} className={chipClass(metric === 'revenue')}>Revenue</button>
+            <button type="button" aria-pressed={metric === 'orders'} onClick={() => setMetric('orders')} className={chipClass(metric === 'orders')}>Orders</button>
           </div>
         </div>
       </div>
 
       {range === 'custom' && (
         <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
-          <CalendarRange size={15} className="text-slate-400" />
+          <CalendarRange size={15} className="text-slate-500" />
           <input
             type="date"
             value={from}
@@ -248,7 +249,7 @@ export default function SalesChart() {
             className="input w-auto! py-1.5!"
             aria-label="Start date"
           />
-          <span className="text-slate-400">to</span>
+          <span className="text-slate-500">to</span>
           <input
             type="date"
             value={to}
@@ -258,7 +259,7 @@ export default function SalesChart() {
             className="input w-auto! py-1.5!"
             aria-label="End date"
           />
-          <span className="text-xs text-slate-400 ml-1">
+          <span className="text-xs text-slate-500 ml-1">
             Grouped by {query.granularity}
           </span>
         </div>
@@ -272,7 +273,7 @@ export default function SalesChart() {
           { label: 'Avg. order', value: money(avgOrder) },
         ].map((t) => (
           <div key={t.label} className="bg-slate-50 rounded-xl px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t.label}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t.label}</p>
             <p className="text-lg font-bold text-slate-900 mt-0.5 truncate">{loading ? '—' : t.value}</p>
           </div>
         ))}
