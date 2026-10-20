@@ -1,10 +1,11 @@
 require('dotenv').config();
 
-// Sign-in tokens are signed with this; refuse to run without it rather than
-// failing on every login.
-if (!process.env.JWT_SECRET) {
-  console.error('JWT_SECRET is not set. Add it to backend/.env (see .env.example).');
-  process.exit(1);
+// Refuse to run without these rather than failing on every login or query.
+for (const name of ['JWT_SECRET', 'DATABASE_URL']) {
+  if (!process.env[name]) {
+    console.error(`${name} is not set. Add it to backend/.env (see .env.example).`);
+    process.exit(1);
+  }
 }
 
 const app = require('./app');

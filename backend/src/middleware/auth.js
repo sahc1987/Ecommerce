@@ -14,7 +14,7 @@ const extractToken = (req) => {
 // Throws when the token is invalid or expired. Looked up on every request so
 // deactivating an account takes effect immediately.
 async function userFromToken(token) {
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
   const result = await db.query(
     'SELECT id, name, email, role FROM users WHERE id = $1 AND is_active = TRUE',
     [decoded.userId]
