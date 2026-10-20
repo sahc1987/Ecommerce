@@ -8,8 +8,6 @@ export const setStoreTimeZone = (tz?: string | null) => {
   if (tz && isValidTimeZone(tz)) storeTimeZone = tz;
 };
 
-export const getStoreTimeZone = () => storeTimeZone;
-
 export const isValidTimeZone = (tz: string): boolean => {
   try {
     new Intl.DateTimeFormat(undefined, { timeZone: tz });

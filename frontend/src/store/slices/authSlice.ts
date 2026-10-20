@@ -9,14 +9,12 @@ export interface User {
 
 interface AuthState {
   user: User | null;
-  loading: boolean;
 }
 
 const userStr = localStorage.getItem('user');
 
 const initialState: AuthState = {
   user: userStr ? JSON.parse(userStr) : null,
-  loading: false,
 };
 
 const authSlice = createSlice({
@@ -31,11 +29,8 @@ const authSlice = createSlice({
       state.user = null;
       localStorage.removeItem('user');
     },
-    setLoading(state, action: PayloadAction<boolean>) {
-      state.loading = action.payload;
-    },
   },
 });
 
-export const { setCredentials, logout, setLoading } = authSlice.actions;
+export const { setCredentials, logout } = authSlice.actions;
 export default authSlice.reducer;

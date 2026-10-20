@@ -363,7 +363,7 @@ All paths start with `/api`. 🔒 = signed in, 🧑‍💼 = staff or admin, �
 
 | Method | Path | Does |
 | --- | --- | --- |
-| GET | `/categories` | All categories |
+| GET | `/categories` | All categories, with `product_count` (all products) and `active_product_count` (what shoppers see) |
 | GET | `/categories/:id/subcategories` | Subcategories of one |
 | POST, PUT | `/categories`, `/categories/:id` | Add or edit 🧑‍💼 |
 | DELETE | `/categories/:id` | Delete 👑 |

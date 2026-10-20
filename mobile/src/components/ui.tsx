@@ -2,7 +2,6 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -115,29 +114,6 @@ export const Card = ({
   style?: StyleProp<ViewStyle>;
 }) => <View style={[styles.card, style]}>{children}</View>;
 
-export const Screen = ({
-  children,
-  scroll,
-  style,
-  refreshControl,
-}: {
-  children: React.ReactNode;
-  scroll?: boolean;
-  style?: StyleProp<ViewStyle>;
-  refreshControl?: React.ReactElement;
-}) =>
-  scroll ? (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[styles.screenContent, style]}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={refreshControl}>
-      {children}
-    </ScrollView>
-  ) : (
-    <View style={[styles.screen, style]}>{children}</View>
-  );
-
 /* --------------------------------------------------------------- Feedback */
 
 export const Loading = ({label}: {label?: string}) => (
@@ -246,8 +222,6 @@ export const SectionTitle = ({
 );
 
 const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: colors.bg},
-  screenContent: {padding: spacing.lg, paddingBottom: spacing.xxl},
   button: {
     minHeight: 46,
     borderRadius: radius.md,

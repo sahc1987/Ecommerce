@@ -7,8 +7,6 @@ export type Selection = Record<string, string>;
 
 const unitsLeft = (v: Variant) => v.available_stock ?? v.stock;
 
-export const needsOptions = (p: Product) => Boolean(p.options?.length);
-
 /** The product's only variant when it has no options (null otherwise). */
 export const singleVariant = (p: Product): Variant | null =>
   !p.options?.length && p.variants?.length === 1 ? p.variants[0] : null;

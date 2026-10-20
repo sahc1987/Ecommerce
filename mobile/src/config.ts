@@ -51,5 +51,3 @@ const DEV_HOST = Platform.select({
 export const SERVER_URL = DEV_HOST;
 
 export const API_URL = `${DEV_HOST}/api`;
-
-export const CURRENCY_FALLBACK = 'USD';

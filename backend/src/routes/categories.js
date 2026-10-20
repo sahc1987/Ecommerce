@@ -15,7 +15,9 @@ router.get('/', async (req, res) => {
       const result = await db.query(`
         SELECT c.*,
           (SELECT COUNT(*) FROM subcategories s WHERE s.category_id = c.id) AS subcategory_count,
-          (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) AS product_count
+          (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) AS product_count,
+          -- What shoppers can see (the shop's aisle counts); product_count includes hidden ones.
+          (SELECT COUNT(*)::int FROM products p WHERE p.category_id = c.id AND p.is_active) AS active_product_count
         FROM categories c ORDER BY c.name
       `);
       return { categories: result.rows };
@@ -139,7 +141,6 @@ router.put('/subcategories/:id', authenticate, requireRole('admin', 'staff'), as
 // DELETE subcategory
 router.delete('/subcategories/:id', authenticate, requireRole('admin'), async (req, res) => {
   try {
-    const current = await db.query('SELECT category_id FROM subcategories WHERE id = $1', [req.params.id]);
     await db.query('DELETE FROM subcategories WHERE id = $1', [req.params.id]);
     await cache.invalidateCategories();
     res.json({ success: true });
