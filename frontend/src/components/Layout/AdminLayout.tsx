@@ -109,6 +109,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      <a href="#main" className="skip-link">Skip to content</a>
       <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-xs">
         <div className="max-w-350 mx-auto px-4 sm:px-6 flex items-center gap-3 h-17">
           <button
@@ -209,7 +210,7 @@ export default function AdminLayout() {
           <aside className="hidden lg:block w-52 shrink-0 sticky top-22">
             <Sidebar onClose={() => setSidebarOpen(false)} />
           </aside>
-          <main className="flex-1 min-w-0">
+          <main id="main" tabIndex={-1} className="flex-1 min-w-0 outline-hidden">
             <Outlet />
           </main>
         </div>

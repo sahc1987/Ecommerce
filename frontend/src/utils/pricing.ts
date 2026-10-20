@@ -113,6 +113,9 @@ export const setStoreCurrency = (code?: string | null) => {
   if (code && isCurrency(code)) storeCurrency = code;
 };
 
+/** The store currency's ISO code, e.g. "USD". */
+export const storeCurrencyCode = (): string => storeCurrency;
+
 /** The store currency's symbol, e.g. "$", "€", "CA$", for input prefixes. */
 export const currencySymbol = (): string =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: storeCurrency })

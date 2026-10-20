@@ -61,7 +61,7 @@ export default function HoldBanner({ compact = false }: Readonly<Props>) {
       <Timer size={compact ? 13 : 16} className="text-primary-600" />
       <span>
         Items reserved for <span className="font-bold tabular-nums">{formatCountdown(left)}</span>
-        {!compact && <span className="text-primary-600/80"> — complete checkout to keep them.</span>}
+        {!compact && <span className="text-primary-700"> — complete checkout to keep them.</span>}
       </span>
     </div>
   );

@@ -92,6 +92,7 @@ export default function ShopLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      <a href="#main" className="skip-link">Skip to content</a>
       <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-xs">
         <div className="max-w-350 mx-auto px-4 sm:px-6">
           {/* Phones: logo + actions on one row, search full width below it.
@@ -205,6 +206,7 @@ export default function ShopLayout() {
                 <div className="flex items-center gap-1.5 ml-1">
                   <Link
                     to="/login"
+                    aria-label="Sign in"
                     className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-primary-600 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
                   >
                     <User size={16} />
@@ -247,7 +249,7 @@ export default function ShopLayout() {
         )}
       </header>
 
-      <main className="flex-1">
+      <main id="main" tabIndex={-1} className="flex-1 outline-hidden">
         <Outlet context={{ store, categories, openCart } satisfies ShopOutletContext} />
       </main>
 

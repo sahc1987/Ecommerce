@@ -7,8 +7,10 @@ import { ShoppingCart, ArrowLeft, Minus, Plus, Truck, RotateCcw, Banknote } from
 import api from '../../api';
 import { addItem, lineKey } from '../../store/slices/cartSlice';
 import {
-  type Product, applyDiscount, formatPrice, effectivePriceRange, sellableStock, variantBasePrice, variantLabel,
+  type Product, applyDiscount, formatPrice, effectivePriceRange, sellableStock, storeCurrencyCode, variantBasePrice,
+  variantLabel,
 } from '../../utils/pricing';
+import { mediaUrl } from '../../utils/media';
 import VariantPicker from '../../components/Shop/VariantPicker';
 import ProductImage from '../../components/Shop/ProductImage';
 import { type Selection, findVariant, initialSelection } from '../../utils/variantSelection';
@@ -65,6 +67,19 @@ export default function ProductDetailPage() {
       ignore = true;
     };
   }, [slug, navigate]);
+
+  // Search results show the product's own title and description, not the store's.
+  useEffect(() => {
+    if (!product) return;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    const before = { title: document.title, description: meta?.content ?? '' };
+    document.title = store.name ? `${product.name} | ${store.name}` : product.name;
+    if (meta && product.description) meta.content = product.description.replace(/\s+/g, ' ').trim().slice(0, 160);
+    return () => {
+      document.title = before.title;
+      if (meta) meta.content = before.description;
+    };
+  }, [product, store.name]);
 
   if (loading) {
     return (
@@ -133,8 +148,32 @@ export default function ProductDetailPage() {
     return <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" />In Stock</span>;
   };
 
+  // schema.org Product for search results, from the same data the page shows.
+  const absolute = (url: string) => new URL(mediaUrl(url) ?? url, location.origin).href;
+  const availability = `https://schema.org/${sellableStock(product) > 0 ? 'InStock' : 'OutOfStock'}`;
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description ?? undefined,
+    sku: product.sku ?? undefined,
+    image: images.map((i) => absolute(i.url)),
+    category: product.category_name ?? undefined,
+    offers: range.min === range.max
+      ? { '@type': 'Offer', price: range.min.toFixed(2), priceCurrency: storeCurrencyCode(), availability, url: location.href }
+      : {
+        '@type': 'AggregateOffer', lowPrice: range.min.toFixed(2), highPrice: range.max.toFixed(2),
+        priceCurrency: storeCurrencyCode(), availability, url: location.href,
+      },
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* "<" escaped so product text can't close the script tag. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replaceAll('<', '\\' + 'u003c') }}
+      />
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-primary-600 transition-colors mb-6 group"
@@ -226,13 +265,15 @@ export default function ProductDetailPage() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    aria-label="Decrease quantity"
                     className="w-10 h-10 rounded-xl border border-control flex items-center justify-center hover:bg-slate-50 hover:border-slate-500 transition-all"
                   >
                     <Minus size={14} />
                   </button>
-                  <span className="w-10 text-center font-bold text-lg">{quantity}</span>
+                  <span className="w-10 text-center font-bold text-lg" aria-live="polite">{quantity}</span>
                   <button
                     onClick={() => setQuantity(Math.min(sellable, quantity + 1))}
+                    aria-label="Increase quantity"
                     className="w-10 h-10 rounded-xl border border-control flex items-center justify-center hover:bg-slate-50 hover:border-slate-500 transition-all"
                   >
                     <Plus size={14} />

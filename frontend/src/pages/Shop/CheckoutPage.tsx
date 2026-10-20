@@ -234,8 +234,9 @@ export default function CheckoutPage() {
     props?: React.InputHTMLAttributes<HTMLInputElement>,
   ) => (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      <label htmlFor={key} className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
       <input
+        id={key}
         className="input"
         value={address[key]}
         onChange={(e) => setAddress((prev) => ({ ...prev, [key]: e.target.value }))}

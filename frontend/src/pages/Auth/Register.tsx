@@ -39,7 +39,7 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <main className="min-h-screen flex">
       {/* Brand panel */}
       <AuthBrandPanel
         title={(name) => `Join ${name}`}
@@ -104,7 +104,7 @@ export default function Register() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-600 transition-colors"
                     onClick={() => setShowPw(!showPw)}
                     aria-label={showPw ? 'Hide password' : 'Show password'}
                   >
@@ -123,10 +123,11 @@ export default function Register() {
                     value={form.confirmPassword}
                     onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
                     required
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-600 transition-colors"
                     onClick={() => setShowConfirmPw(!showConfirmPw)}
                     aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
                   >
@@ -145,6 +146,6 @@ export default function Register() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

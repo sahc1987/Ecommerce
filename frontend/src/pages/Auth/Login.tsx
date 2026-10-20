@@ -31,7 +31,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <main className="min-h-screen flex">
       {/* Brand panel */}
       <AuthBrandPanel
         title={(name) => `Welcome back to ${name}`}
@@ -62,6 +62,7 @@ export default function Login() {
                 <input
                   id="email"
                   type="email"
+                  autoComplete="email"
                   className="input"
                   placeholder="you@example.com"
                   value={form.email}
@@ -91,11 +92,13 @@ export default function Login() {
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     required
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-600 transition-colors"
                     onClick={() => setShowPw(!showPw)}
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
                   >
                     {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -112,6 +115,6 @@ export default function Login() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

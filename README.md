@@ -71,6 +71,7 @@ A full online store built the way real shops need it to work, not a simple demo:
 | 📦 **Order management** | Filter orders, move them through each status, and see full details. |
 | 📊 **Dashboard** | Revenue, orders, units sold, average order, and new customers, each compared with the previous period. Low-stock and sold-out alerts, top products, pending shipments, and a sales chart. |
 | ⚙️ **Store setup** | A first-run wizard sets the store name, logo, currency, tax rate, return window, and time zone. |
+| 🔎 **Search engines** | Product pages set their own title and description and include schema.org `Product` data (price, currency, stock, photos). `robots.txt` keeps the cart, checkout, account, and back-office pages out of search results, and the 404 page is marked `noindex`. |
 | 📱 **Mobile app** | The full shop and the full back office on iOS and Android. |
 
 ## Who uses it

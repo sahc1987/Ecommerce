@@ -94,12 +94,9 @@ function Countdown({ target }: Readonly<{ target: Date | null }>) {
 
 function Hero({ products }: Readonly<{ products: Product[] }>) {
   const [idx, setIdx] = useState(0);
+  // ponytail: no auto-advance, so there's nothing to pause (WCAG 2.2.2); add
+  // it back only together with a visible pause button.
   const slides = products.slice(0, 3);
-  useEffect(() => {
-    if (slides.length < 2) return;
-    const id = setInterval(() => setIdx((i) => (i + 1) % slides.length), 6000);
-    return () => clearInterval(id);
-  }, [slides.length]);
 
   const p = slides[idx];
   const discounted = p ? hasActiveDiscount(p) : false;
@@ -147,15 +144,19 @@ function Hero({ products }: Readonly<{ products: Product[] }>) {
       </div>
       {slides.length > 1 && (
         <>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex">
+            {/* The dot is small; the button around it is a 24px tap target. */}
             {slides.map((s, i) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setIdx(i)}
-                className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-5 bg-white' : 'w-1.5 bg-white/40'}`}
+                className="h-6 min-w-6 px-1 flex items-center justify-center"
                 aria-label={`Slide ${i + 1}`}
-              />
+                aria-current={i === idx}
+              >
+                <span className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-5 bg-white' : 'w-1.5 bg-white/40'}`} />
+              </button>
             ))}
           </div>
           <button
