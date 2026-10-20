@@ -5,10 +5,11 @@ import { RootState } from '../../store';
 import api from '../../api';
 import {
   LayoutDashboard, Package, Tag, ShoppingCart, RotateCcw,
-  Users, Settings, LogOut, Menu, X, ExternalLink, ChevronDown, Headset,
+  Users, Settings, LogOut, Menu, X, ExternalLink, ChevronDown,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import NotificationBell from '../Notifications/NotificationBell';
+import { useStoreSettings } from '../../hooks/useStoreSettings';
 import StoreLogo from '../StoreLogo';
 
 const navItems = [
@@ -69,14 +70,6 @@ function Sidebar({ onClose }: SidebarProps) {
           <p className="text-[11px] text-slate-500">Open the storefront</p>
         </div>
       </NavLink>
-
-      <div className="rounded-2xl bg-linear-to-br from-[#0b1a3d] via-[#10306e] to-primary-700 p-5 text-white shadow-lg shadow-primary-900/20 mt-auto">
-        <div className="flex items-center gap-2 mb-2">
-          <Headset size={16} className="text-primary-200" />
-          <p className="text-sm font-bold">Need Help?</p>
-        </div>
-        <p className="text-[11px] text-white/70">Check the README for setup notes and API docs.</p>
-      </div>
     </div>
   );
 }
@@ -86,17 +79,11 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const { user } = useSelector((s: RootState) => s.auth);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [storeName, setStoreName] = useState('');
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const { store } = useStoreSettings();
+  const storeName = store?.name ?? '';
+  const logoUrl = store?.logo_url ?? null;
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    api.get('/setup/status').then((res) => {
-      if (res.data.store?.name) setStoreName(res.data.store.name);
-      setLogoUrl(res.data.store?.logo_url ?? null);
-    }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -123,8 +110,9 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-xs">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 flex items-center gap-3 h-[68px]">
+        <div className="max-w-350 mx-auto px-4 sm:px-6 flex items-center gap-3 h-17">
           <button
+            type="button"
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-primary-600 hover:bg-slate-100 rounded-lg"
             aria-label="Open menu"
@@ -132,10 +120,11 @@ export default function AdminLayout() {
             <Menu size={20} />
           </button>
 
-          <NavLink to="/admin" className="flex items-center gap-2.5">
+          {/* Long store names truncate on one line instead of wrapping (as in the shop header). */}
+          <NavLink to="/admin" className="min-w-0 flex items-center gap-2.5">
             <StoreLogo logoUrl={logoUrl} name={storeName} size={40} />
-            <div className="leading-tight">
-              <p className="font-extrabold text-xl text-primary-700 tracking-tight">{storeName}</p>
+            <div className="leading-tight min-w-0">
+              <p className="font-extrabold text-lg sm:text-xl text-primary-700 tracking-tight truncate">{storeName}</p>
               <p className="text-[10px] text-slate-500">Admin Panel</p>
             </div>
           </NavLink>
@@ -144,19 +133,24 @@ export default function AdminLayout() {
 
           <NotificationBell buttonClassName="text-slate-500 hover:text-primary-600 hover:bg-slate-100 rounded-lg" />
 
-          <div className="relative ml-1" ref={userMenuRef}>
+          <div className="relative ml-1 shrink-0" ref={userMenuRef}>
+            {/* Named by its visible text ("Hello, Saul"), so voice control users
+                can say what they see; "Account menu" covers the avatar-only
+                phone layout. */}
             <button
+              type="button"
               onClick={() => setUserMenuOpen((o) => !o)}
+              aria-expanded={userMenuOpen}
               className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-slate-100 transition-colors"
-              aria-label="Account menu"
             >
-              <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
+              <div aria-hidden="true" className="w-9 h-9 rounded-full bg-linear-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
                 {user?.name[0].toUpperCase()}
               </div>
               <div className="hidden md:block text-left leading-tight">
-                <p className="text-sm font-semibold text-slate-900 truncate max-w-[120px]">Hello, {firstName}</p>
-                <p className="text-[11px] text-slate-500 flex items-center gap-0.5 capitalize">{user?.role} <ChevronDown size={11} /></p>
+                <p className="text-sm font-semibold text-slate-900 truncate max-w-30">Hello, {firstName}</p>
+                <p className="text-[11px] text-slate-500 flex items-center gap-0.5 capitalize">{user?.role} <ChevronDown size={11} aria-hidden="true" /></p>
               </div>
+              <span className="sr-only md:hidden">Account menu</span>
             </button>
 
             {userMenuOpen && (
@@ -210,9 +204,9 @@ export default function AdminLayout() {
         </div>
       )}
 
-      <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-5">
+      <div className="flex-1 max-w-350 w-full mx-auto px-4 sm:px-6 py-5">
         <div className="flex gap-5 items-start">
-          <aside className="hidden lg:block w-52 shrink-0 sticky top-[88px]">
+          <aside className="hidden lg:block w-52 shrink-0 sticky top-22">
             <Sidebar onClose={() => setSidebarOpen(false)} />
           </aside>
           <main className="flex-1 min-w-0">

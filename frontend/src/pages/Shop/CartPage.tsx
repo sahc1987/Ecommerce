@@ -1,17 +1,19 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ShoppingBag, Trash2, Plus, Minus, ArrowRight } from 'lucide-react';
 import { RootState } from '../../store';
 import { lineKey, removeItem, updateQuantity } from '../../store/slices/cartSlice';
-import api from '../../api';
 import HoldBanner from '../../components/Shop/HoldBanner';
 import { lineStatus, useReservations } from '../../hooks/useReservations';
 import ProductImage from '../../components/Shop/ProductImage';
+import { cartTotals, formatPrice } from '../../utils/pricing';
+import type { ShopOutletContext } from '../../components/Layout/ShopLayout';
 
 export default function CartPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { store } = useOutletContext<ShopOutletContext>();
   const { items, reservations, holdStatus } = useSelector((s: RootState) => s.cart);
   const { user } = useSelector((s: RootState) => s.auth);
   const { renew } = useReservations();
@@ -20,24 +22,7 @@ export default function CartPage() {
   // Opening the cart counts as activity: extend the stock hold.
   useEffect(() => { renew(); }, [renew]);
 
-  const [taxRate, setTaxRate] = useState(0);
-  const [taxEnabled, setTaxEnabled] = useState(false);
-
-  useEffect(() => {
-    api.get('/setup/status').then((res) => {
-      const s = res.data.store;
-      if (s?.tax_enabled) {
-        setTaxEnabled(true);
-        setTaxRate(Number.parseFloat(s.tax_rate) || 0);
-      }
-    }).catch(() => {});
-  }, []);
-
-  const subtotal = items.reduce((sum, i) => sum + i.effective_price * i.quantity, 0);
-  const savings = items.reduce((sum, i) => sum + (i.price - i.effective_price) * i.quantity, 0);
-  const itemCount = items.reduce((s, i) => s + i.quantity, 0);
-  const tax = taxEnabled && taxRate > 0 ? Number.parseFloat((subtotal * taxRate / 100).toFixed(2)) : 0;
-  const total = subtotal + tax;
+  const { count: itemCount, subtotal, savings, tax, total } = cartTotals(items, store);
 
   if (items.length === 0) {
     return (
@@ -83,9 +68,9 @@ export default function CartPage() {
                 {status === 'partial' && <p className="text-xs font-semibold text-amber-700 mt-0.5">Only {held} available — reduce quantity to continue</p>}
                 {status === 'expired' && <p className="text-xs font-semibold text-amber-700 mt-0.5">Hold expired</p>}
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="font-bold text-slate-900">${item.effective_price.toFixed(2)}</span>
+                  <span className="font-bold text-slate-900">{formatPrice(item.effective_price)}</span>
                   {item.price !== item.effective_price && (
-                    <span className="text-xs text-slate-500 line-through">${item.price.toFixed(2)}</span>
+                    <span className="text-xs text-slate-500 line-through">{formatPrice(item.price)}</span>
                   )}
                 </div>
 
@@ -119,10 +104,10 @@ export default function CartPage() {
               </div>
 
               <div className="text-right shrink-0">
-                <p className="font-bold text-slate-900">${(item.effective_price * item.quantity).toFixed(2)}</p>
+                <p className="font-bold text-slate-900">{formatPrice(item.effective_price * item.quantity)}</p>
                 {item.price !== item.effective_price && (
                   <p className="text-xs text-emerald-700 font-medium mt-0.5">
-                    -{((item.price - item.effective_price) * item.quantity).toFixed(2)} saved
+                    -{formatPrice((item.price - item.effective_price) * item.quantity)} saved
                   </p>
                 )}
               </div>
@@ -142,12 +127,12 @@ export default function CartPage() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between text-slate-600">
                 <span>Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})</span>
-                <span className="font-medium text-slate-900">${subtotal.toFixed(2)}</span>
+                <span className="font-medium text-slate-900">{formatPrice(subtotal)}</span>
               </div>
               {savings > 0 && (
                 <div className="flex justify-between text-emerald-700 font-semibold">
                   <span>Savings</span>
-                  <span>-${savings.toFixed(2)}</span>
+                  <span>-{formatPrice(savings)}</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-600">
@@ -156,15 +141,15 @@ export default function CartPage() {
               </div>
               {tax > 0 && (
                 <div className="flex justify-between text-slate-600">
-                  <span>Tax ({taxRate}%)</span>
-                  <span className="font-medium text-slate-900">${tax.toFixed(2)}</span>
+                  <span>Tax ({Number(store.tax_rate)}%)</span>
+                  <span className="font-medium text-slate-900">{formatPrice(tax)}</span>
                 </div>
               )}
             </div>
 
             <div className="border-t border-slate-100 mt-4 pt-4 flex justify-between font-bold text-base text-slate-900">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>{formatPrice(total)}</span>
             </div>
 
             <button
@@ -181,7 +166,7 @@ export default function CartPage() {
             )}
             {savings > 0 && (
               <p className="text-center text-xs text-emerald-700 font-semibold mt-3">
-                You're saving ${savings.toFixed(2)} on this order!
+                You're saving {formatPrice(savings)} on this order!
               </p>
             )}
           </div>

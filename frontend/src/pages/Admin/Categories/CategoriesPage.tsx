@@ -186,8 +186,11 @@ export default function CategoriesPage() {
           <div key={cat.id}>
             <div className="flex items-center gap-3 px-6 py-4 hover:bg-slate-50">
               <button
+                type="button"
                 onClick={() => toggleExpand(cat.id)}
-                className="text-slate-500 hover:text-slate-600"
+                className="p-1 -m-1 rounded-md text-slate-500 hover:text-slate-900"
+                aria-expanded={expanded === cat.id}
+                aria-label={`${cat.name} subcategories`}
               >
                 {expanded === cat.id ? (
                   <ChevronDown size={16} />
@@ -216,14 +219,18 @@ export default function CategoriesPage() {
                   + Subcategory
                 </button>
                 <button
+                  type="button"
                   onClick={() => openModal("category", cat)}
                   className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
+                  aria-label={`Edit ${cat.name}`}
                 >
                   <Pencil size={14} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                  className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  className="p-1.5 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                  aria-label={`Delete ${cat.name}`}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -253,8 +260,10 @@ export default function CategoriesPage() {
                         )}
                       </div>
                       <button
+                        type="button"
                         onClick={() => openModal("subcategory", sub, cat.id)}
                         className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
+                        aria-label={`Edit ${sub.name}`}
                       >
                         <Pencil size={13} />
                       </button>
@@ -262,7 +271,9 @@ export default function CategoriesPage() {
                         onClick={() =>
                           handleDeleteSubcategory(cat.id, sub.id, sub.name)
                         }
-                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        type="button"
+                        className="p-1.5 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                        aria-label={`Delete ${sub.name}`}
                       >
                         <Trash2 size={13} />
                       </button>

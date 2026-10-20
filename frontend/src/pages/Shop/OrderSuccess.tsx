@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Clock, Loader2, XCircle } from 'lucide-react';
 import api from '../../api';
 import { clearCart } from '../../store/slices/cartSlice';
+import { shortId } from '../../utils/orderDisplay';
 
 type PaymentState = 'confirming' | 'paid' | 'processing' | 'failed';
 
@@ -75,7 +76,7 @@ export default function OrderSuccess() {
       </p>
       {orderId && (
         <p className="text-sm text-slate-500 mb-8">
-          Order #{orderId.slice(0, 8).toUpperCase()}
+          Order #{shortId(orderId)}
         </p>
       )}
       <div className="flex flex-col sm:flex-row gap-3 justify-center">

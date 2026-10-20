@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState } from "react";import { formatDateTime } from '../../../utils/dates';
+import { Fragment, useEffect, useState } from "react";
+import { formatDateTime } from '../../../utils/dates';
 import ProductImage from '../../../components/Shop/ProductImage';
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -6,22 +7,9 @@ import { ArrowLeft, Check, ExternalLink, RotateCcw, Truck } from "lucide-react";
 import { isAxiosError } from "axios";
 import api, { errorMessage } from "../../../api";
 import type { Order, OrderStatus, ReturnRequest } from "../../../types";
-
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  paid: "bg-primary-100 text-primary-800",
-  processing: "bg-primary-100 text-primary-800",
-  shipped: "bg-purple-100 text-purple-800",
-  delivered: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-};
-
-const returnStatusColors: Record<string, string> = {
-  requested: "bg-yellow-100 text-yellow-800",
-  approved: "bg-primary-100 text-primary-800",
-  rejected: "bg-red-100 text-red-800",
-  refunded: "bg-green-100 text-green-800",
-};
+import { orderBadge, returnBadge, shortId } from '../../../utils/orderDisplay';
+import { formatPrice } from '../../../utils/pricing';
+import { useStoreSettings } from '../../../hooks/useStoreSettings';
 
 const STEPS = [
   { label: 'Order Placed', reach: ['pending', 'paid', 'processing', 'shipped', 'delivered'] },
@@ -75,7 +63,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrier, setCarrier] = useState('');
   const [returnRequest, setReturnRequest] = useState<ReturnRequest | null>(null);
-  const [returnWindowDays, setReturnWindowDays] = useState(30);
+  const returnWindowDays = useStoreSettings().store?.return_window_days ?? 30;
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [returnReason, setReturnReason] = useState('');
   const [submittingReturn, setSubmittingReturn] = useState(false);
@@ -90,9 +78,6 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
     ];
     if (isCustomer) {
       loads.push(
-        api.get('/setup/status').then((res) => {
-          if (!ignore) setReturnWindowDays(res.data.store?.return_window_days ?? 30);
-        }),
         api.get<{ returns: ReturnRequest[] }>('/returns', { params: { order_id: id, limit: 1 } }).then((res) => {
           if (!ignore) setReturnRequest(res.data.returns[0] ?? null);
         }),
@@ -204,21 +189,23 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={() => navigate(isCustomer ? "/orders" : "/admin/orders")}
-          className="text-slate-500 hover:text-slate-600"
+          className="p-1.5 -ml-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+          aria-label={isCustomer ? "Back to my orders" : "Back to orders"}
         >
           <ArrowLeft size={20} />
         </button>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            Order #{order.id.slice(0, 8).toUpperCase()}
+            Order #{shortId(order.id)}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Placed {formatDateTime(order.created_at)}
           </p>
         </div>
         <span
-          className={`badge ${statusColors[order.status] ?? "bg-slate-100 text-slate-800"} ml-auto text-sm px-3 py-1`}
+          className={`badge ${orderBadge(order.status)} ml-auto text-sm px-3 py-1`}
         >
           {order.status}
         </span>
@@ -359,12 +346,12 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
                   </p>
                 )}
                 <p className="text-sm text-slate-500">
-                  Qty: {item.quantity} × $
-                  {Number.parseFloat(item.unit_price).toFixed(2)}
+                  Qty: {item.quantity} ×{" "}
+                  {formatPrice(item.unit_price)}
                 </p>
               </div>
               <p className="font-semibold text-slate-900">
-                ${Number.parseFloat(item.total).toFixed(2)}
+                {formatPrice(item.total)}
               </p>
             </div>
           ))}
@@ -374,29 +361,29 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         <div className="border-t border-slate-200 px-6 py-4 space-y-2">
           <div className="flex justify-between text-sm text-slate-600">
             <span>Subtotal</span>
-            <span>${Number.parseFloat(order.subtotal).toFixed(2)}</span>
+            <span>{formatPrice(order.subtotal)}</span>
           </div>
           {Number.parseFloat(order.discount) > 0 && (
             <div className="flex justify-between text-sm text-green-700">
               <span>Discount</span>
-              <span>-${Number.parseFloat(order.discount).toFixed(2)}</span>
+              <span>-{formatPrice(order.discount)}</span>
             </div>
           )}
           {Number.parseFloat(order.tax) > 0 && (
             <div className="flex justify-between text-sm text-slate-600">
               <span>Tax</span>
-              <span>${Number.parseFloat(order.tax).toFixed(2)}</span>
+              <span>{formatPrice(order.tax)}</span>
             </div>
           )}
           {Number.parseFloat(order.shipping) > 0 && (
             <div className="flex justify-between text-sm text-slate-600">
               <span>Shipping</span>
-              <span>${Number.parseFloat(order.shipping).toFixed(2)}</span>
+              <span>{formatPrice(order.shipping)}</span>
             </div>
           )}
           <div className="flex justify-between font-bold text-slate-900 text-base border-t border-slate-100 pt-2">
             <span>Total</span>
-            <span>${Number.parseFloat(order.total).toFixed(2)}</span>
+            <span>{formatPrice(order.total)}</span>
           </div>
           <div className="flex justify-between items-center text-sm text-slate-600 pt-1">
             <span>Payment</span>
@@ -410,7 +397,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           {Number.parseFloat(order.refunded_amount ?? '0') > 0 && (
             <div className="flex justify-between text-sm text-slate-600">
               <span>Refunded</span>
-              <span>-${Number.parseFloat(order.refunded_amount ?? '0').toFixed(2)}</span>
+              <span>-{formatPrice(order.refunded_amount ?? '0')}</span>
             </div>
           )}
         </div>
@@ -520,7 +507,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-600">Status:</span>
-            <span className={`badge ${returnStatusColors[returnRequest.status] ?? 'bg-slate-100 text-slate-800'}`}>
+            <span className={`badge ${returnBadge(returnRequest.status)}`}>
               {returnRequest.status}
             </span>
           </div>
@@ -529,7 +516,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
           </p>
           {returnRequest.refund_amount && (
             <p className="text-sm text-green-700 font-medium">
-              Refund amount: ${Number.parseFloat(returnRequest.refund_amount).toFixed(2)}
+              Refund amount: {formatPrice(returnRequest.refund_amount)}
             </p>
           )}
           {returnRequest.admin_notes && (
@@ -545,7 +532,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
     const daysLeft = returnWindowDays - daysSince;
     if (daysSince > returnWindowDays) {
       return (
-        <p className="text-sm text-red-700">
+        <p className="text-sm text-rose-700">
           The return window for this order has expired. Returns must be requested within {returnWindowDays} days of the order date.
         </p>
       );

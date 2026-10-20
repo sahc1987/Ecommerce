@@ -12,19 +12,16 @@ import NotificationBell from '../Notifications/NotificationBell';
 import StoreLogo from '../StoreLogo';
 import { Category } from '../../utils/pricing';
 import { useReservationSync } from '../../hooks/useReservations';
+import { useStoreSettings } from '../../hooks/useStoreSettings';
+import type { StoreSettings } from '../../types';
 import { useAddToCart } from '../../hooks/useAddToCart';
 import CartDrawer from '../Shop/CartDrawer';
 import TrustStrip from '../Shop/TrustStrip';
 
-export interface StoreInfo {
-  name: string;
-  description?: string | null;
-  logo_url?: string | null;
-  /** Contact details from Store Settings; empty strings when not filled in. */
-  email?: string | null;
-  phone?: string | null;
-  return_window_days?: number;
-}
+export type StoreInfo = StoreSettings;
+
+// Until the settings load: empty, so no placeholder brand name flashes.
+const NO_STORE: StoreInfo = { name: '' };
 
 export interface ShopOutletContext {
   store: StoreInfo;
@@ -51,8 +48,7 @@ export default function ShopLayout() {
   const cartCount = useSelector((s: RootState) =>
     s.cart.items.reduce((sum, i) => sum + i.quantity, 0)
   );
-  // Empty until loaded, so no placeholder brand name flashes before the real one.
-  const [store, setStore] = useState<StoreInfo>({ name: '' });
+  const store = useStoreSettings().store ?? NO_STORE;
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -61,9 +57,6 @@ export default function ShopLayout() {
 
   useEffect(() => {
     api.get('/categories').then((res) => setCategories(res.data.categories)).catch(() => {});
-    api.get('/setup/status').then((res) => {
-      if (res.data.store?.name) setStore(res.data.store);
-    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -158,18 +151,21 @@ export default function ShopLayout() {
 
               {user ? (
                 <div className="relative ml-1" ref={userMenuRef}>
+                  {/* Named by its visible text; "Account menu" covers the avatar-only phone layout. */}
                   <button
+                    type="button"
                     onClick={() => setUserMenuOpen((o) => !o)}
+                    aria-expanded={userMenuOpen}
                     className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-slate-100 transition-colors"
-                    aria-label="Account menu"
                   >
-                    <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
+                    <div aria-hidden="true" className="w-9 h-9 rounded-full bg-linear-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold">
                       {user.name[0].toUpperCase()}
                     </div>
                     <div className="hidden md:block text-left leading-tight">
                       <p className="text-sm font-semibold text-slate-900 truncate max-w-30">Hello, {firstName}</p>
-                      <p className="text-[11px] text-slate-500 flex items-center gap-0.5">My Account <ChevronDown size={11} /></p>
+                      <p className="text-[11px] text-slate-500 flex items-center gap-0.5">My Account <ChevronDown size={11} aria-hidden="true" /></p>
                     </div>
+                    <span className="sr-only md:hidden">Account menu</span>
                   </button>
 
                   {userMenuOpen && (

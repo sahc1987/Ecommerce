@@ -1,11 +1,15 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, Upload, X, Star } from "lucide-react";
+import { ArrowLeft, Upload, Star, Trash2 } from "lucide-react";
+import ProductImage from "../../../components/Shop/ProductImage";
 import api, { errorMessage } from "../../../api";
 import VariantEditor from "../../../components/Admin/VariantEditor";
 import { type OptionDraft, type VariantDraft, cleanOptions, isStale } from "../../../components/Admin/variantDrafts";
-import type { Product, Variant } from "../../../utils/pricing";
+import { type Product, type Variant, currencySymbol } from "../../../utils/pricing";
+
+// Left padding that clears the currency prefix ("$", "R$", "CA$").
+const PREFIX_PAD = ["pl-7", "pl-7", "pl-9", "pl-11"];
 
 interface Category {
   id: number;
@@ -17,7 +21,7 @@ interface Subcategory {
   name: string;
 }
 
-interface ProductImage {
+interface ProductPhoto {
   id: string;
   url: string;
   is_primary: boolean;
@@ -29,7 +33,7 @@ type AdminProductDetail = Product & {
   sku: string | null;
   subcategory_id: number | null;
   is_active: boolean;
-  images: ProductImage[] | null;
+  images: ProductPhoto[] | null;
   variants: Variant[];
 };
 
@@ -43,6 +47,8 @@ const toDraft = (v: Variant): VariantDraft => ({
 });
 
 export default function ProductForm() {
+  const currency = currencySymbol();
+  const currencyPad = PREFIX_PAD[Math.min(currency.length, 3)];
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -53,7 +59,7 @@ export default function ProductForm() {
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
-  const [images, setImages] = useState<ProductImage[]>([]);
+  const [images, setImages] = useState<ProductPhoto[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   // With no options the product has one default variant, edited through the
   // plain SKU/Stock fields; defaultVariantId keeps its holds and order links.
@@ -217,7 +223,7 @@ export default function ProductForm() {
     const formData = new FormData();
     Array.from(e.target.files).forEach((f) => formData.append("images", f));
     try {
-      const res = await api.post<{ images: ProductImage[] }>(`/products/${id}/images`, formData);
+      const res = await api.post<{ images: ProductPhoto[] }>(`/products/${id}/images`, formData);
       setImages((prev) => [...prev, ...res.data.images]);
       toast.success("Images uploaded");
     } catch (err) {
@@ -261,8 +267,10 @@ export default function ProductForm() {
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={() => navigate("/admin/products")}
-          className="text-slate-500 hover:text-slate-600"
+          className="p-1.5 -ml-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+          aria-label="Back to products"
         >
           <ArrowLeft size={20} />
         </button>
@@ -371,14 +379,14 @@ export default function ProductForm() {
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                  $
+                  {currency}
                 </span>
                 <input
                   id="price"
                   type="number"
                   min="0"
                   step="0.01"
-                  className="input pl-7"
+                  className={`input ${currencyPad}`}
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
                   required
@@ -391,14 +399,14 @@ export default function ProductForm() {
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                  $
+                  {currency}
                 </span>
                 <input
                   id="compare_at_price"
                   type="number"
                   min="0"
                   step="0.01"
-                  className="input pl-7"
+                  className={`input ${currencyPad}`}
                   value={form.compare_at_price}
                   onChange={(e) =>
                     setForm({ ...form, compare_at_price: e.target.value })
@@ -563,38 +571,39 @@ export default function ProductForm() {
           {isEdit && (
             <>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {images.map((img) => (
-                  <div key={img.id} className="relative group aspect-square">
-                    <img
+                {/* Same neutral, uncropped frame the shop uses, so this is what
+                    customers see. Actions stay visible for keyboard and touch. */}
+                {images.map((img, i) => (
+                  <div key={img.id} className="flex flex-col gap-1.5">
+                    <ProductImage
                       src={img.url}
-                      alt=""
-                      className="w-full h-full object-cover rounded-lg border border-slate-200"
+                      alt={`${form.name || "Product"} photo ${i + 1}`}
+                      className="aspect-square w-full"
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSetPrimary(img.id)}
-                        className="bg-white/90 p-1.5 rounded-lg text-yellow-600 hover:bg-white"
-                        title="Set as primary"
-                      >
-                        <Star
-                          size={14}
-                          fill={img.is_primary ? "currentColor" : "none"}
-                        />
-                      </button>
+                    <div className="flex items-center justify-between gap-1">
+                      {img.is_primary ? (
+                        <span className="badge bg-primary-50 text-primary-700 gap-1">
+                          <Star size={11} fill="currentColor" aria-hidden="true" /> Primary
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetPrimary(img.id)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-primary-700 px-1.5 py-1 rounded-md hover:bg-slate-100"
+                          aria-label={`Set photo ${i + 1} as primary`}
+                        >
+                          <Star size={12} aria-hidden="true" /> Set primary
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleDeleteImage(img.id)}
-                        className="bg-white/90 p-1.5 rounded-lg text-red-700 hover:bg-white"
+                        className="p-1.5 rounded-md text-slate-500 hover:text-rose-700 hover:bg-rose-50"
+                        aria-label={`Delete photo ${i + 1}`}
                       >
-                        <X size={14} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
-                    {img.is_primary && (
-                      <span className="absolute top-1 left-1 bg-yellow-400 text-yellow-900 text-xs px-1.5 py-0.5 rounded-sm font-medium">
-                        Primary
-                      </span>
-                    )}
                   </div>
                 ))}
                 <button

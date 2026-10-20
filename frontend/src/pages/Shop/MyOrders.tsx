@@ -3,15 +3,8 @@ import { Link } from "react-router-dom";
 import { ShoppingCart } from "lucide-react";
 import { useApiGet } from "../../hooks/useApiGet";
 import type { Order, Page } from "../../types";
-
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  paid: "bg-primary-100 text-primary-800",
-  processing: "bg-primary-100 text-primary-800",
-  shipped: "bg-purple-100 text-purple-800",
-  delivered: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-};
+import { orderBadge, shortId } from '../../utils/orderDisplay';
+import { formatPrice } from '../../utils/pricing';
 
 const statusLabels: Record<string, string> = {
   pending: "Order Placed",
@@ -55,10 +48,10 @@ export default function MyOrders() {
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="font-mono text-sm text-slate-500">
-                  #{o.id.slice(0, 8).toUpperCase()}
+                  #{shortId(o.id)}
                 </p>
                 <span
-                  className={`badge ${statusColors[o.status] ?? "bg-slate-100 text-slate-800"}`}
+                  className={`badge ${orderBadge(o.status)}`}
                 >
                   {statusLabels[o.status] ?? o.status}
                 </span>
@@ -73,7 +66,7 @@ export default function MyOrders() {
                   </p>
                 </div>
                 <p className="text-xl font-bold text-slate-900">
-                  ${Number.parseFloat(o.total).toFixed(2)}
+                  {formatPrice(o.total)}
                 </p>
               </div>
             </Link>

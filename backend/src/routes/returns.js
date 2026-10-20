@@ -1,13 +1,18 @@
 const router = require('express').Router();
 const db = require('../config/database');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireStaff, isStaff } = require('../middleware/auth');
 const { createNotification, notifyAdmins } = require('../utils/notifications');
 const safeErr = require('../utils/safeErr');
 const cache = require('../utils/cache');
 const inventory = require('../utils/inventory');
 const refunds = require('../utils/refunds');
+const { withTransaction } = require('../utils/tx');
+const { Filters, paginate } = require('../utils/pagedQuery');
+const { getStoreSettings, storeMoneyFormatter } = require('../utils/storeSettings');
+const { shortId } = require('../utils/format');
+const { isUuid, pagination, uuidParam } = require('../utils/validate');
 
-const { UUID_RE, pagination } = require('../utils/validate');
+router.param('id', uuidParam('Return not found'));
 
 const MAX_RETURN_LINES = 100;
 
@@ -38,31 +43,28 @@ async function validateReturnLines(orderId, items) {
 // Saves a return with its lines, all or nothing. Returns null when the order
 // already has a return (the unique index catches simultaneous requests).
 async function insertReturn({ orderId, userId, reason, lines }) {
-  const client = await db.connect();
   try {
-    await client.query('BEGIN');
-    const ret = (await client.query(
-      'INSERT INTO returns (order_id, user_id, reason) VALUES ($1,$2,$3) RETURNING *',
-      [orderId, userId, reason]
-    )).rows[0];
-    for (const line of lines) {
-      await client.query(
-        'INSERT INTO return_items (return_id, order_item_id, quantity, reason) VALUES ($1,$2,$3,$4)',
-        [ret.id, line.order_item_id, line.quantity, line.reason]
-      );
-    }
-    await client.query('COMMIT');
-    return ret;
+    return await withTransaction(async (client) => {
+      const ret = (await client.query(
+        'INSERT INTO returns (order_id, user_id, reason) VALUES ($1,$2,$3) RETURNING *',
+        [orderId, userId, reason]
+      )).rows[0];
+      for (const line of lines) {
+        await client.query(
+          'INSERT INTO return_items (return_id, order_item_id, quantity, reason) VALUES ($1,$2,$3,$4)',
+          [ret.id, line.order_item_id, line.quantity, line.reason]
+        );
+      }
+      return ret;
+    });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     if (err.code === '23505' && err.constraint === 'idx_returns_one_per_order') return null;
     throw err;
-  } finally {
-    client.release();
   }
 }
 
-function buildReturnNotification(status, orderShort, refund_amount, admin_notes) {
+// `money` formats an amount in the store's currency (storeMoneyFormatter).
+function buildReturnNotification(status, orderShort, refund_amount, admin_notes, money) {
   const note = admin_notes ? ` Note: ${admin_notes}` : '';
   const reason = admin_notes ? ` Reason: ${admin_notes}` : '';
   if (status === 'approved') {
@@ -77,9 +79,7 @@ function buildReturnNotification(status, orderShort, refund_amount, admin_notes)
       message: `Your return request for order #${orderShort} was not approved.${reason}`,
     };
   }
-  const formatted = refund_amount
-    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(refund_amount)
-    : 'your refund';
+  const formatted = refund_amount ? money(refund_amount) : 'your refund';
   return {
     title: 'Refund Processed',
     message: `${formatted} for order #${orderShort} has been processed.${note}`,
@@ -89,42 +89,24 @@ function buildReturnNotification(status, orderShort, refund_amount, admin_notes)
 // GET returns
 router.get('/', authenticate, async (req, res) => {
   const { status, order_id } = req.query;
-  if (order_id && !UUID_RE.test(order_id)) return res.status(400).json({ error: 'Invalid order_id' });
-  const { page, limit, offset } = pagination(req.query);
-  const isAdmin = ['admin', 'staff'].includes(req.user.role);
+  if (order_id && !isUuid(order_id)) return res.status(400).json({ error: 'Invalid order_id' });
 
-  const conditions = [];
-  const params = [];
-  if (!isAdmin) { params.push(req.user.id); conditions.push(`r.user_id = $${params.length}`); }
-  if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
-  if (order_id) { params.push(order_id); conditions.push(`r.order_id = $${params.length}`); }
-
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(limit, offset);
+  const filters = new Filters();
+  if (!isStaff(req.user)) filters.add('r.user_id = ?', req.user.id);
+  if (status) filters.add('r.status = ?', status);
+  if (order_id) filters.add('r.order_id = ?', order_id);
 
   try {
-    const countResult = await db.query(
-      `SELECT COUNT(*) FROM returns r ${where}`,
-      params.slice(0, -2)
-    );
-    const result = await db.query(
-      `SELECT r.*, u.name as customer_name, u.email as customer_email, o.total as order_total,
-              o.refunded_amount as order_refunded_amount, o.payment_method as order_payment_method
-       FROM returns r
-       LEFT JOIN users u ON r.user_id = u.id
-       LEFT JOIN orders o ON r.order_id = o.id
-       ${where}
-       ORDER BY r.created_at DESC
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
-    );
-    const total = Number.parseInt(countResult.rows[0].count);
-    res.json({
-      returns: result.rows,
-      total,
-      page,
-      pages: Math.ceil(total / limit),
+    const { rows, ...page } = await paginate({
+      select: `r.*, u.name as customer_name, u.email as customer_email, o.total as order_total,
+               o.refunded_amount as order_refunded_amount, o.payment_method as order_payment_method`,
+      table: 'returns r',
+      joins: 'LEFT JOIN users u ON r.user_id = u.id LEFT JOIN orders o ON r.order_id = o.id',
+      filters,
+      orderBy: 'r.created_at DESC',
+      ...pagination(req.query),
     });
+    res.json({ returns: rows, ...page });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -132,7 +114,6 @@ router.get('/', authenticate, async (req, res) => {
 
 // GET single return
 router.get('/:id', authenticate, async (req, res) => {
-  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Return not found' });
   try {
     const result = await db.query(
       `SELECT r.*, u.name as customer_name, u.email as customer_email
@@ -141,7 +122,7 @@ router.get('/:id', authenticate, async (req, res) => {
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'Return not found' });
     const ret = result.rows[0];
-    if (!['admin', 'staff'].includes(req.user.role) && ret.user_id !== req.user.id)
+    if (!isStaff(req.user) && ret.user_id !== req.user.id)
       return res.status(403).json({ error: 'Access denied' });
     const items = await db.query(
       `SELECT ri.*, oi.product_name, oi.unit_price, oi.product_image
@@ -158,8 +139,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   const { order_id, reason, items } = req.body;
   if (!order_id || !reason) return res.status(400).json({ error: 'order_id and reason required' });
-  if (typeof order_id !== 'string' || !UUID_RE.test(order_id))
-    return res.status(404).json({ error: 'Order not found' });
+  if (!isUuid(order_id)) return res.status(404).json({ error: 'Order not found' });
   try {
     const order = await db.query(
       'SELECT * FROM orders WHERE id = $1 AND user_id = $2',
@@ -174,8 +154,7 @@ router.post('/', authenticate, async (req, res) => {
     if (existingReturn.rows[0])
       return res.status(400).json({ error: 'A return request already exists for this order' });
 
-    const settings = await db.query('SELECT return_window_days FROM store_settings LIMIT 1');
-    const windowDays = settings.rows[0]?.return_window_days ?? 30;
+    const windowDays = (await getStoreSettings()).return_window_days ?? 30;
     const orderDate = new Date(order.rows[0].created_at);
     const diffDays = Math.floor((Date.now() - orderDate.getTime()) / 86400000);
     if (diffDays > windowDays)
@@ -191,7 +170,7 @@ router.post('/', authenticate, async (req, res) => {
     if (!ret) return res.status(400).json({ error: 'A return request already exists for this order' });
     await cache.invalidateDashboard();
 
-    const orderShort = order_id.slice(0, 8).toUpperCase();
+    const orderShort = shortId(order_id);
     await Promise.all([
       createNotification(
         req.user.id,
@@ -255,10 +234,8 @@ async function returnedUnits(client, ret) {
 // Applies an admin decision to a return inside one transaction: validates the
 // transition and amount, puts items back when asked, and refunds (Stripe for
 // card orders) last, so a failed refund changes nothing.
-async function processReturn(returnId, { status, refundAmount, adminNotes, restock }) {
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
+function processReturn(returnId, { status, refundAmount, adminNotes, restock }) {
+  return withTransaction(async (client) => {
     const ret = (await client.query('SELECT * FROM returns WHERE id = $1 FOR UPDATE', [returnId])).rows[0];
     if (!ret) throw new ReturnRejected(404, 'Return not found');
     if (!RETURN_TRANSITIONS[ret.status]?.includes(status))
@@ -271,9 +248,8 @@ async function processReturn(returnId, { status, refundAmount, adminNotes, resto
     if (status === 'refunded' && amount === null)
       throw new ReturnRejected(400, 'Enter the refund amount');
 
-    let touched = [];
     const restocked = status === 'refunded' && restock !== false;
-    if (restocked) touched = await returnedUnits(client, ret);
+    if (restocked) await returnedUnits(client, ret);
 
     const updated = (await client.query(
       `UPDATE returns SET status=$1, refund_amount=$2, admin_notes=$3, restocked=$4, updated_at=NOW()
@@ -281,39 +257,33 @@ async function processReturn(returnId, { status, refundAmount, adminNotes, resto
       [status, amount, adminNotes ?? ret.admin_notes, restocked, returnId]
     )).rows[0];
     if (status === 'refunded') await refunds.refundOrder(client, order, amount, `return-${returnId}`);
-    await client.query('COMMIT');
-    return { ret: updated, touched };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+    return { ret: updated, restocked };
+  });
 }
 
 // PUT process return (admin)
 // Body: status, refund_amount (required by the time it's refunded), admin_notes,
 // restock (default true: returned units go back on sale when refunded).
-router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res) => {
+router.put('/:id', authenticate, requireStaff, async (req, res) => {
   const { status, refund_amount, admin_notes, restock } = req.body;
   const validStatuses = ['approved', 'rejected', 'refunded'];
   if (!validStatuses.includes(status))
     return res.status(400).json({ error: 'Invalid status' });
-  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Return not found' });
   try {
-    const { ret, touched } = await processReturn(req.params.id, {
+    const { ret, restocked } = await processReturn(req.params.id, {
       status, refundAmount: refund_amount, adminNotes: admin_notes, restock,
     });
     await Promise.all([
       cache.invalidateDashboard(),
-      touched.length && cache.invalidateProducts(...touched.flatMap(({ id, slug }) => [id, slug])),
+      restocked && cache.invalidateProducts(),
     ]);
 
     if (ret.user_id) {
       // The saved amount: the refund may reuse the one set when approving.
       const amount = ret.refund_amount === null ? null : Number.parseFloat(ret.refund_amount);
-      const orderShort = ret.order_id.slice(0, 8).toUpperCase();
-      const { title, message } = buildReturnNotification(status, orderShort, amount, ret.admin_notes);
+      const { title, message } = buildReturnNotification(
+        status, shortId(ret.order_id), amount, ret.admin_notes, await storeMoneyFormatter()
+      );
       await createNotification(
         ret.user_id,
         'return_response',

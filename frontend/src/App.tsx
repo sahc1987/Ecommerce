@@ -1,8 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { Suspense, lazy, useEffect, useState } from 'react';
-import api from './api';
-import { setStoreTimeZone } from './utils/dates';
+import { Suspense, lazy, useEffect } from 'react';
+import { refreshStoreSettings, useStoreSettings } from './hooks/useStoreSettings';
 import { mediaUrl } from './utils/media';
 
 import ProtectedRoute from './components/ProtectedRoute';
@@ -34,26 +33,21 @@ const UsersList = lazy(() => import('./pages/Admin/Users/UsersList'));
 const StoreSettings = lazy(() => import('./pages/Admin/Settings/StoreSettings'));
 
 export default function App() {
-  const [setupChecked, setSetupChecked] = useState(false);
-  const [isConfigured, setIsConfigured] = useState(true);
+  const { status, configured: isConfigured, store } = useStoreSettings();
 
+  // The tab's title and icon follow the settings (the hook sets the time zone).
   useEffect(() => {
-    api.get('/setup/status').then((res) => {
-      setIsConfigured(res.data.configured);
-      setStoreTimeZone(res.data.store?.timezone);
-      // The tab shows the real store name (index.html only has a generic fallback).
-      if (res.data.store?.name) document.title = res.data.store.name;
-      const logo = mediaUrl(res.data.store?.logo_url);
-      const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-      if (logo && icon) {
-        icon.type = '';
-        icon.href = logo;
-      }
-      setSetupChecked(true);
-    }).catch(() => setSetupChecked(true));
-  }, []);
+    // The tab shows the real store name (index.html only has a generic fallback).
+    if (store?.name) document.title = store.name;
+    const logo = mediaUrl(store?.logo_url);
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (logo && icon) {
+      icon.type = '';
+      icon.href = logo;
+    }
+  }, [store]);
 
-  if (!setupChecked) return <PageSpinner />;
+  if (status === 'loading') return <PageSpinner />;
 
   return (
     <BrowserRouter>
@@ -65,7 +59,7 @@ export default function App() {
           path="/setup"
           element={
             <ProtectedRoute roles={['admin']}>
-              <SetupWizard onComplete={() => setIsConfigured(true)} />
+              <SetupWizard onComplete={refreshStoreSettings} />
             </ProtectedRoute>
           }
         />

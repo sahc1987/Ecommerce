@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";import ProductImage from '../../components/Shop/ProductImage';
+import { useState, useEffect, useRef } from "react";
+import ProductImage from '../../components/Shop/ProductImage';
 import { useSelector, useDispatch } from "react-redux";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
 import { Lock, MapPin, CheckCircle2, Loader2, X, CreditCard, Banknote } from "lucide-react";
@@ -11,6 +12,8 @@ import { textOr } from "../../utils/text";
 import HoldBanner from "../../components/Shop/HoldBanner";
 import { lineStatus, toOrderLine, useReservations } from "../../hooks/useReservations";
 import { newIdempotencyKey } from "../../utils/cartToken";
+import { cartTotals, formatPrice } from "../../utils/pricing";
+import type { ShopOutletContext } from "../../components/Layout/ShopLayout";
 
 interface Address {
   name: string;
@@ -50,6 +53,7 @@ const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; hint: string; icon
 export default function CheckoutPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { store } = useOutletContext<ShopOutletContext>();
   const { items, reservations, holdStatus } = useSelector((s: RootState) => s.cart);
   const { user } = useSelector((s: RootState) => s.auth);
   const { renew, sync, signature } = useReservations();
@@ -70,8 +74,6 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
-  const [taxRate, setTaxRate] = useState(0);
-  const [taxEnabled, setTaxEnabled] = useState(false);
   const [address, setAddress] = useState<Address>({
     name: user?.name ?? "",
     line1: "",
@@ -90,13 +92,6 @@ export default function CheckoutPage() {
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.get("/setup/status").then((res) => {
-      const s = res.data.store;
-      if (s?.tax_enabled) {
-        setTaxEnabled(true);
-        setTaxRate(Number.parseFloat(s.tax_rate) || 0);
-      }
-    }).catch(() => {});
     api.get("/payments/config").then((res) => {
       if (res.data.stripe_enabled) {
         setStripeEnabled(true);
@@ -136,9 +131,7 @@ export default function CheckoutPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const subtotal = items.reduce((sum, i) => sum + i.effective_price * i.quantity, 0);
-  const tax = taxEnabled && taxRate > 0 ? Number.parseFloat((subtotal * taxRate / 100).toFixed(2)) : 0;
-  const total = subtotal + tax;
+  const { subtotal, tax, total } = cartTotals(items, store);
 
   const handleLine1Change = (value: string) => {
     setAddress((prev) => ({ ...prev, line1: value }));
@@ -434,7 +427,7 @@ export default function CheckoutPage() {
                       </p>
                     </div>
                     <p className="text-sm font-medium text-slate-900">
-                      ${(item.effective_price * item.quantity).toFixed(2)}
+                      {formatPrice(item.effective_price * item.quantity)}
                     </p>
                   </div>
                 ))}
@@ -442,7 +435,7 @@ export default function CheckoutPage() {
               <div className="border-t border-slate-200 pt-3 space-y-1 text-sm">
                 <div className="flex justify-between text-slate-600">
                   <span>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>{formatPrice(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
                   <span>Shipping</span>
@@ -450,13 +443,13 @@ export default function CheckoutPage() {
                 </div>
                 {tax > 0 && (
                   <div className="flex justify-between text-slate-600">
-                    <span>Tax ({taxRate}%)</span>
-                    <span>${tax.toFixed(2)}</span>
+                    <span>Tax ({Number(store.tax_rate)}%)</span>
+                    <span>{formatPrice(tax)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-base text-slate-900 border-t border-slate-200 pt-2 mt-2">
                   <span>Total</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span>{formatPrice(total)}</span>
                 </div>
               </div>
               <button
@@ -466,7 +459,7 @@ export default function CheckoutPage() {
               >
                 <Lock size={14} />
                 {loading && (paymentMethod === "stripe" ? "Redirecting to Stripe..." : "Processing...")}
-                {!loading && (paymentMethod === "stripe" ? `Pay $${total.toFixed(2)}` : `Place Order — $${total.toFixed(2)}`)}
+                {!loading && (paymentMethod === "stripe" ? `Pay ${formatPrice(total)}` : `Place Order — ${formatPrice(total)}`)}
               </button>
             </div>
           </div>

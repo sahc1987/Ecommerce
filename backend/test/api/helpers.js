@@ -17,6 +17,9 @@ if (TEST_DB) {
   process.env.DATABASE_URL = TEST_DB;
   process.env.JWT_SECRET ||= crypto.randomBytes(16).toString('hex');
   delete process.env.STRIPE_SECRET_KEY; // card payments stay off: no real money in tests
+  // No cache: keys don't name the database, so a shared Redis could answer
+  // with another database's products. Nothing listens on port 1.
+  process.env.REDIS_URL = 'redis://127.0.0.1:1';
 }
 
 let server;

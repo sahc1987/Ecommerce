@@ -1,12 +1,15 @@
 const router = require('express').Router();
 const db = require('../config/database');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireStaff } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const cache = require('../utils/cache');
 const safeErr = require('../utils/safeErr');
 const slugify = require('../utils/slugify');
 const variantsUtil = require('../utils/variants');
+const { withTransaction } = require('../utils/tx');
+const { Filters, paginate } = require('../utils/pagedQuery');
 const { isUuid, pagination, uuidParam } = require('../utils/validate');
+const { SALE_STATUSES_SQL } = require('../utils/orderStatus');
 
 // Short TTLs: responses include live availability (stock minus active cart holds)
 const TTL = { list: 30, detail: 30 }; // seconds
@@ -50,18 +53,40 @@ function withVariantTotals(row) {
   };
 }
 
-async function fetchProduct(client, id, { activeOnly = false } = {}) {
+const PRODUCT_JOINS = `LEFT JOIN categories c ON p.category_id = c.id
+  LEFT JOIN subcategories s ON p.subcategory_id = s.id`;
+
+// Columns of a product as every endpoint returns it (before withVariantTotals).
+const productColumnsSql = (activeOnly) => `p.*, c.name as category_name, s.name as subcategory_name,
+  (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images,
+  ${variantColumnsSql(activeOnly)}`;
+
+// Lists also carry the primary image, for cards and thumbnails.
+const PRIMARY_IMAGE_SQL =
+  '(SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image';
+
+// One product by id (or by slug), or null. The shop sees active variants only.
+async function fetchProduct(client, key, { activeOnly = false, bySlug = false } = {}) {
   const result = await client.query(
-    `SELECT p.*, c.name as category_name, s.name as subcategory_name,
-       (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images,
-       ${variantColumnsSql(activeOnly)}
-     FROM products p
-     LEFT JOIN categories c ON p.category_id = c.id
-     LEFT JOIN subcategories s ON p.subcategory_id = s.id
-     WHERE p.id = $1`,
-    [id]
+    `SELECT ${productColumnsSql(activeOnly)}
+     FROM products p ${PRODUCT_JOINS}
+     WHERE ${bySlug ? 'p.slug' : 'p.id'} = $1`,
+    [key]
   );
   return result.rows[0] ? withVariantTotals(result.rows[0]) : null;
+}
+
+// A page of products in the shape both lists return.
+async function listProducts({ filters, orderBy, activeOnly, extraColumns = '', query }) {
+  const { rows, ...page } = await paginate({
+    select: `${productColumnsSql(activeOnly)}, ${PRIMARY_IMAGE_SQL}${extraColumns}`,
+    table: 'products p',
+    joins: PRODUCT_JOINS,
+    filters,
+    orderBy,
+    ...pagination(query),
+  });
+  return { products: rows.map(withVariantTotals), ...page };
 }
 
 // Replaces a product's options and variants with `parsed` (from
@@ -117,108 +142,55 @@ function conflictMessage(err) {
   return 'That value is already in use';
 }
 
-// Order of the public list: `new` (default) or `popular` (most units sold in
-// orders that weren't cancelled — the shop's "Best sellers").
+// Order of the public list: `new` (default) or `popular` (most units sold —
+// the shop's "Best sellers").
 const LIST_ORDER = {
   new: 'p.created_at DESC',
   popular: 'units_sold DESC, p.created_at DESC',
 };
 
 // GET all products (public, with filters)
+// Units sold (orders counted as sales; see orderStatus.SALE_STATUSES), for
+// "Best sellers". Same definition as the dashboard's top products.
+const UNITS_SOLD_SQL = `,
+  (SELECT COALESCE(SUM(oi.quantity), 0)::int FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+    WHERE oi.product_id = p.id AND o.status IN ${SALE_STATUSES_SQL}) as units_sold`;
+
+// Filters both lists accept.
+function catalogFilters({ category, subcategory }) {
+  const filters = new Filters();
+  if (category) filters.add('p.category_id = ?', category);
+  if (subcategory) filters.add('p.subcategory_id = ?', subcategory);
+  return filters;
+}
+
+// GET all products (public, with filters)
 router.get('/', async (req, res) => {
-  const { category, subcategory, search, discount } = req.query;
-  const orderBy = LIST_ORDER[req.query.sort] ?? LIST_ORDER.new;
-  const { page, limit, offset } = pagination(req.query);
-  const cacheKey = cache.queryKey('products:list', req.query);
-
-  const cached = await cache.get(cacheKey);
-  if (cached) return res.json(cached);
-
-  const conditions = ['p.is_active = TRUE'];
-  const params = [];
-
-  if (category) { params.push(category); conditions.push(`p.category_id = $${params.length}`); }
-  if (subcategory) { params.push(subcategory); conditions.push(`p.subcategory_id = $${params.length}`); }
-  if (search) { params.push(`%${search}%`); conditions.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
-  if (discount === 'true') conditions.push('p.discount_active = TRUE');
-
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(limit, offset);
+  const { search, discount } = req.query;
+  const filters = catalogFilters(req.query).raw('p.is_active = TRUE');
+  if (search) filters.add('(p.name ILIKE ? OR p.description ILIKE ?)', `%${search}%`);
+  if (discount === 'true') filters.raw('p.discount_active = TRUE');
 
   try {
-    const countResult = await db.query(
-      `SELECT COUNT(*) FROM products p ${where}`,
-      params.slice(0, -2)
-    );
-    const result = await db.query(
-      `SELECT p.*, c.name as category_name, s.name as subcategory_name,
-        (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image,
-        (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images,
-        (SELECT COALESCE(SUM(oi.quantity), 0)::int FROM order_items oi
-           JOIN orders o ON o.id = oi.order_id
-          WHERE oi.product_id = p.id AND o.status <> 'cancelled') as units_sold,
-        ${variantColumnsSql(true)}
-       FROM products p
-       LEFT JOIN categories c ON p.category_id = c.id
-       LEFT JOIN subcategories s ON p.subcategory_id = s.id
-       ${where}
-       ORDER BY ${orderBy}
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
-    );
-    const total = Number.parseInt(countResult.rows[0].count);
-    const data = {
-      products: result.rows.map(withVariantTotals),
-      total,
-      page,
-      pages: Math.ceil(total / limit),
-    };
-    await cache.set(cacheKey, data, TTL.list);
-    res.json(data);
+    res.json(await cache.cached('products', `list:${cache.queryKey(req.query)}`, TTL.list, () => listProducts({
+      filters,
+      orderBy: LIST_ORDER[req.query.sort] ?? LIST_ORDER.new,
+      activeOnly: true,
+      extraColumns: UNITS_SOLD_SQL,
+      query: req.query,
+    })));
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
 });
 
 // GET all products for admin (includes inactive — not cached)
-router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req, res) => {
-  const { category, subcategory, search } = req.query;
-  const { page, limit, offset } = pagination(req.query);
-  const conditions = [];
-  const params = [];
-
-  if (category) { params.push(category); conditions.push(`p.category_id = $${params.length}`); }
-  if (subcategory) { params.push(subcategory); conditions.push(`p.subcategory_id = $${params.length}`); }
-  if (search) { params.push(`%${search}%`); conditions.push(`p.name ILIKE $${params.length}`); }
-
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(limit, offset);
-
+router.get('/admin/all', authenticate, requireStaff, async (req, res) => {
+  const filters = catalogFilters(req.query);
+  if (req.query.search) filters.add('p.name ILIKE ?', `%${req.query.search}%`);
   try {
-    const countResult = await db.query(
-      `SELECT COUNT(*) FROM products p ${where}`,
-      params.slice(0, -2)
-    );
-    const result = await db.query(
-      `SELECT p.*, c.name as category_name, s.name as subcategory_name,
-        (SELECT url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as primary_image,
-        (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images,
-        ${variantColumnsSql(false)}
-       FROM products p
-       LEFT JOIN categories c ON p.category_id = c.id
-       LEFT JOIN subcategories s ON p.subcategory_id = s.id
-       ${where}
-       ORDER BY p.created_at DESC
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
-    );
-    const total = Number.parseInt(countResult.rows[0].count);
-    res.json({
-      products: result.rows.map(withVariantTotals),
-      total,
-      page,
-      pages: Math.ceil(total / limit),
-    });
+    res.json(await listProducts({ filters, orderBy: 'p.created_at DESC', activeOnly: false, query: req.query }));
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -226,7 +198,7 @@ router.get('/admin/all', authenticate, requireRole('admin', 'staff'), async (req
 
 // GET single product for the admin form: every variant, inactive ones included
 // (saving the form replaces the variant list, so it must see all of them).
-router.get('/admin/:id', authenticate, requireRole('admin', 'staff'), async (req, res) => {
+router.get('/admin/:id', authenticate, requireStaff, async (req, res) => {
   try {
     const product = await fetchProduct(db, req.params.id);
     if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -239,47 +211,18 @@ router.get('/admin/:id', authenticate, requireRole('admin', 'staff'), async (req
 // GET single product by id or slug (shop view: active variants only)
 router.get('/:idOrSlug', async (req, res) => {
   const { idOrSlug } = req.params;
-  const cacheKey = `products:detail:${idOrSlug}`;
-
-  const cached = await cache.get(cacheKey);
-  if (cached) return res.json(cached);
-
-  const isUUID = isUuid(idOrSlug);
   try {
-    const result = await db.query(
-      `SELECT p.*, c.name as category_name, s.name as subcategory_name,
-        (SELECT json_agg(pi ORDER BY pi.sort_order) FROM product_images pi WHERE pi.product_id = p.id) as images,
-        ${variantColumnsSql(true)}
-       FROM products p
-       LEFT JOIN categories c ON p.category_id = c.id
-       LEFT JOIN subcategories s ON p.subcategory_id = s.id
-       WHERE ${isUUID ? 'p.id' : 'p.slug'} = $1`,
-      [idOrSlug]
-    );
-    if (!result.rows[0]) return res.status(404).json({ error: 'Product not found' });
-    const data = { product: withVariantTotals(result.rows[0]) };
-    await cache.set(cacheKey, data, TTL.detail);
+    // Misses aren't cached (null), so a product created later shows up at once.
+    const data = await cache.cached('products', `detail:${idOrSlug}`, TTL.detail, async () => {
+      const product = await fetchProduct(db, idOrSlug, { activeOnly: true, bySlug: !isUuid(idOrSlug) });
+      return product && { product };
+    });
+    if (!data) return res.status(404).json({ error: 'Product not found' });
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
 });
-
-// Runs fn(client) in a transaction; rolls back and rethrows on error.
-async function inTransaction(fn) {
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
-}
 
 const sendWriteError = (res, err) => {
   const conflict = conflictMessage(err);
@@ -290,7 +233,7 @@ const sendWriteError = (res, err) => {
 // POST create product
 // Body may carry `options` + `variants`; without them the product gets a
 // single default variant from the top-level `stock` and `sku`.
-router.post('/', authenticate, requireRole('admin', 'staff'), async (req, res) => {
+router.post('/', authenticate, requireStaff, async (req, res) => {
   const {
     name, description, price, compare_at_price, discount_percent, discount_active,
     discount_start, discount_end, stock, sku, category_id, subcategory_id, options, variants,
@@ -304,7 +247,7 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req, res) =
 
   let slug = slugify(name);
   try {
-    const product = await inTransaction(async (client) => {
+    const product = await withTransaction(async (client) => {
       const existing = await client.query('SELECT id FROM products WHERE slug = $1', [slug]);
       if (existing.rows.length) slug = `${slug}-${Date.now()}`;
 
@@ -362,7 +305,7 @@ class BadRequest extends Error {}
 // PUT update product
 // Sending `variants` (with `options`) replaces the whole variant list; see
 // saveVariants for how existing variants are matched by id.
-router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res) => {
+router.put('/:id', authenticate, requireStaff, async (req, res) => {
   const {
     name, description, price, compare_at_price, discount_percent, discount_active,
     discount_start, discount_end, stock, sku, category_id, subcategory_id, is_active, options, variants,
@@ -371,7 +314,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
   if (parsed?.error) return res.status(400).json({ error: parsed.error });
 
   try {
-    const outcome = await inTransaction(async (client) => {
+    const product = await withTransaction(async (client) => {
       const current = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
       const p = current.rows[0];
       if (!p) return null;
@@ -404,14 +347,11 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
         const legacyError = await applyLegacyStockSku(client, p.id, { stock, sku });
         if (legacyError) throw new BadRequest(legacyError);
       }
-      return { oldSlug: p.slug, product: await fetchProduct(client, p.id) };
+      return fetchProduct(client, p.id);
     });
-    if (!outcome) return res.status(404).json({ error: 'Product not found' });
-    await Promise.all([
-      cache.invalidateProducts(req.params.id, outcome.oldSlug, outcome.product.slug),
-      cache.invalidateDashboard(),
-    ]);
-    res.json({ product: outcome.product });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    await Promise.all([cache.invalidateProducts(), cache.invalidateDashboard()]);
+    res.json({ product });
   } catch (err) {
     if (err instanceof BadRequest) return res.status(400).json({ error: err.message });
     sendWriteError(res, err);
@@ -420,7 +360,7 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req, res)
 
 // PUT quick edit of one variant: any of sku, price (null = product price),
 // stock, is_active.
-router.put('/:id/variants/:variantId', authenticate, requireRole('admin', 'staff'), async (req, res) => {
+router.put('/:id/variants/:variantId', authenticate, requireStaff, async (req, res) => {
   const { sku, price, stock, is_active } = req.body;
   const sets = [];
   const params = [];
@@ -450,7 +390,7 @@ router.put('/:id/variants/:variantId', authenticate, requireRole('admin', 'staff
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'Variant not found' });
     const product = await fetchProduct(db, req.params.id);
-    await Promise.all([cache.invalidateProducts(req.params.id, product.slug), cache.invalidateDashboard()]);
+    await Promise.all([cache.invalidateProducts(), cache.invalidateDashboard()]);
     res.json({ product });
   } catch (err) {
     sendWriteError(res, err);
@@ -460,9 +400,8 @@ router.put('/:id/variants/:variantId', authenticate, requireRole('admin', 'staff
 // DELETE product
 router.delete('/:id', authenticate, requireRole('admin'), async (req, res) => {
   try {
-    const current = await db.query('SELECT slug FROM products WHERE id = $1', [req.params.id]);
     await db.query('DELETE FROM products WHERE id = $1', [req.params.id]);
-    await Promise.all([cache.invalidateProducts(req.params.id, current.rows[0]?.slug), cache.invalidateDashboard()]);
+    await Promise.all([cache.invalidateProducts(), cache.invalidateDashboard()]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -470,7 +409,7 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res) => {
 });
 
 // POST upload product images
-router.post('/:id/images', authenticate, requireRole('admin', 'staff'), upload.array('images', 10), async (req, res) => {
+router.post('/:id/images', authenticate, requireStaff, upload.array('images', 10), async (req, res) => {
   if (!req.files?.length) return res.status(400).json({ error: 'No files uploaded' });
   try {
     const hasPrimary = await db.query(
@@ -486,7 +425,7 @@ router.post('/:id/images', authenticate, requireRole('admin', 'staff'), upload.a
       );
       images.push(result.rows[0]);
     }
-    await cache.invalidateProducts(req.params.id);
+    await cache.invalidateProducts();
     res.status(201).json({ images });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -494,35 +433,49 @@ router.post('/:id/images', authenticate, requireRole('admin', 'staff'), upload.a
 });
 
 // DELETE product image
-router.delete('/:id/images/:imageId', authenticate, requireRole('admin', 'staff'), async (req, res) => {
+// DELETE product image (the next one becomes primary if it was the primary).
+router.delete('/:id/images/:imageId', authenticate, requireStaff, async (req, res) => {
   try {
-    const img = await db.query('SELECT * FROM product_images WHERE id=$1 AND product_id=$2', [
-      req.params.imageId, req.params.id,
-    ]);
-    if (!img.rows[0]) return res.status(404).json({ error: 'Image not found' });
-    await db.query('DELETE FROM product_images WHERE id=$1', [req.params.imageId]);
-    if (img.rows[0].is_primary) {
-      await db.query(
-        `UPDATE product_images SET is_primary=TRUE WHERE id=(
-          SELECT id FROM product_images WHERE product_id=$1 ORDER BY sort_order LIMIT 1)`,
-        [req.params.id]
-      );
-    }
-    await cache.invalidateProducts(req.params.id);
+    const deleted = await withTransaction(async (client) => {
+      const img = (await client.query(
+        'DELETE FROM product_images WHERE id=$1 AND product_id=$2 RETURNING is_primary',
+        [req.params.imageId, req.params.id]
+      )).rows[0];
+      if (img?.is_primary) {
+        await client.query(
+          `UPDATE product_images SET is_primary=TRUE WHERE id=(
+            SELECT id FROM product_images WHERE product_id=$1 ORDER BY sort_order LIMIT 1)`,
+          [req.params.id]
+        );
+      }
+      return Boolean(img);
+    });
+    if (!deleted) return res.status(404).json({ error: 'Image not found' });
+    await cache.invalidateProducts();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
 });
 
-// PUT set primary image
-router.put('/:id/images/:imageId/primary', authenticate, requireRole('admin', 'staff'), async (req, res) => {
+// The image doesn't belong to the product; nothing was changed.
+class ImageNotFound extends Error {}
+
+// PUT set primary image: exactly one primary per product, switched atomically.
+router.put('/:id/images/:imageId/primary', authenticate, requireStaff, async (req, res) => {
   try {
-    await db.query('UPDATE product_images SET is_primary=FALSE WHERE product_id=$1', [req.params.id]);
-    await db.query('UPDATE product_images SET is_primary=TRUE WHERE id=$1', [req.params.imageId]);
-    await cache.invalidateProducts(req.params.id);
+    await withTransaction(async (client) => {
+      await client.query('UPDATE product_images SET is_primary=FALSE WHERE product_id=$1', [req.params.id]);
+      const set = await client.query(
+        'UPDATE product_images SET is_primary=TRUE WHERE id=$1 AND product_id=$2',
+        [req.params.imageId, req.params.id]
+      );
+      if (!set.rowCount) throw new ImageNotFound();
+    });
+    await cache.invalidateProducts();
     res.json({ success: true });
   } catch (err) {
+    if (err instanceof ImageNotFound) return res.status(404).json({ error: 'Image not found' });
     res.status(500).json({ error: safeErr(err) });
   }
 });

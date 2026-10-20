@@ -6,6 +6,7 @@ import { TrendingUp, CalendarRange } from 'lucide-react';
 import { errorMessage } from '../../api';
 import { useApiGet } from '../../hooks/useApiGet';
 import { formatDate, isoDateInStoreZone } from '../../utils/dates';
+import { formatPrice } from '../../utils/pricing';
 
 type Granularity = 'hour' | 'day' | 'week' | 'month';
 type Range = 'today' | 'daily' | 'weekly' | 'monthly' | 'custom';
@@ -29,7 +30,7 @@ const RANGES: { key: Range; label: string; granularity: Granularity; days: numbe
 // Calendar-day maths in the store's zone (the API buckets by the same zone).
 const toIso = (d: Date) => isoDateInStoreZone(d);
 const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d; };
-const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+const money = (n: number) => formatPrice(n);
 
 // Custom ranges pick a bucket size that keeps the axis readable.
 const autoGranularity = (from: string, to: string): Granularity => {
@@ -52,11 +53,8 @@ const formatLabel = (bucket: string, g: Granularity) => {
   return formatDate(bucket, { month: 'short', day: 'numeric' });
 };
 
-// Compact currency for the Y axis: $950, $1.2k
-const axisMoney = (v: number) => {
-  const amount = v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
-  return `$${amount}`;
-};
+// Compact currency for the Y axis: $950, $1.2K
+const axisMoney = (v: number) => formatPrice(v, { notation: 'compact', maximumFractionDigits: 1 });
 
 const TOOLTIP_PREFIX: Partial<Record<Granularity, string>> = { week: 'Week of ', hour: 'Today, ' };
 
@@ -129,9 +127,12 @@ export default function SalesChart() {
   const avgOrder = totals.orders ? totals.revenue / totals.orders : 0;
   const hasSales = data.some((d) => d.orders > 0);
 
+  // Same segmented style as the dashboard's period selector: the selected
+  // option is a white pill with a control-coloured outline (3:1), so solid
+  // blue stays reserved for the screen's main action.
   const chipClass = (active: boolean) =>
     `px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-      active ? 'bg-primary-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+      active ? 'bg-white text-primary-700 shadow-xs ring-1 ring-control' : 'text-slate-600 hover:text-slate-900'
     }`;
 
   const renderChart = () => {
@@ -224,14 +225,14 @@ export default function SalesChart() {
 
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           {/* On narrow screens the range chips scroll within their own row. */}
-          <div className="inline-flex max-w-full overflow-x-auto scrollbar-hide bg-slate-50 border border-control rounded-xl p-1">
+          <div className="inline-flex max-w-full overflow-x-auto scrollbar-hide bg-slate-100 rounded-xl p-1">
             {RANGES.map((r) => (
               <button key={r.key} type="button" aria-pressed={range === r.key} onClick={() => setRange(r.key)} className={`shrink-0 ${chipClass(range === r.key)}`}>
                 {r.label}
               </button>
             ))}
           </div>
-          <div className="inline-flex bg-slate-50 border border-control rounded-xl p-1">
+          <div className="inline-flex bg-slate-100 rounded-xl p-1">
             <button type="button" aria-pressed={metric === 'revenue'} onClick={() => setMetric('revenue')} className={chipClass(metric === 'revenue')}>Revenue</button>
             <button type="button" aria-pressed={metric === 'orders'} onClick={() => setMetric('orders')} className={chipClass(metric === 'orders')}>Orders</button>
           </div>

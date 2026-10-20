@@ -10,19 +10,27 @@ const extractToken = (req) => {
   return null;
 };
 
+// The active user a token belongs to, or null (deactivated or deleted).
+// Throws when the token is invalid or expired. Looked up on every request so
+// deactivating an account takes effect immediately.
+async function userFromToken(token) {
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const result = await db.query(
+    'SELECT id, name, email, role FROM users WHERE id = $1 AND is_active = TRUE',
+    [decoded.userId]
+  );
+  return result.rows[0] ?? null;
+}
+
 const authenticate = async (req, res, next) => {
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
   }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const result = await db.query(
-      'SELECT id, name, email, role FROM users WHERE id = $1 AND is_active = TRUE',
-      [decoded.userId]
-    );
-    if (!result.rows[0]) return res.status(401).json({ error: 'User not found' });
-    req.user = result.rows[0];
+    const user = await userFromToken(token);
+    if (!user) return res.status(401).json({ error: 'User not found' });
+    req.user = user;
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
@@ -34,17 +42,18 @@ const optionalAuth = async (req, res, next) => {
   const token = extractToken(req);
   if (!token) return next();
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const result = await db.query(
-      'SELECT id, name, email, role FROM users WHERE id = $1 AND is_active = TRUE',
-      [decoded.userId]
-    );
-    if (result.rows[0]) req.user = result.rows[0];
+    const user = await userFromToken(token);
+    if (user) req.user = user;
   } catch {
     // invalid/expired token: treat as guest
   }
   next();
 };
+
+const STAFF_ROLES = ['admin', 'staff'];
+
+// Back-office users see every order and return; customers only their own.
+const isStaff = (user) => STAFF_ROLES.includes(user?.role);
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!req.user || !roles.includes(req.user.role)) {
@@ -53,4 +62,6 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, optionalAuth, requireRole, extractToken };
+const requireStaff = requireRole(...STAFF_ROLES);
+
+module.exports = { authenticate, optionalAuth, requireRole, requireStaff, isStaff, extractToken };

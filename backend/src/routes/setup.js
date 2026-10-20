@@ -4,8 +4,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const cache = require('../utils/cache');
 const safeErr = require('../utils/safeErr');
-
-const CACHE_KEY = 'setup:status';
+const { getStoreSettings } = require('../utils/storeSettings');
 
 // Any IANA zone the runtime knows; falls back to UTC for unknown input.
 const isValidTimeZone = (tz) => {
@@ -15,14 +14,12 @@ const isValidTimeZone = (tz) => {
 const TTL = 1800; // 30 minutes
 
 router.get('/status', async (req, res) => {
-  const cached = await cache.get(CACHE_KEY);
-  if (cached) return res.json(cached);
-
   try {
-    const result = await db.query('SELECT * FROM store_settings LIMIT 1');
-    const data = { configured: result.rows.length > 0, store: result.rows[0] || null };
-    await cache.set(CACHE_KEY, data, TTL);
-    res.json(data);
+    res.json(await cache.cached('setup', 'status', TTL, async () => {
+      const store = await getStoreSettings();
+      const configured = Object.keys(store).length > 0;
+      return { configured, store: configured ? store : null };
+    }));
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -51,7 +48,7 @@ router.post('/complete', authenticate, requireRole('admin'), async (req, res) =>
         [name, description, currency || 'USD', email, phone, address, parsedTaxRate, !!tax_enabled, parsedReturnDays, tz]
       );
     }
-    await cache.del(CACHE_KEY);
+    await cache.invalidateSetup();
     res.json({ store: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -66,7 +63,7 @@ router.post('/logo', authenticate, requireRole('admin'), upload.single('logo'), 
       'UPDATE store_settings SET logo_url=$1, updated_at=NOW() WHERE id=(SELECT id FROM store_settings LIMIT 1)',
       [url]
     );
-    await cache.del(CACHE_KEY);
+    await cache.invalidateSetup();
     res.json({ logo_url: url });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });

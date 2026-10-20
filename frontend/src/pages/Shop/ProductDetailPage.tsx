@@ -191,12 +191,12 @@ export default function ProductDetailPage() {
           <div className="py-4 border-y border-slate-100">
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-bold text-slate-900">
-                {showRange ? `${formatPrice(range.min)} – ${formatPrice(range.max)}` : `$${effectivePrice.toFixed(2)}`}
+                {showRange ? `${formatPrice(range.min)} – ${formatPrice(range.max)}` : formatPrice(effectivePrice)}
               </span>
               {hasDiscount && !showRange && (
                 <>
                   <span className="text-xl text-slate-500 line-through font-medium">
-                    ${basePrice.toFixed(2)}
+                    {formatPrice(basePrice)}
                   </span>
                   <span className="bg-rose-100 text-rose-700 text-sm font-bold px-2.5 py-0.5 rounded-lg">
                     {product.discount_percent}% OFF
@@ -206,7 +206,7 @@ export default function ProductDetailPage() {
             </div>
             {hasDiscount && !showRange && quantity > 0 && (
               <p className="text-sm text-emerald-700 font-semibold mt-2">
-                You save ${savings.toFixed(2)} on this order
+                You save {formatPrice(savings)} on this order
               </p>
             )}
           </div>

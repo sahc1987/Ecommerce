@@ -332,3 +332,7 @@ ALTER TABLE returns ADD COLUMN IF NOT EXISTS restocked BOOLEAN NOT NULL DEFAULT 
 -- It also serves lookups by order, replacing the plain idx_returns_order_id.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_returns_one_per_order ON returns(order_id);
 DROP INDEX IF EXISTS idx_returns_order_id;
+
+-- Every product list and detail reads its images (and the primary one) per
+-- product; without this each lookup scans the whole table.
+CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id, sort_order);

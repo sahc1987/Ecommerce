@@ -4,7 +4,8 @@ import toast from "react-hot-toast";
 import { Store, ArrowRight, Check } from "lucide-react";
 import api, { errorMessage } from "../../api";
 import TimeZoneSelect from "../../components/TimeZoneSelect";
-import { browserTimeZone, setStoreTimeZone } from "../../utils/dates";
+import { browserTimeZone } from "../../utils/dates";
+import { CURRENCIES } from "../../utils/pricing";
 
 // Progress dot: completed, current, or upcoming.
 const stepCircleClass = (s: number, step: number) => {
@@ -14,7 +15,7 @@ const stepCircleClass = (s: number, step: number) => {
 };
 
 interface Props {
-  onComplete: () => void;
+  onComplete: () => Promise<void> | void;
 }
 
 export default function SetupWizard({ onComplete }: Readonly<Props>) {
@@ -36,8 +37,7 @@ export default function SetupWizard({ onComplete }: Readonly<Props>) {
     setLoading(true);
     try {
       await api.post("/setup/complete", form);
-      setStoreTimeZone(form.timezone);
-      onComplete();
+      await onComplete(); // the app now knows the store is set up
       toast.success("Store configured successfully!");
       navigate("/admin");
     } catch (err) {
@@ -46,8 +46,6 @@ export default function SetupWizard({ onComplete }: Readonly<Props>) {
       setLoading(false);
     }
   };
-
-  const currencies = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "BRL", "MXN"];
   const launchLabel = loading ? "Launching..." : "Launch Store";
   const submitLabel = step === 3 ? launchLabel : "Continue";
 
@@ -142,7 +140,7 @@ export default function SetupWizard({ onComplete }: Readonly<Props>) {
                       setForm({ ...form, currency: e.target.value })
                     }
                   >
-                    {currencies.map((c) => (
+                    {CURRENCIES.map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>

@@ -9,7 +9,11 @@ const { idempotent } = require('../middleware/idempotency');
 const stripe = require('../config/stripe');
 const stripeOrders = require('../utils/stripeOrders');
 const variants = require('../utils/variants');
-const { isUuid } = require('../utils/validate');
+const { withTransaction } = require('../utils/tx');
+const { getStoreSettings } = require('../utils/storeSettings');
+const { uuidParam } = require('../utils/validate');
+
+router.param('id', uuidParam('Order not found'));
 
 const PAYMENT_METHODS = new Set(['cod', 'stripe']);
 const toCents = (amount) => Math.round(amount * 100);
@@ -92,9 +96,7 @@ div{max-width:360px}h1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:0}</
 });
 
 async function findOwnOrder(req, res) {
-  const order = isUuid(req.params.id)
-    ? (await db.query('SELECT * FROM orders WHERE id = $1', [req.params.id])).rows[0]
-    : null;
+  const order = (await db.query('SELECT * FROM orders WHERE id = $1', [req.params.id])).rows[0];
   if (!order || order.user_id !== req.user.id) {
     res.status(404).json({ error: 'Order not found' });
     return null;
@@ -168,54 +170,51 @@ async function fetchLockedVariant(client, variantId) {
   return res.rows[0] || null;
 }
 
+// The order can't go ahead; `body` is sent with `status`. Thrown inside the
+// transaction so nothing it did is kept.
+class OrderRejected extends Error {
+  constructor(status, body) {
+    super(body.error);
+    this.status = status;
+    this.body = body;
+  }
+}
+
 // Locks, checks and prices every cart line inside the order's transaction.
-// Returns { reject: { status, body } } when the order can't go ahead.
+// Throws OrderRejected when a line can't be sold.
 async function priceOrderLines(client, items, cartToken) {
   // One line per variant (duplicates are summed, so they can't each pass the
   // stock check), locked in a fixed order to avoid deadlocks between orders.
   const { lines, unresolved } = await variants.resolveLines(client, items);
   if (unresolved.length) {
-    return {
-      reject: {
-        status: 400,
-        body: {
-          error: 'Please choose an option (size, color…) for every product in your cart',
-          product_id: unresolved[0].product_id,
-        },
-      },
-    };
+    throw new OrderRejected(400, {
+      error: 'Please choose an option (size, color…) for every product in your cart',
+      product_id: unresolved[0].product_id,
+    });
   }
   lines.sort((a, b) => a.variant_id.localeCompare(b.variant_id));
 
   let subtotal = 0;
   let discount = 0;
   const orderItems = [];
-  const affectedProductIds = [];
   for (const line of lines) {
     const variant = await fetchLockedVariant(client, line.variant_id);
     if (!variant) {
-      return {
-        reject: { status: 400, body: { error: 'A product in your cart is no longer available', variant_id: line.variant_id } },
-      };
+      throw new OrderRejected(400, { error: 'A product in your cart is no longer available', variant_id: line.variant_id });
     }
     const displayName = variant.variant_label ? `${variant.name} (${variant.variant_label})` : variant.name;
     // Stock held by other carts is not for sale to this one; our own hold
     // (if any) is consumed by this order.
     const available = await reservations.availableFor(client, variant.id, cartToken);
     if (available < line.quantity) {
-      return {
-        reject: {
-          status: 409,
-          body: {
-            error: available > 0
-              ? `Only ${available} of ${displayName} available right now`
-              : `${displayName} is out of stock`,
-            product_id: variant.product_id,
-            variant_id: variant.id,
-            available,
-          },
-        },
-      };
+      throw new OrderRejected(409, {
+        error: available > 0
+          ? `Only ${available} of ${displayName} available right now`
+          : `${displayName} is out of stock`,
+        product_id: variant.product_id,
+        variant_id: variant.id,
+        available,
+      });
     }
 
     const basePrice = Number.parseFloat(variant.variant_price ?? variant.price);
@@ -237,9 +236,53 @@ async function priceOrderLines(client, items, cartToken) {
       discount: itemDiscount,
       total: effectivePrice * line.quantity,
     });
-    affectedProductIds.push({ id: variant.product_id, slug: variant.slug });
   }
-  return { orderItems, subtotal, discount, affectedProductIds };
+  return { orderItems, subtotal, discount };
+}
+
+// Creates the order, its lines and the stock deduction; for card orders also
+// the Checkout session. Runs inside the caller's transaction.
+async function createOrder(client, req, { items, shipping_address, notes, payment_method, clientApp, cartToken }) {
+  // Shipping is server-controlled — never trusted from the client
+  const shipping = 0;
+  const { orderItems, subtotal, discount } = await priceOrderLines(client, items, cartToken);
+
+  const settings = await getStoreSettings(client);
+  const taxRate = settings.tax_enabled ? Number.parseFloat(settings.tax_rate) || 0 : 0;
+  const tax = taxRate > 0 ? Number.parseFloat(((subtotal - discount) * taxRate / 100).toFixed(2)) : 0;
+  const total = subtotal - discount + tax + shipping;
+
+  const order = (await client.query(
+    `INSERT INTO orders (user_id, subtotal, discount, tax, shipping, total, shipping_address, notes, payment_method)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [req.user.id, subtotal, discount, tax, shipping, total, JSON.stringify(shipping_address), notes, payment_method]
+  )).rows[0];
+
+  for (const item of orderItems) {
+    await client.query(
+      `INSERT INTO order_items
+         (order_id, product_id, variant_id, sku, variant_label, product_name, product_image, unit_price, quantity, discount, total)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        order.id, item.product_id, item.variant_id, item.sku, item.variant_label, item.product_name,
+        item.product_image, item.unit_price, item.quantity, item.discount, item.total,
+      ]
+    );
+    // CHECK (stock >= 0) on product_variants backs up the availability check.
+    await client.query('UPDATE product_variants SET stock = stock - $1, updated_at = NOW() WHERE id = $2', [item.quantity, item.variant_id]);
+  }
+
+  // The sale is final: release this cart's holds on the purchased products.
+  if (cartToken) {
+    await client.query('DELETE FROM stock_reservations WHERE cart_token = $1', [cartToken]);
+  }
+
+  // Card orders: open the Checkout session inside the transaction, so a Stripe
+  // failure rolls the order back and the stock is never taken.
+  const checkoutUrl = payment_method === 'stripe'
+    ? await attachCheckoutSession(client, req, { order, orderItems, tax, currency: settings.currency, clientApp })
+    : undefined;
+  return { order, checkoutUrl };
 }
 
 router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, res) => {
@@ -248,65 +291,11 @@ router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, 
   if (invalid) return res.status(400).json({ error: invalid });
   const cartToken = reservations.getCartToken(req);
 
-  // Shipping is server-controlled — never trusted from the client
-  const shipping = 0;
-
-  const client = await db.connect();
   try {
-    await client.query('BEGIN');
-    const priced = await priceOrderLines(client, items, cartToken);
-    if (priced.reject) {
-      await client.query('ROLLBACK');
-      return res.status(priced.reject.status).json(priced.reject.body);
-    }
-    const { orderItems, subtotal, discount, affectedProductIds } = priced;
-
-    const settingsRes = await client.query('SELECT tax_rate, tax_enabled, currency FROM store_settings LIMIT 1');
-    const settings = settingsRes.rows[0];
-    const taxRate = settings?.tax_enabled ? Number.parseFloat(settings.tax_rate) || 0 : 0;
-    const tax = taxRate > 0 ? Number.parseFloat(((subtotal - discount) * taxRate / 100).toFixed(2)) : 0;
-    const total = subtotal - discount + tax + Number.parseFloat(shipping);
-
-    const orderRes = await client.query(
-      `INSERT INTO orders (user_id, subtotal, discount, tax, shipping, total, shipping_address, notes, payment_method)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.user.id, subtotal, discount, tax, shipping, total, JSON.stringify(shipping_address), notes, payment_method]
-    );
-    const order = orderRes.rows[0];
-
-    for (const item of orderItems) {
-      await client.query(
-        `INSERT INTO order_items
-           (order_id, product_id, variant_id, sku, variant_label, product_name, product_image, unit_price, quantity, discount, total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [
-          order.id, item.product_id, item.variant_id, item.sku, item.variant_label, item.product_name,
-          item.product_image, item.unit_price, item.quantity, item.discount, item.total,
-        ]
-      );
-      // CHECK (stock >= 0) on product_variants backs up the availability check.
-      await client.query('UPDATE product_variants SET stock = stock - $1, updated_at = NOW() WHERE id = $2', [item.quantity, item.variant_id]);
-    }
-
-    // The sale is final: release this cart's holds on the purchased products.
-    if (cartToken) {
-      await client.query('DELETE FROM stock_reservations WHERE cart_token = $1', [cartToken]);
-    }
-
-    // Card orders: open the Checkout session inside the transaction, so a Stripe
-    // failure rolls the order back and the stock is never taken.
-    const checkoutUrl = payment_method === 'stripe'
-      ? await attachCheckoutSession(client, req, {
-        order, orderItems, tax, currency: settings?.currency, clientApp,
-      })
-      : undefined;
-
-    await client.query('COMMIT');
-
-    await Promise.all([
-      cache.invalidateProducts(...affectedProductIds.flatMap(({ id, slug }) => [id, slug])),
-      cache.invalidateDashboard(),
-    ]);
+    const { order, checkoutUrl } = await withTransaction((client) => createOrder(client, req, {
+      items, shipping_address, notes, payment_method, clientApp, cartToken,
+    }));
+    await Promise.all([cache.invalidateProducts(), cache.invalidateDashboard()]);
 
     // Card orders are announced once Stripe confirms payment (see stripeOrders.markPaid).
     if (payment_method === 'stripe') return res.json({ order_id: order.id, checkout_url: checkoutUrl });
@@ -314,10 +303,8 @@ router.post('/place-order', authenticate, orderLimiter, idempotent, async (req, 
     await stripeOrders.sendOrderNotifications(order, req.user.name);
     res.json({ order_id: order.id });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (err instanceof OrderRejected) return res.status(err.status).json(err.body);
     res.status(500).json({ error: safeErr(err) });
-  } finally {
-    client.release();
   }
 });
 

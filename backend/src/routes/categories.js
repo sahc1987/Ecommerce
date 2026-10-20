@@ -10,19 +10,16 @@ const TTL = { list: 600, sub: 600 }; // 10 minutes
 
 // GET all categories with subcategory counts
 router.get('/', async (req, res) => {
-  const cached = await cache.get('categories:list');
-  if (cached) return res.json(cached);
-
   try {
-    const result = await db.query(`
-      SELECT c.*,
-        (SELECT COUNT(*) FROM subcategories s WHERE s.category_id = c.id) AS subcategory_count,
-        (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) AS product_count
-      FROM categories c ORDER BY c.name
-    `);
-    const data = { categories: result.rows };
-    await cache.set('categories:list', data, TTL.list);
-    res.json(data);
+    res.json(await cache.cached('categories', 'list', TTL.list, async () => {
+      const result = await db.query(`
+        SELECT c.*,
+          (SELECT COUNT(*) FROM subcategories s WHERE s.category_id = c.id) AS subcategory_count,
+          (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) AS product_count
+        FROM categories c ORDER BY c.name
+      `);
+      return { categories: result.rows };
+    }));
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -30,18 +27,14 @@ router.get('/', async (req, res) => {
 
 // GET subcategories for a category
 router.get('/:id/subcategories', async (req, res) => {
-  const cacheKey = `categories:sub:${req.params.id}`;
-  const cached = await cache.get(cacheKey);
-  if (cached) return res.json(cached);
-
   try {
-    const result = await db.query(
-      'SELECT * FROM subcategories WHERE category_id = $1 ORDER BY name',
-      [req.params.id]
-    );
-    const data = { subcategories: result.rows };
-    await cache.set(cacheKey, data, TTL.sub);
-    res.json(data);
+    res.json(await cache.cached('categories', `sub:${req.params.id}`, TTL.sub, async () => {
+      const result = await db.query(
+        'SELECT * FROM subcategories WHERE category_id = $1 ORDER BY name',
+        [req.params.id]
+      );
+      return { subcategories: result.rows };
+    }));
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -112,7 +105,7 @@ router.post('/:categoryId/subcategories', authenticate, requireRole('admin', 'st
       'INSERT INTO subcategories (category_id, name, slug, description) VALUES ($1,$2,$3,$4) RETURNING *',
       [req.params.categoryId, name, slug, description]
     );
-    await cache.invalidateCategories(req.params.categoryId);
+    await cache.invalidateCategories();
     res.status(201).json({ subcategory: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Subcategory already exists' });
@@ -136,7 +129,7 @@ router.put('/subcategories/:id', authenticate, requireRole('admin', 'staff'), as
         req.params.id,
       ]
     );
-    await cache.invalidateCategories(current.rows[0].category_id);
+    await cache.invalidateCategories();
     res.json({ subcategory: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -148,7 +141,7 @@ router.delete('/subcategories/:id', authenticate, requireRole('admin'), async (r
   try {
     const current = await db.query('SELECT category_id FROM subcategories WHERE id = $1', [req.params.id]);
     await db.query('DELETE FROM subcategories WHERE id = $1', [req.params.id]);
-    await cache.invalidateCategories(current.rows[0]?.category_id);
+    await cache.invalidateCategories();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });

@@ -13,6 +13,7 @@ import LeftSidebar from '../../components/Shop/LeftSidebar';
 import ProductCard from '../../components/Shop/ProductCard';
 import type { ShopOutletContext } from '../../components/Layout/ShopLayout';
 import ProductImage from '../../components/Shop/ProductImage';
+import Pagination from '../../components/Pagination';
 
 /* ---------- small building blocks ---------- */
 
@@ -330,27 +331,7 @@ export default function HomePage() {
 
       <ProductResults loading={loading} products={products} onAddToCart={handleAddToCart} />
 
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-8">
-          <button
-            type="button"
-            className="px-4 py-2 text-sm font-medium border border-control bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            disabled={page === 1}
-            onClick={() => goToPage(page - 1)}
-          >
-            Previous
-          </button>
-          <span className="text-sm text-slate-500">Page {page} of {pages}</span>
-          <button
-            type="button"
-            className="px-4 py-2 text-sm font-medium border border-control bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            disabled={page === pages}
-            onClick={() => goToPage(page + 1)}
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <Pagination page={page} pages={pages} onChange={goToPage} className="mt-8" />
 
       {moreFromStore.length > 0 && (
         <section className="mt-8">

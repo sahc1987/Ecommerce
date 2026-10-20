@@ -5,7 +5,9 @@ import api, { errorMessage } from '../../../api';
 import TimeZoneSelect from '../../../components/TimeZoneSelect';
 import { mediaUrl } from '../../../utils/media';
 import { textOr } from '../../../utils/text';
-import { browserTimeZone, setStoreTimeZone } from '../../../utils/dates';
+import { browserTimeZone } from '../../../utils/dates';
+import { CURRENCIES } from '../../../utils/pricing';
+import { refreshStoreSettings } from '../../../hooks/useStoreSettings';
 
 export default function StoreSettings() {
   const [loading, setLoading] = useState(true);
@@ -13,8 +15,6 @@ export default function StoreSettings() {
   const [form, setForm] = useState({ name: '', description: '', currency: 'USD', email: '', phone: '', address: '', tax_rate: '0', tax_enabled: false, return_window_days: '30', timezone: browserTimeZone() });
   const fileRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-
-  const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'BRL', 'MXN'];
 
   useEffect(() => {
     api.get('/setup/status').then((res) => {
@@ -31,7 +31,8 @@ export default function StoreSettings() {
     setSaving(true);
     try {
       await api.post('/setup/complete', form);
-      setStoreTimeZone(form.timezone);
+      // Headers, tab title, tax and return window everywhere pick this up.
+      await refreshStoreSettings();
       toast.success('Store settings saved');
     } catch (err) {
       toast.error(errorMessage(err, 'Save failed'));
@@ -51,6 +52,7 @@ export default function StoreSettings() {
       const res = await api.post('/setup/logo', fd);
       toast.success('Logo updated');
       setLogoPreview(res.data.logo_url);
+      void refreshStoreSettings();
     } catch {
       toast.error('Upload failed');
     }
@@ -100,7 +102,7 @@ export default function StoreSettings() {
         <div>
           <label htmlFor="currency" className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
           <select id="currency" className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
-            {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
@@ -128,13 +130,19 @@ export default function StoreSettings() {
           <h2 className="font-semibold text-slate-900">Tax Configuration</h2>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-700">Enable Tax</p>
-              <p className="text-xs text-slate-500 mt-0.5">Apply sales tax to all orders</p>
+              <p id="tax_enabled_label" className="text-sm font-medium text-slate-700">Enable Tax</p>
+              <p id="tax_enabled_hint" className="text-xs text-slate-500 mt-0.5">Apply sales tax to all orders</p>
             </div>
+            {/* The "off" track uses the control colour so the switch itself
+                stays visible (3:1) against the white card. */}
             <button
               type="button"
+              role="switch"
+              aria-checked={form.tax_enabled}
+              aria-labelledby="tax_enabled_label"
+              aria-describedby="tax_enabled_hint"
               onClick={() => setForm({ ...form, tax_enabled: !form.tax_enabled })}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.tax_enabled ? 'bg-primary-600' : 'bg-slate-200'}`}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.tax_enabled ? 'bg-primary-600' : 'bg-control'}`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${form.tax_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>

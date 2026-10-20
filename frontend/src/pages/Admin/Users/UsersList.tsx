@@ -5,11 +5,12 @@ import api, { errorMessage } from '../../../api';
 import ListContent from '../../../components/Admin/ListContent';
 import { useApiGet } from '../../../hooks/useApiGet';
 import type { AdminUser, Page, Role } from '../../../types';
+import Pagination from '../../../components/Pagination';
 
 type UsersPage = { users: AdminUser[] } & Page;
 
 const roleColors: Record<string, string> = {
-  admin: 'bg-red-100 text-red-800',
+  admin: 'bg-rose-100 text-rose-800',
   staff: 'bg-purple-100 text-purple-800',
   customer: 'bg-primary-100 text-primary-800',
 };
@@ -100,7 +101,7 @@ export default function UsersList() {
                 <th className="text-left px-6 py-3 font-medium text-slate-500 hidden md:table-cell">Role</th>
                 <th className="text-left px-6 py-3 font-medium text-slate-500 hidden sm:table-cell">Orders</th>
                 <th className="text-left px-6 py-3 font-medium text-slate-500">Status</th>
-                <th className="px-6 py-3" />
+                <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -128,11 +129,11 @@ export default function UsersList() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 justify-end">
-                      <button onClick={() => openEdit(u)} className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg">
+                      <button type="button" onClick={() => openEdit(u)} className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg" aria-label={`Edit ${u.name}`}>
                         <Pencil size={14} />
                       </button>
                       {u.is_active && (
-                        <button onClick={() => handleDeactivate(u.id, u.name)} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                        <button type="button" onClick={() => handleDeactivate(u.id, u.name)} className="p-1.5 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg" aria-label={`Deactivate ${u.name}`}>
                           <UserX size={14} />
                         </button>
                       )}
@@ -145,13 +146,7 @@ export default function UsersList() {
         </ListContent>
       </div>
 
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button className="btn-secondary py-1.5 px-3 text-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
-          <span className="text-sm text-slate-600">Page {page} of {pages}</span>
-          <button className="btn-secondary py-1.5 px-3 text-sm" disabled={page === pages} onClick={() => setPage(page + 1)}>Next</button>
-        </div>
-      )}
+      <Pagination page={page} pages={pages} onChange={setPage} />
 
       {/* Edit modal */}
       {editUser && (

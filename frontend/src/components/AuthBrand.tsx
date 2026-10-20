@@ -1,17 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import StoreLogo from './StoreLogo';
-import { useApiGet } from '../hooks/useApiGet';
-
-interface StoreStatus {
-  store: { name: string; logo_url: string | null; return_window_days: number } | null;
-}
+import { useStoreSettings } from '../hooks/useStoreSettings';
 
 /** The store's real name, logo and return window (Store Settings). */
-function useStore() {
-  const { data } = useApiGet<StoreStatus>('/setup/status');
-  return data?.store ?? null;
-}
+const useStore = () => useStoreSettings().store;
 
 // Only promises the store keeps: free shipping on every order (the API charges
 // none), the configured return window, cash on delivery always on offer.

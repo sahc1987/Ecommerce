@@ -93,5 +93,63 @@ export const variantLabel = (options: ProductOption[] | undefined, combo: Record
 export const sellableStock = (p: Pick<Product, 'stock' | 'available_stock'>): number =>
   p.available_stock ?? p.stock;
 
-export const formatPrice = (n: number): string =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+/** Currencies a store can sell in (setup wizard and Store Settings). */
+export const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'BRL', 'MXN'];
+
+// Every amount is shown in the store's currency (a store setting), as the API
+// charges it. useStoreSettings sets it when the settings load.
+let storeCurrency = 'USD';
+
+const isCurrency = (code: string) => {
+  try {
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: code });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const setStoreCurrency = (code?: string | null) => {
+  if (code && isCurrency(code)) storeCurrency = code;
+};
+
+/** The store currency's symbol, e.g. "$", "€", "CA$", for input prefixes. */
+export const currencySymbol = (): string =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: storeCurrency })
+    .formatToParts(0)
+    .find((p) => p.type === 'currency')?.value ?? storeCurrency;
+
+/**
+ * An amount in the store's currency: "$1,549.36", "€12.00". Accepts numbers
+ * (cart) or numeric strings (API DECIMAL columns); `options` can e.g. drop the
+ * cents or make it compact ("$1.2K") for charts.
+ */
+export const formatPrice = (value: number | string, options: Intl.NumberFormatOptions = {}): string => {
+  const n = typeof value === 'string' ? Number.parseFloat(value) : value;
+  return (Number.isFinite(n) ? n : 0).toLocaleString('en-US', { style: 'currency', currency: storeCurrency, ...options });
+};
+
+interface PricedLine {
+  price: number;
+  effective_price: number;
+  quantity: number;
+}
+
+/**
+ * Cart totals as POST /payments/place-order computes them: tax on the
+ * discounted subtotal (rounded to the cent) when the store charges tax, and no
+ * shipping. The cart and checkout pages both show these.
+ */
+export function cartTotals(lines: PricedLine[], store?: { tax_enabled?: boolean; tax_rate?: string | number } | null) {
+  const sum = (f: (l: PricedLine) => number) => lines.reduce((total, l) => total + f(l), 0);
+  const subtotal = sum((l) => l.effective_price * l.quantity);
+  const taxRate = store?.tax_enabled ? Number.parseFloat(String(store.tax_rate ?? 0)) || 0 : 0;
+  const tax = taxRate > 0 ? Number.parseFloat((subtotal * taxRate / 100).toFixed(2)) : 0;
+  return {
+    count: sum((l) => l.quantity),
+    subtotal,
+    savings: sum((l) => (l.price - l.effective_price) * l.quantity),
+    tax,
+    total: subtotal + tax,
+  };
+}

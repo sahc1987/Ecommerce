@@ -1,82 +1,90 @@
 const redis = require('../config/redis');
 
-const get = async (key) => {
+// Redis-backed response cache. Every call swallows Redis errors: with Redis
+// down, reads simply go to the database, which is always authoritative.
+//
+// Keys live in namespaces ('products', 'dashboard', 'categories', 'setup').
+// A key is `<namespace>:<generation>:<id>`, and invalidating a namespace bumps
+// its generation with one INCR: older keys become unreachable and expire on
+// their TTL. That keeps invalidation O(1); a SCAN over the keyspace would run
+// on every cart change, since product payloads embed live availability.
+
+const genKey = (ns) => `gen:${ns}`;
+
+// Current generation of a namespace, or null when Redis is unavailable.
+async function generation(ns) {
+  try {
+    return (await redis.get(genKey(ns))) ?? '0';
+  } catch {
+    return null;
+  }
+}
+
+async function get(key) {
   try {
     const val = await redis.get(key);
     return val ? JSON.parse(val) : null;
   } catch {
     return null;
   }
-};
+}
 
-const set = async (key, value, ttlSeconds) => {
+async function set(key, value, ttlSeconds) {
   try {
     await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
   } catch {
-    // Redis unavailable — skip caching, DB is authoritative
+    // Redis unavailable: skip caching.
   }
-};
+}
 
-const del = async (...keys) => {
-  try {
-    if (keys.length) await redis.del(...keys);
-  } catch {}
-};
-
-// Scans and deletes all keys matching a glob pattern (safe for production unlike KEYS)
-const delByPattern = async (pattern) => {
-  try {
-    let cursor = '0';
-    do {
-      const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-      cursor = next;
-      if (keys.length) await redis.del(...keys);
-    } while (cursor !== '0');
-  } catch {}
-};
-
-// Builds a deterministic cache key from express query params
-const queryKey = (prefix, query) => {
-  const parts = Object.entries(query)
+// Deterministic id from query params, e.g. { page: 2, sort: 'new' } → "page=2&sort=new".
+const queryKey = (query) =>
+  Object.entries(query)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)
     .join('&');
-  return parts ? `${prefix}:${parts}` : prefix;
-};
+
+// Returns the cached value for `id` in namespace `ns`, or computes it with
+// load(), caches it for `ttlSeconds` and returns it. A null result (not found)
+// isn't cached. Errors from load() propagate.
+async function cached(ns, id, ttlSeconds, load) {
+  const gen = await generation(ns);
+  const key = gen === null ? null : `${ns}:${gen}:${id}`;
+  if (key) {
+    const hit = await get(key);
+    if (hit) return hit;
+  }
+  const value = await load();
+  if (key && value != null) await set(key, value, ttlSeconds);
+  return value;
+}
+
+async function invalidate(...namespaces) {
+  try {
+    await Promise.all(namespaces.map((ns) => redis.incr(genKey(ns))));
+  } catch {
+    // Redis unavailable: nothing is being served from it either.
+  }
+}
 
 // ---- Invalidation helpers -------------------------------------------------
 // Every write that changes what a cached read returns must call one of these,
-// so clients always see the database after an update (the TTL is only a
-// backstop). Keep the mapping here rather than in each route.
+// after COMMIT, so clients see the database right after an update (the TTL is
+// only a backstop). Keep the mapping here rather than in each route.
 
-// Product lists embed price/stock/availability/primary image/category name, and
-// details are cached under both id and slug, so clear everything product-shaped.
-const invalidateProducts = async (...idsOrSlugs) => {
-  await Promise.all([
-    del(...idsOrSlugs.filter(Boolean).map((k) => `products:detail:${k}`)),
-    delByPattern('products:detail:*'),
-    delByPattern('products:list:*'),
-  ]);
-};
+// Product lists and details embed price, stock, availability, images and
+// category names.
+const invalidateProducts = () => invalidate('products');
 
 // Dashboard aggregates depend on orders, products, users and returns.
-const invalidateDashboard = async () => {
-  await Promise.all([
-    del('dashboard:recent-orders', 'dashboard:top-products', 'dashboard:pending-shipments'),
-    delByPattern('dashboard:summary*'),
-    delByPattern('dashboard:sales-chart*'),
-  ]);
-};
+const invalidateDashboard = () => invalidate('dashboard');
 
-const invalidateCategories = async (categoryId) => {
-  await Promise.all([
-    del('categories:list', ...(categoryId ? [`categories:sub:${categoryId}`] : [])),
-    // product payloads embed category/subcategory names
-    invalidateProducts(),
-  ]);
-};
+// Product payloads embed category/subcategory names too.
+const invalidateCategories = () => invalidate('categories', 'products');
+
+const invalidateSetup = () => invalidate('setup');
 
 module.exports = {
-  get, set, del, delByPattern, queryKey,
-  invalidateProducts, invalidateDashboard, invalidateCategories,
+  cached, queryKey, invalidate,
+  invalidateProducts, invalidateDashboard, invalidateCategories, invalidateSetup,
 };

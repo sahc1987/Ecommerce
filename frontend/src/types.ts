@@ -11,6 +11,22 @@ export interface Page {
 
 export type Role = 'admin' | 'staff' | 'customer';
 
+/** The store_settings row, as GET /setup/status returns it. */
+export interface StoreSettings {
+  name: string;
+  description?: string | null;
+  logo_url?: string | null;
+  /** Contact details; empty strings when not filled in. */
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  currency?: string;
+  tax_rate?: string | number;
+  tax_enabled?: boolean;
+  return_window_days?: number;
+  timezone?: string | null;
+}
+
 /** A user as the admin Users list returns it. */
 export interface AdminUser {
   id: string;

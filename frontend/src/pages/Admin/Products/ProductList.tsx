@@ -9,6 +9,8 @@ import { getEffectivePrice, type Product } from '../../../utils/pricing';
 import { useApiGet } from '../../../hooks/useApiGet';
 import type { Page } from '../../../types';
 import ProductImage from '../../../components/Shop/ProductImage';
+import { formatPrice } from '../../../utils/pricing';
+import Pagination from '../../../components/Pagination';
 
 // The admin list also carries drafts and cart holds.
 type AdminProduct = Product & { sku: string | null; is_active: boolean; reserved_stock: number };
@@ -101,7 +103,7 @@ export default function ProductList() {
                 <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Status
                 </th>
-                <th className="px-6 py-3" />
+                <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -141,12 +143,12 @@ export default function ProductList() {
                     <td className="px-6 py-4">
                       <div>
                         <span className="font-medium text-slate-900">
-                          ${effectivePrice.toFixed(2)}
+                          {formatPrice(effectivePrice)}
                         </span>
                         {hasDiscount && (
                           <>
                             <span className="text-slate-500 line-through ml-1.5 text-xs">
-                              ${Number.parseFloat(p.price).toFixed(2)}
+                              {formatPrice(p.price)}
                             </span>
                             <span className="ml-1.5 text-xs font-medium text-green-700">
                               -{p.discount_percent}%
@@ -159,7 +161,7 @@ export default function ProductList() {
                       <span
                         className={
                           p.stock <= 5
-                            ? "text-red-700 font-medium"
+                            ? "text-rose-700 font-medium"
                             : "text-slate-600"
                         }
                       >
@@ -169,7 +171,7 @@ export default function ProductList() {
                         // Total stock can hide a sold-out size: flag those.
                         const out = (p.variants ?? []).filter((v) => v.is_active && v.stock === 0).length;
                         return p.options?.length && out > 0 ? (
-                          <span className="block text-[11px] text-red-700">{out} sold out</span>
+                          <span className="block text-[11px] text-rose-700">{out} sold out</span>
                         ) : null;
                       })()}
                       {p.reserved_stock > 0 && (
@@ -193,12 +195,15 @@ export default function ProductList() {
                         <Link
                           to={`/admin/products/${p.id}/edit`}
                           className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                          aria-label={`Edit ${p.name}`}
                         >
                           <Pencil size={15} />
                         </Link>
                         <button
+                          type="button"
                           onClick={() => handleDelete(p.id, p.name)}
-                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                          aria-label={`Delete ${p.name}`}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -212,27 +217,7 @@ export default function ProductList() {
         </ListContent>
       </div>
 
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            className="btn-secondary py-1.5 px-3 text-sm"
-            disabled={page === 1}
-            onClick={() => setPage(page - 1)}
-          >
-            Previous
-          </button>
-          <span className="text-sm text-slate-600">
-            Page {page} of {pages}
-          </span>
-          <button
-            className="btn-secondary py-1.5 px-3 text-sm"
-            disabled={page === pages}
-            onClick={() => setPage(page + 1)}
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <Pagination page={page} pages={pages} onChange={setPage} />
     </div>
   );
 }

@@ -442,7 +442,7 @@ Each part has its own `.env.example`. Copy it to `.env` and fill it in.
 | --- | --- | --- |
 | `PORT` | Optional | API port (default 5000) |
 | `DATABASE_URL` | ✅ Yes | PostgreSQL connection |
-| `REDIS_URL` | ✅ Yes | Redis connection |
+| `REDIS_URL` | Recommended | Redis connection, including the password (`redis://:<password>@localhost:6379`). Without it the API still works but caches nothing, so every request goes to the database |
 | `JWT_SECRET` | ✅ Yes | Signs sign-in tokens. Use a long random value (`openssl rand -hex 32`). The server won't start without it |
 | `CLIENT_URL` | ✅ Yes | The website address allowed to call the API |
 | `CROSS_SITE_COOKIES` | Optional | `true` when the website and API are on different domains |

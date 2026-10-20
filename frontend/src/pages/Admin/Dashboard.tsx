@@ -1,4 +1,6 @@
-import { useState } from 'react';import { Link } from 'react-router-dom';import {
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
   DollarSign, ShoppingCart, Users, Clock, RotateCcw, Receipt, TrendingUp, TrendingDown, Minus, AlertTriangle, XCircle, Lock, RefreshCw, ArrowRight,
 } from 'lucide-react';
 import { useApiGet } from '../../hooks/useApiGet';
@@ -7,6 +9,8 @@ import { formatDate } from '../../utils/dates';
 import { textOr } from '../../utils/text';
 import SalesChart from '../../components/Admin/SalesChart';
 import ProductImage from '../../components/Shop/ProductImage';
+import { orderBadge, orderBar, shortId } from '../../utils/orderDisplay';
+import { formatPrice } from '../../utils/pricing';
 
 interface Period {
   days: number;
@@ -61,29 +65,8 @@ const PERIODS = [
   { days: 365, label: '12 months' },
 ];
 
-const statusColors: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-800',
-  paid: 'bg-primary-100 text-primary-800',
-  processing: 'bg-primary-100 text-primary-800',
-  shipped: 'bg-violet-100 text-violet-800',
-  delivered: 'bg-emerald-100 text-emerald-800',
-  cancelled: 'bg-rose-100 text-rose-800',
-};
-
-// Same palette as the badges above, for the status distribution bar.
-const statusBars: Record<string, string> = {
-  pending: 'bg-amber-400',
-  paid: 'bg-primary-400',
-  processing: 'bg-primary-600',
-  shipped: 'bg-violet-500',
-  delivered: 'bg-emerald-500',
-  cancelled: 'bg-rose-400',
-};
-
-const money = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n >= 1000 ? 0 : 2 });
-const exactMoney = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+// Big figures drop the cents ("$23,875"); the store's currency either way.
+const money = (n: number) => formatPrice(n, { maximumFractionDigits: n >= 1000 ? 0 : 2 });
 
 // "2d ago" reads faster than a date when the list is all recent.
 const relativeTime = (iso: string) => {
@@ -99,92 +82,48 @@ const relativeTime = (iso: string) => {
 
 // A null change means the previous period had no baseline — showing "+100%"
 // against zero would be misleading, so we say so instead.
-// `onColor` renders the delta as a translucent pill for the gradient cards,
-// where green/red text would clash with the background.
-function Delta({ value, onColor = false }: Readonly<{ value: number | null; onColor?: boolean }>) {
-  const pill = onColor ? 'px-2 py-0.5 rounded-full bg-white/20 text-white' : '';
-  if (value === null)
-    return <span className={`text-xs ${onColor ? `${pill} text-white/80` : 'text-slate-500'}`}>no prior data</span>;
+function Delta({ value }: Readonly<{ value: number | null }>) {
+  if (value === null) return <span className="text-xs text-slate-500">no prior data</span>;
   if (value === 0)
     return (
-      <span className={`inline-flex items-center gap-1 text-xs font-semibold ${onColor ? pill : 'text-slate-500'}`}>
-        <Minus size={12} /> 0%
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
+        <Minus size={12} aria-hidden="true" /> 0%
       </span>
     );
   const up = value > 0;
   const Icon = up ? TrendingUp : TrendingDown;
-  let color = up ? 'text-emerald-700' : 'text-rose-700';
-  if (onColor) color = pill;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${color}`}>
-      <Icon size={12} />
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${up ? 'text-emerald-700' : 'text-rose-700'}`}>
+      <Icon size={12} aria-hidden="true" />
       {up ? '+' : ''}{value}%
     </span>
   );
 }
 
-const STAT_THEMES = {
-  revenue: {
-    card: 'bg-linear-to-br from-emerald-500 via-emerald-600 to-teal-700 border-transparent text-white shadow-lg shadow-emerald-500/20',
-    icon: 'bg-white/20 text-white',
-  },
-  orders: {
-    card: 'bg-linear-to-br from-primary-500 via-primary-600 to-indigo-700 border-transparent text-white shadow-lg shadow-primary-500/20',
-    icon: 'bg-white/20 text-white',
-  },
-  aov: {
-    card: 'bg-linear-to-br from-violet-50 to-fuchsia-50 border-violet-100',
-    icon: 'bg-violet-500 text-white',
-  },
-  customers: {
-    card: 'bg-linear-to-br from-orange-50 to-amber-50 border-orange-100',
-    icon: 'bg-orange-500 text-white',
-  },
-};
-
+// White cards with the same light-blue icon chip as the shop: the figures and
+// the green/red trend carry the meaning, not the card colour. Revenue and
+// orders are "featured": wider, with a larger figure.
 function StatCard({
-  label, value, sub, icon: Icon, theme, change, featured = false,
+  label, value, sub, icon: Icon, change, featured = false,
 }: Readonly<{
   label: string;
   value: string;
   sub: string;
   icon: typeof DollarSign;
-  theme: keyof typeof STAT_THEMES;
   change: number | null;
   featured?: boolean;
 }>) {
-  const t = STAT_THEMES[theme];
-  if (featured) {
-    return (
-      <div className={`relative overflow-hidden rounded-2xl border p-6 sm:col-span-1 xl:col-span-2 ${t.card}`}>
-        {/* Soft decorative circles for depth */}
-        <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10" />
-        <div className="absolute -right-4 -bottom-16 w-32 h-32 rounded-full bg-white/5" />
-        <div className="relative">
-          <div className="flex items-start justify-between">
-            <div className={`w-12 h-12 ${t.icon} rounded-xl flex items-center justify-center`}>
-              <Icon size={24} />
-            </div>
-            <Delta value={change} onColor />
-          </div>
-          <p className="text-sm font-medium text-white/80 mt-5">{label}</p>
-          <p className="text-4xl font-extrabold mt-1 tabular-nums tracking-tight">{value}</p>
-          <p className="text-xs text-white/75 mt-4 border-t border-white/20 pt-3">{sub}</p>
-        </div>
-      </div>
-    );
-  }
   return (
-    <div className={`rounded-2xl border p-5 flex flex-col ${t.card}`}>
-      <div className="flex items-start justify-between">
-        <div className={`w-10 h-10 ${t.icon} rounded-xl flex items-center justify-center`}>
-          <Icon size={20} />
+    <div className={`card p-5 flex flex-col ${featured ? 'xl:col-span-2' : ''}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="w-10 h-10 bg-primary-50 text-primary-700 rounded-xl flex items-center justify-center shrink-0">
+          <Icon size={20} aria-hidden="true" />
         </div>
         <Delta value={change} />
       </div>
-      <p className="text-2xl font-bold text-slate-900 mt-4 tabular-nums">{value}</p>
-      <p className="text-sm text-slate-600 mt-0.5">{label}</p>
-      <p className="text-xs text-slate-500 mt-auto pt-2 border-t border-slate-900/5">{sub}</p>
+      <p className="text-sm text-slate-600 mt-4">{label}</p>
+      <p className={`font-bold text-slate-900 mt-0.5 tabular-nums tracking-tight ${featured ? 'text-3xl' : 'text-2xl'}`}>{value}</p>
+      <p className="text-xs text-slate-500 mt-auto pt-3 border-t border-slate-100">{sub}</p>
     </div>
   );
 }
@@ -263,9 +202,8 @@ export default function Dashboard() {
     {
       label: `Revenue · last ${periodLabel}`,
       value: money(period?.revenue ?? 0),
-      sub: `${exactMoney(summary?.total_revenue ?? 0)} all time`,
+      sub: `${formatPrice(summary?.total_revenue ?? 0)} all time`,
       icon: DollarSign,
-      theme: 'revenue' as const,
       featured: true,
       change: period?.change.revenue ?? null,
     },
@@ -274,7 +212,6 @@ export default function Dashboard() {
       value: String(period?.orders ?? 0),
       sub: `${period?.units ?? 0} units · ${summary?.total_orders ?? 0} orders all time`,
       icon: ShoppingCart,
-      theme: 'orders' as const,
       featured: true,
       change: period?.change.orders ?? null,
     },
@@ -283,7 +220,6 @@ export default function Dashboard() {
       value: money(period?.aov ?? 0),
       sub: `Previously ${money(period?.previous.aov ?? 0)}`,
       icon: Receipt,
-      theme: 'aov' as const,
       change: period?.change.aov ?? null,
     },
     {
@@ -291,7 +227,6 @@ export default function Dashboard() {
       value: String(period?.new_customers ?? 0),
       sub: `${summary?.total_customers ?? 0} customers total`,
       icon: Users,
-      theme: 'customers' as const,
       change: period?.change.new_customers ?? null,
     },
   ];
@@ -318,7 +253,7 @@ export default function Dashboard() {
                 aria-pressed={days === p.days}
                 onClick={() => setDays(p.days)}
                 className={`shrink-0 px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
-                  days === p.days ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  days === p.days ? 'bg-white text-primary-700 shadow-xs ring-1 ring-control' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {p.label}
@@ -326,11 +261,13 @@ export default function Dashboard() {
             ))}
           </div>
           <button
+            type="button"
             onClick={refresh}
             className="shrink-0 p-2 rounded-xl border border-control bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
             title="Refresh"
+            aria-label="Refresh dashboard"
           >
-            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -407,7 +344,7 @@ export default function Dashboard() {
               {breakdown.map((s) => (
                 <div
                   key={s.status}
-                  className={statusBars[s.status] ?? 'bg-slate-300'}
+                  className={orderBar(s.status)}
                   style={{ width: `${(s.count / breakdownTotal) * 100}%` }}
                   title={`${s.status}: ${s.count}`}
                 />
@@ -421,7 +358,7 @@ export default function Dashboard() {
                   className="rounded-xl border border-slate-100 p-3 hover:border-slate-200 hover:bg-slate-50 transition-colors"
                 >
                   <span className="flex items-center gap-1.5 text-xs text-slate-500 capitalize">
-                    <span className={`w-2 h-2 rounded-full ${statusBars[s.status] ?? 'bg-slate-300'}`} />
+                    <span className={`w-2 h-2 rounded-full ${orderBar(s.status)}`} />
                     {s.status}
                   </span>
                   <p className="text-lg font-bold text-slate-900 mt-1 tabular-nums">{s.count}</p>
@@ -499,12 +436,12 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-900 truncate">{textOr(o.customer_name, 'Guest')}</p>
                     <p className="text-xs text-slate-500 truncate">
-                      #{String(o.id).slice(0, 8).toUpperCase()} · {o.item_count} item{Number(o.item_count) === 1 ? '' : 's'} · {relativeTime(o.created_at)}
+                      #{shortId(o.id)} · {o.item_count} item{Number(o.item_count) === 1 ? '' : 's'} · {relativeTime(o.created_at)}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold tabular-nums">{exactMoney(Number.parseFloat(o.total) || 0)}</p>
-                    <span className={`badge ${statusColors[o.status] ?? 'bg-slate-100 text-slate-800'}`}>
+                    <p className="text-sm font-semibold tabular-nums">{formatPrice(o.total)}</p>
+                    <span className={`badge ${orderBadge(o.status)}`}>
                       {o.status}
                     </span>
                   </div>

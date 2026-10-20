@@ -4,17 +4,13 @@ import toast from 'react-hot-toast';
 import { RotateCcw } from 'lucide-react';
 import api, { errorMessage } from '../../../api';
 import ListContent from '../../../components/Admin/ListContent';
+import Pagination from '../../../components/Pagination';
 import { useApiGet } from '../../../hooks/useApiGet';
 import type { Page, ReturnRequest, ReturnStatus } from '../../../types';
+import { returnBadge, shortId } from '../../../utils/orderDisplay';
+import { formatPrice } from '../../../utils/pricing';
 
 type Decision = Exclude<ReturnStatus, 'requested'>;
-
-const statusColors: Record<string, string> = {
-  requested: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-primary-100 text-primary-800',
-  rejected: 'bg-red-100 text-red-800',
-  refunded: 'bg-green-100 text-green-800',
-};
 
 // Decisions allowed from each return status (mirrors the server's rules).
 const DECISIONS: Partial<Record<ReturnStatus, { value: Decision; label: string }[]>> = {
@@ -39,10 +35,13 @@ interface ProcessForm {
 
 export default function ReturnsList() {
   const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
   const { data, loading, reload } = useApiGet<{ returns: ReturnRequest[] } & Page>('/returns', {
     status: status || undefined,
+    page,
     limit: 30,
   });
+  const pages = data?.pages ?? 1;
   const returns = data?.returns ?? [];
   const [selectedReturn, setSelectedReturn] = useState<ReturnRequest | null>(null);
   const [processForm, setProcessForm] = useState<ProcessForm>({ status: 'approved', refund_amount: '', admin_notes: '', restock: true });
@@ -100,7 +99,10 @@ export default function ReturnsList() {
           <button
             key={s || 'all'}
             aria-pressed={status === s}
-            onClick={() => setStatus(s)}
+            onClick={() => {
+              setStatus(s);
+              setPage(1);
+            }}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
               status === s ? 'bg-primary-600 text-white' : 'bg-white border border-control text-slate-600 hover:bg-slate-50'
             }`}
@@ -120,14 +122,14 @@ export default function ReturnsList() {
                 <th className="text-left px-6 py-3 font-medium text-slate-500">Reason</th>
                 <th className="text-left px-6 py-3 font-medium text-slate-500 hidden sm:table-cell">Date</th>
                 <th className="text-left px-6 py-3 font-medium text-slate-500">Status</th>
-                <th className="px-6 py-3" />
+                <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {returns.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">
-                    #{r.id.slice(0, 8).toUpperCase()}
+                    #{shortId(r.id)}
                   </td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <p className="font-medium text-slate-900">{r.customer_name}</p>
@@ -137,7 +139,7 @@ export default function ReturnsList() {
                     <p className="text-slate-700 max-w-[200px] truncate">{r.reason}</p>
                     {r.refund_amount && (
                       <p className="text-xs text-green-700 font-medium">
-                        {r.status === 'refunded' ? 'Refunded' : 'Refund'}: ${Number.parseFloat(r.refund_amount).toFixed(2)}
+                        {r.status === 'refunded' ? 'Refunded' : 'Refund'}: {formatPrice(r.refund_amount)}
                         {r.status === 'refunded' && (
                           <span className="text-slate-500 font-normal"> · {r.restocked ? 'restocked' : 'not restocked'}</span>
                         )}
@@ -148,7 +150,7 @@ export default function ReturnsList() {
                     {formatDate(r.created_at)}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`badge ${statusColors[r.status] ?? 'bg-slate-100 text-slate-800'}`}>
+                    <span className={`badge ${returnBadge(r.status)}`}>
                       {r.status}
                     </span>
                   </td>
@@ -166,13 +168,15 @@ export default function ReturnsList() {
         </ListContent>
       </div>
 
+      <Pagination page={page} pages={pages} onChange={setPage} />
+
       {/* Process modal */}
       {selectedReturn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button type="button" aria-label="Close dialog" className="absolute inset-0 bg-black/50 cursor-default" onClick={() => setSelectedReturn(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <h2 className="text-lg font-bold text-slate-900 mb-1">Process Return</h2>
-            <p className="text-sm text-slate-500 mb-5">Return #{selectedReturn.id.slice(0, 8).toUpperCase()}</p>
+            <p className="text-sm text-slate-500 mb-5">Return #{shortId(selectedReturn.id)}</p>
             <form onSubmit={handleProcess} className="space-y-4">
               <div>
                 <label htmlFor="r_status" className="block text-sm font-medium text-slate-700 mb-1">Decision</label>
@@ -199,7 +203,7 @@ export default function ReturnsList() {
                     required={processForm.status === 'refunded'}
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    Up to ${refundableLeft(selectedReturn).toFixed(2)}
+                    Up to {formatPrice(refundableLeft(selectedReturn))}
                     {selectedReturn.order_payment_method === 'stripe'
                       ? ' · refunded to the customer’s card through Stripe'
                       : ' · cash on delivery: give the money back yourself; this records it'}

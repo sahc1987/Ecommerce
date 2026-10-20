@@ -1,6 +1,7 @@
 const db = require('../config/database');
 const cache = require('./cache');
 const variants = require('./variants');
+const { withTransaction } = require('./tx');
 
 // How long an add-to-cart holds stock before it is released.
 const HOLD_MINUTES = 3;
@@ -35,29 +36,21 @@ async function availableFor(client, variantId, cartToken) {
   return res.rows[0] ? Math.max(0, Number(res.rows[0].available)) : 0;
 }
 
-// Product list/detail caches include availability, so drop them on change.
-async function invalidateProductCache(productIds) {
-  await cache.invalidateProducts(...productIds);
-}
-
 // Replace the cart's holds with `items` (upsert each, remove the rest), renewing
 // the timer. Items name a variant_id (or, from older clients, a product_id with
 // a single variant). Returns one result per line with how much could be held;
 // results carry product_id too so product-keyed carts keep working.
 async function syncReservations({ cartToken, userId, items }) {
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
+  const result = await withTransaction(async (client) => {
     const { lines, unresolved } = await variants.resolveLines(client, items);
     // Lock in a fixed order so two carts never wait on each other's rows.
     lines.sort((a, b) => a.variant_id.localeCompare(b.variant_id));
 
     // Remove holds for variants no longer in the cart.
     const keep = lines.map((l) => l.variant_id);
-    const removed = await client.query(
+    await client.query(
       `DELETE FROM stock_reservations WHERE cart_token = $1
-       ${keep.length ? 'AND NOT (variant_id = ANY($2::uuid[]))' : ''}
-       RETURNING product_id`,
+       ${keep.length ? 'AND NOT (variant_id = ANY($2::uuid[]))' : ''}`,
       keep.length ? [cartToken, keep] : [cartToken]
     );
 
@@ -67,7 +60,6 @@ async function syncReservations({ cartToken, userId, items }) {
       product_id: u.product_id, variant_id: null, requested: u.quantity, reserved: 0, available: 0,
       expires_at: null, error: 'variant_required',
     }));
-    const touchedProducts = removed.rows.map((r) => r.product_id);
     for (const { variant_id: variantId, quantity: qty } of lines) {
       // Lock the variant row so concurrent carts can't both grab the last unit.
       const row = (await client.query(
@@ -80,7 +72,6 @@ async function syncReservations({ cartToken, userId, items }) {
         results.push({ product_id: row?.product_id ?? null, variant_id: variantId, requested: qty, reserved: 0, available: 0, expires_at: null });
         continue;
       }
-      touchedProducts.push(row.product_id);
       const available = await availableFor(client, variantId, cartToken);
       const reserved = Math.min(qty, available);
       if (reserved > 0) {
@@ -104,15 +95,11 @@ async function syncReservations({ cartToken, userId, items }) {
         expires_at: reserved > 0 ? expiresAt.toISOString() : null,
       });
     }
-    await client.query('COMMIT');
-    await invalidateProductCache([...new Set(touchedProducts)]);
     return { items: results, expires_at: expiresAt.toISOString(), hold_minutes: HOLD_MINUTES };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
+  // Product lists and details show live availability.
+  await cache.invalidateProducts();
+  return result;
 }
 
 // Push every non-expired hold of the cart forward by the full window.
@@ -139,21 +126,18 @@ async function getReservations(cartToken) {
 // `id` may be a variant id, or a product id to release all of its variants.
 async function releaseReservations(cartToken, id) {
   const res = await db.query(
-    `DELETE FROM stock_reservations WHERE cart_token = $1 ${id ? 'AND (variant_id = $2 OR product_id = $2)' : ''}
-     RETURNING product_id`,
+    `DELETE FROM stock_reservations WHERE cart_token = $1 ${id ? 'AND (variant_id = $2 OR product_id = $2)' : ''}`,
     id ? [cartToken, id] : [cartToken]
   );
-  await invalidateProductCache(res.rows.map((r) => r.product_id));
+  if (res.rowCount) await cache.invalidateProducts();
 }
 
 // Expired rows are ignored by every query; this just keeps the table small.
 function startExpiryJob(intervalMs = 60 * 1000) {
   const timer = setInterval(async () => {
     try {
-      const res = await db.query(
-        'DELETE FROM stock_reservations WHERE expires_at <= NOW() RETURNING product_id'
-      );
-      if (res.rowCount) await invalidateProductCache([...new Set(res.rows.map((r) => r.product_id))]);
+      const res = await db.query('DELETE FROM stock_reservations WHERE expires_at <= NOW()');
+      if (res.rowCount) await cache.invalidateProducts();
     } catch {}
   }, intervalMs);
   timer.unref();
@@ -169,6 +153,5 @@ module.exports = {
   renewReservations,
   getReservations,
   releaseReservations,
-  invalidateProductCache,
   startExpiryJob,
 };

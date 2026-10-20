@@ -5,6 +5,9 @@ const inventory = require('./inventory');
 const orderStatus = require('./orderStatus');
 const refunds = require('./refunds');
 const { createNotification, notifyAdmins } = require('./notifications');
+const { withTransaction } = require('./tx');
+const { shortId } = require('./format');
+const { storeMoneyFormatter } = require('./storeSettings');
 
 // Thrown when the order can't be cancelled from its current state; carries the
 // fresh order so the apps can show it.
@@ -14,8 +17,6 @@ class OrderConflict extends Error {
     this.order = order;
   }
 }
-
-const shortId = (id) => id.slice(0, 8).toUpperCase();
 
 function checkCancellable(order, { byCustomer, expectedStatus }) {
   if (expectedStatus && order.status !== expectedStatus)
@@ -28,7 +29,9 @@ function checkCancellable(order, { byCustomer, expectedStatus }) {
 
 async function announce(order, { byCustomer, refunded }) {
   const orderShort = shortId(order.id);
-  const refundText = refunded > 0 ? ` A refund of ${refunded.toFixed(2)} is on its way to your card.` : '';
+  const money = await storeMoneyFormatter();
+  const refundText = refunded > 0 ? ` A refund of ${money(refunded)} is on its way to your card.` : '';
+  const adminRefundText = refunded > 0 ? ` ${money(refunded)} refunded.` : '';
   await Promise.all([
     order.user_id && createNotification(
       order.user_id,
@@ -40,7 +43,7 @@ async function announce(order, { byCustomer, refunded }) {
     byCustomer && notifyAdmins(
       'order_cancelled',
       'Order Cancelled by Customer',
-      `Order #${orderShort} was cancelled by the customer.${refunded > 0 ? ` ${refunded.toFixed(2)} refunded.` : ''}`,
+      `Order #${orderShort} was cancelled by the customer.${adminRefundText}`,
       { order_id: order.id }
     ),
   ]);
@@ -69,36 +72,24 @@ async function cancelOrder(orderId, { byCustomer = false, userId = null, expecte
     }
   }
 
-  const client = await db.connect();
-  let cancelled;
-  let touched = [];
-  let refunded = 0;
-  try {
-    await client.query('BEGIN');
+  const { cancelled, refunded } = await withTransaction(async (client) => {
     const order = (await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId])).rows[0];
     checkCancellable(order, { byCustomer, expectedStatus: closingCheckout ? null : expectedStatus });
-    cancelled = (await client.query(
+    let updated = (await client.query(
       "UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING *",
       [orderId]
     )).rows[0];
-    touched = await inventory.restockOrder(client, orderId);
-    if (refunds.hasCardPayment(cancelled) && refunds.refundableLeft(cancelled) > 0) {
-      refunded = refunds.refundableLeft(cancelled);
+    await inventory.restockOrder(client, orderId);
+    let amount = 0;
+    if (refunds.hasCardPayment(updated) && refunds.refundableLeft(updated) > 0) {
+      amount = refunds.refundableLeft(updated);
       // Stripe last: anything above failing rolls back before money moves.
-      cancelled = await refunds.refundOrder(client, cancelled, refunded, `cancel-${orderId}`);
+      updated = await refunds.refundOrder(client, updated, amount, `cancel-${orderId}`);
     }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+    return { cancelled: updated, refunded: amount };
+  });
 
-  await Promise.all([
-    cache.invalidateProducts(...touched.flatMap(({ id, slug }) => [id, slug])),
-    cache.invalidateDashboard(),
-  ]);
+  await Promise.all([cache.invalidateProducts(), cache.invalidateDashboard()]);
   await announce(cancelled, { byCustomer, refunded });
   return cancelled;
 }

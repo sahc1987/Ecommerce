@@ -6,15 +6,9 @@ import { ShoppingCart } from "lucide-react";
 import ListContent from '../../../components/Admin/ListContent';
 import { useApiGet } from '../../../hooks/useApiGet';
 import type { Order, Page } from '../../../types';
-
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  paid: "bg-primary-100 text-primary-800",
-  processing: "bg-primary-100 text-primary-800",
-  shipped: "bg-purple-100 text-purple-800",
-  delivered: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-};
+import { orderBadge, shortId } from '../../../utils/orderDisplay';
+import { formatPrice } from '../../../utils/pricing';
+import Pagination from '../../../components/Pagination';
 
 const STATUSES = [
   "",
@@ -89,14 +83,14 @@ export default function OrdersList() {
                 <th className="text-left px-6 py-3 font-medium text-slate-500">
                   Status
                 </th>
-                <th className="px-6 py-3" />
+                <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {orders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">
-                    #{o.id.slice(0, 8).toUpperCase()}
+                    #{shortId(o.id)}
                   </td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <p className="font-medium text-slate-900">
@@ -108,14 +102,14 @@ export default function OrdersList() {
                     {formatDate(o.created_at)}
                   </td>
                   <td className="px-6 py-4 font-semibold text-slate-900">
-                    ${Number.parseFloat(o.total).toFixed(2)}
+                    {formatPrice(o.total)}
                     <span className="text-xs text-slate-500 font-normal ml-1">
                       ({o.item_count} items)
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`badge ${statusColors[o.status] ?? "bg-slate-100 text-slate-800"}`}
+                      className={`badge ${orderBadge(o.status)}`}
                     >
                       {o.status}
                     </span>
@@ -135,27 +129,7 @@ export default function OrdersList() {
         </ListContent>
       </div>
 
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            className="btn-secondary py-1.5 px-3 text-sm"
-            disabled={page === 1}
-            onClick={() => setPage(page - 1)}
-          >
-            Previous
-          </button>
-          <span className="text-sm text-slate-600">
-            Page {page} of {pages}
-          </span>
-          <button
-            className="btn-secondary py-1.5 px-3 text-sm"
-            disabled={page === pages}
-            onClick={() => setPage(page + 1)}
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <Pagination page={page} pages={pages} onChange={setPage} />
     </div>
   );
 }

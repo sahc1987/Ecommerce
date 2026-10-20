@@ -19,6 +19,13 @@ const TRANSITIONS = {
 
 const STATUSES = Object.keys(TRANSITIONS);
 
+// Orders that count as a sale: the money is in (paid by card, or a cash order
+// staff marked paid) and the order wasn't cancelled. Revenue, units sold,
+// "Best sellers" and the dashboard's top products all use this one definition.
+const SALE_STATUSES = ['paid', 'processing', 'shipped', 'delivered'];
+// For SQL: `o.status IN ${SALE_STATUSES_SQL}` (constants only, no user input).
+const SALE_STATUSES_SQL = `('${SALE_STATUSES.join("','")}')`;
+
 // Customers may cancel their own order until the store starts preparing it.
 const CUSTOMER_CANCELLABLE = new Set(['pending', 'paid']);
 
@@ -45,6 +52,8 @@ function transitionError(order, status) {
 
 module.exports = {
   STATUSES,
+  SALE_STATUSES,
+  SALE_STATUSES_SQL,
   allowedNext,
   canTransition,
   canCustomerCancel,

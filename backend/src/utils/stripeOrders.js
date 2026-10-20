@@ -3,6 +3,9 @@ const stripe = require('../config/stripe');
 const cache = require('./cache');
 const inventory = require('./inventory');
 const { createNotification, notifyAdmins } = require('./notifications');
+const { withTransaction } = require('./tx');
+const { storeMoneyFormatter } = require('./storeSettings');
+const { shortId } = require('./format');
 
 // Checkout sessions live this long; Stripe's minimum is 30 minutes. Stock is
 // deducted when the order is created, so an abandoned session holds it until
@@ -10,11 +13,10 @@ const { createNotification, notifyAdmins } = require('./notifications');
 const SESSION_TTL_MINUTES = 30;
 
 async function sendOrderNotifications(order, customerName) {
-  const orderShort = order.id.slice(0, 8).toUpperCase();
-  const settings = await db.query('SELECT currency FROM store_settings LIMIT 1');
-  const currency = settings.rows[0]?.currency || 'USD';
+  const orderShort = shortId(order.id);
+  const money = await storeMoneyFormatter();
   const total = Number.parseFloat(order.total);
-  const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(total);
+  const formattedTotal = money(total);
   await Promise.all([
     createNotification(
       order.user_id,
@@ -56,33 +58,19 @@ async function markPaid(orderId, paymentIntent) {
 
 // Cancels an unpaid Stripe order and returns its units to stock. Idempotent.
 async function cancelUnpaid(orderId) {
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
+  const cancelled = await withTransaction(async (client) => {
     const res = await client.query(
       `UPDATE orders SET status = 'cancelled', payment_status = 'canceled', updated_at = NOW()
        WHERE id = $1 AND payment_method = 'stripe' AND payment_status = 'unpaid' AND status = 'pending'
        RETURNING id`,
       [orderId]
     );
-    if (!res.rows[0]) {
-      await client.query('ROLLBACK');
-      return false;
-    }
-    const restored = await inventory.restockOrder(client, orderId);
-    await client.query('COMMIT');
-
-    await Promise.all([
-      cache.invalidateProducts(...restored.flatMap(({ id, slug }) => [id, slug])),
-      cache.invalidateDashboard(),
-    ]);
+    if (!res.rows[0]) return false; // already paid or cancelled: nothing changed
+    await inventory.restockOrder(client, orderId);
     return true;
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
+  if (cancelled) await Promise.all([cache.invalidateProducts(), cache.invalidateDashboard()]);
+  return cancelled;
 }
 
 // Brings an order in line with its Checkout session's current state.

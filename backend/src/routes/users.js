@@ -5,6 +5,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const safeErr = require('../utils/safeErr');
 const cache = require('../utils/cache');
 const { pagination, uuidParam } = require('../utils/validate');
+const { Filters, paginate } = require('../utils/pagedQuery');
 
 const ROLES = new Set(['admin', 'staff', 'customer']);
 
@@ -14,31 +15,20 @@ router.param('id', uuidParam('User not found'));
 // GET all users
 router.get('/', async (req, res) => {
   const { role, search } = req.query;
-  const { page, limit, offset } = pagination(req.query);
-  const conditions = [];
-  const params = [];
-  if (role) { params.push(role); conditions.push(`role = $${params.length}`); }
-  if (search) { params.push(`%${search}%`); conditions.push(`(name ILIKE $${params.length} OR email ILIKE $${params.length})`); }
-
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(limit, offset);
+  const filters = new Filters();
+  if (role) filters.add('role = ?', role);
+  if (search) filters.add('(name ILIKE ? OR email ILIKE ?)', `%${search}%`);
 
   try {
-    const countResult = await db.query(`SELECT COUNT(*) FROM users ${where}`, params.slice(0, -2));
-    const result = await db.query(
-      `SELECT id, name, email, role, is_active, created_at,
-        (SELECT COUNT(*) FROM orders WHERE user_id = users.id) as order_count
-       FROM users ${where} ORDER BY created_at DESC
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
-    );
-    const total = Number.parseInt(countResult.rows[0].count);
-    res.json({
-      users: result.rows,
-      total,
-      page,
-      pages: Math.ceil(total / limit),
+    const { rows, ...page } = await paginate({
+      select: `id, name, email, role, is_active, created_at,
+        (SELECT COUNT(*) FROM orders WHERE user_id = users.id) as order_count`,
+      table: 'users',
+      filters,
+      orderBy: 'created_at DESC',
+      ...pagination(req.query),
     });
+    res.json({ users: rows, ...page });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
   }
@@ -52,7 +42,6 @@ router.get('/:id', async (req, res) => {
       [req.params.id]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
-    await cache.invalidateDashboard();
     res.json({ user: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
@@ -84,6 +73,7 @@ router.put('/:id', async (req, res) => {
        WHERE id=$6 RETURNING id, name, email, role, is_active, created_at`,
       [name ?? u.name, email ?? u.email, role ?? u.role, is_active ?? u.is_active, hash, req.params.id]
     );
+    await cache.invalidateDashboard(); // customer counts depend on role
     res.json({ user: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: safeErr(err) });
