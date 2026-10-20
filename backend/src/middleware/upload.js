@@ -1,7 +1,7 @@
 const multer = require('multer');
 const path = require('node:path');
 const fs = require('node:fs');
-const { v4 } = require('uuid');
+const { randomUUID } = require('node:crypto');
 // file-type v17+ is ESM-only; load it lazily via dynamic import from this CJS module.
 let fileTypeModule;
 const fileTypeFromFile = async (filePath) => {
@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, v4() + ext);
+    cb(null, randomUUID() + ext);
   },
 });
 
