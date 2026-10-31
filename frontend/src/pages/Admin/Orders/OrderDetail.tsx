@@ -4,6 +4,7 @@ import ProductImage from '../../../components/Shop/ProductImage';
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowLeft, Check, ExternalLink, RotateCcw, Truck } from "lucide-react";
+import Modal from "../../../components/Modal";
 import { isAxiosError } from "axios";
 import api, { errorMessage } from "../../../api";
 import type { Order, OrderStatus, ReturnRequest } from "../../../types";
@@ -440,8 +441,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
 
       {/* Shipment modal */}
       {showShipModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <Modal label="Ship Order" onClose={() => setShowShipModal(false)}>
             <div className="flex items-center gap-2 mb-4">
               <Truck size={20} className="text-purple-500" />
               <h2 className="text-lg font-semibold text-slate-900">Ship Order</h2>
@@ -484,8 +484,7 @@ export default function OrderDetail({ isCustomer }: Readonly<Props>) {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Return & Refund (customer only, delivered orders; before that they cancel) */}

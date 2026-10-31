@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import api, { errorMessage } from "../../../api";
 import { useApiGet } from "../../../hooks/useApiGet";
+import Modal from "../../../components/Modal";
 
 interface Category {
   id: number;
@@ -304,14 +305,10 @@ export default function CategoriesPage() {
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            aria-label="Close dialog"
-            className="absolute inset-0 bg-black/50 cursor-default"
-            onClick={() => setModal(null)}
-          />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <Modal
+          label={`${modal.editing ? "Edit" : "Add"} ${modal.type === "category" ? "Category" : "Subcategory"}`}
+          onClose={() => setModal(null)}
+        >
             <h2 className="text-lg font-bold text-slate-900 mb-5">
               {modal.editing ? "Edit" : "Add"}{" "}
               {modal.type === "category" ? "Category" : "Subcategory"}
@@ -373,8 +370,7 @@ export default function CategoriesPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

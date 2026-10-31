@@ -109,4 +109,9 @@
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
   }
+  /* Tailwind 4 gives buttons the default cursor; bring back the hand. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
 }

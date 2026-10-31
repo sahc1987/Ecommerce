@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import NotificationBell from '../Notifications/NotificationBell';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import StoreLogo from '../StoreLogo';
+import Modal from '../Modal';
 
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -183,16 +184,14 @@ export default function AdminLayout() {
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          <button
-            type="button"
-            className="fixed inset-0 w-full bg-black/40 backdrop-blur-xs cursor-default"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close sidebar"
-          />
-          <aside className="relative w-64 z-10 bg-slate-50 p-4 overflow-y-auto">
+        <Modal
+          label="Menu"
+          onClose={() => setSidebarOpen(false)}
+          className="lg:hidden m-0 w-64 h-dvh max-h-none bg-slate-50 p-4 backdrop:backdrop-blur-xs"
+        >
             <button
-              className="absolute top-3 right-3 p-1 text-slate-500 hover:text-slate-700 z-10"
+              type="button"
+              className="absolute top-3 right-3 p-2 text-slate-500 hover:text-slate-700"
               onClick={() => setSidebarOpen(false)}
               aria-label="Close menu"
             >
@@ -201,8 +200,7 @@ export default function AdminLayout() {
             <div className="pt-6 h-full">
               <Sidebar onClose={() => setSidebarOpen(false)} />
             </div>
-          </aside>
-        </div>
+        </Modal>
       )}
 
       <div className="flex-1 max-w-350 w-full mx-auto px-4 sm:px-6 py-5">

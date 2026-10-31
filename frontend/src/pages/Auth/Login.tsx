@@ -71,18 +71,9 @@ export default function Login() {
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="password" className="block text-sm font-semibold text-slate-700">
-                    Password
-                  </label>
-                  <button
-                    type="button"
-                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
-                    onClick={() => toast('Password reset coming soon', { icon: '🔒' })}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                <label htmlFor="password" className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Password
+                </label>
                 <div className="relative">
                   <input
                     id="password"

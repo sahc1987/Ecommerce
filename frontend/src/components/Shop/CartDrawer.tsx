@@ -118,7 +118,7 @@ export default function CartDrawer({ open, addedKey, onClose, onAddToCart }: Rea
                             type="button"
                             onClick={() => dispatch(updateQuantity({ key, quantity: item.quantity - 1 }))}
                             disabled={item.quantity <= 1}
-                            className="p-1.5 text-slate-500 hover:text-primary-600 disabled:opacity-30"
+                            className="p-2.5 sm:p-1.5 text-slate-500 hover:text-primary-600 disabled:opacity-30"
                             aria-label={`Decrease quantity of ${item.name}`}
                           >
                             <Minus size={12} />
@@ -128,7 +128,7 @@ export default function CartDrawer({ open, addedKey, onClose, onAddToCart }: Rea
                             type="button"
                             onClick={() => dispatch(updateQuantity({ key, quantity: item.quantity + 1 }))}
                             disabled={item.quantity >= item.stock}
-                            className="p-1.5 text-slate-500 hover:text-primary-600 disabled:opacity-30"
+                            className="p-2.5 sm:p-1.5 text-slate-500 hover:text-primary-600 disabled:opacity-30"
                             aria-label={`Increase quantity of ${item.name}`}
                           >
                             <Plus size={12} />
@@ -137,7 +137,7 @@ export default function CartDrawer({ open, addedKey, onClose, onAddToCart }: Rea
                         <button
                           type="button"
                           onClick={() => dispatch(removeItem(key))}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+                          className="p-2.5 sm:p-1.5 rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
                           aria-label={`Remove ${item.name}`}
                         >
                           <Trash2 size={14} />

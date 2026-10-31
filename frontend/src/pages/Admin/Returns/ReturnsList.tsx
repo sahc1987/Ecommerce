@@ -5,6 +5,7 @@ import { RotateCcw } from 'lucide-react';
 import api, { errorMessage } from '../../../api';
 import ListContent from '../../../components/Admin/ListContent';
 import Pagination from '../../../components/Pagination';
+import Modal from '../../../components/Modal';
 import { useApiGet } from '../../../hooks/useApiGet';
 import type { Page, ReturnRequest, ReturnStatus } from '../../../types';
 import { returnBadge, shortId } from '../../../utils/orderDisplay';
@@ -172,9 +173,7 @@ export default function ReturnsList() {
 
       {/* Process modal */}
       {selectedReturn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button type="button" aria-label="Close dialog" className="absolute inset-0 bg-black/50 cursor-default" onClick={() => setSelectedReturn(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <Modal label="Process Return" onClose={() => setSelectedReturn(null)}>
             <h2 className="text-lg font-bold text-slate-900 mb-1">Process Return</h2>
             <p className="text-sm text-slate-500 mb-5">Return #{shortId(selectedReturn.id)}</p>
             <form onSubmit={handleProcess} className="space-y-4">
@@ -235,8 +234,7 @@ export default function ReturnsList() {
                 <button type="button" className="btn-secondary flex-1" onClick={() => setSelectedReturn(null)}>Cancel</button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

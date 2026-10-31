@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Before writing or changing any code, invoke the `ponytail` skill** (simplest, most minimal solution that works). For UI work (`frontend/`, `mobile/`), also invoke `ui-ux-pro-max` first: it decides *what* to change (UX rules, accessibility), ponytail decides *how* (smallest diff). This file's colour and copy rules win over the skill's suggested palettes and styles.
+
 ## Repository layout
 
 Three independent npm projects share one API; there is no root `package.json` or workspace.

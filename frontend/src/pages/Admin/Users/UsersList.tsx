@@ -6,6 +6,7 @@ import ListContent from '../../../components/Admin/ListContent';
 import { useApiGet } from '../../../hooks/useApiGet';
 import type { AdminUser, Page, Role } from '../../../types';
 import Pagination from '../../../components/Pagination';
+import Modal from '../../../components/Modal';
 
 type UsersPage = { users: AdminUser[] } & Page;
 
@@ -150,9 +151,7 @@ export default function UsersList() {
 
       {/* Edit modal */}
       {editUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button type="button" aria-label="Close dialog" className="absolute inset-0 bg-black/50 cursor-default" onClick={() => setEditUser(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <Modal label="Edit User" onClose={() => setEditUser(null)}>
             <h2 className="text-lg font-bold text-slate-900 mb-5">Edit User</h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
@@ -180,8 +179,7 @@ export default function UsersList() {
                 <button type="button" className="btn-secondary flex-1" onClick={() => setEditUser(null)}>Cancel</button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

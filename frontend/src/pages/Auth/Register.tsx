@@ -70,6 +70,7 @@ export default function Register() {
                   type="text"
                   className="input"
                   placeholder="John Doe"
+                  autoComplete="name"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
@@ -82,6 +83,7 @@ export default function Register() {
                   type="email"
                   className="input"
                   placeholder="you@example.com"
+                  autoComplete="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required

@@ -254,7 +254,7 @@ export default function CheckoutPage() {
             <div className="card space-y-4">
               <h2 className="font-semibold text-slate-900">Shipping Address</h2>
 
-              {field("Full Name", "name", { required: true, placeholder: "John Doe" })}
+              {field("Full Name", "name", { required: true, placeholder: "John Doe", autoComplete: "shipping name" })}
 
               {/* Address Line 1 with autocomplete */}
               <div className="relative" ref={suggestionsRef}>
@@ -339,15 +339,15 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {field("Address Line 2", "line2", { placeholder: "Apt, Suite, etc. (optional)" })}
+              {field("Address Line 2", "line2", { placeholder: "Apt, Suite, etc. (optional)", autoComplete: "shipping address-line2" })}
 
               <div className="grid grid-cols-2 gap-4">
-                {field("City", "city", { required: true })}
-                {field("State / Province", "state", { required: true })}
+                {field("City", "city", { required: true, autoComplete: "shipping address-level2" })}
+                {field("State / Province", "state", { required: true, autoComplete: "shipping address-level1" })}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {field("ZIP / Postal Code", "zip", { required: true })}
+                {field("ZIP / Postal Code", "zip", { required: true, autoComplete: "shipping postal-code" })}
                 <div>
                   <label htmlFor="country" className="block text-sm font-medium text-slate-700 mb-1">
                     Country
@@ -355,6 +355,7 @@ export default function CheckoutPage() {
                   <select
                     id="country"
                     className="input"
+                    autoComplete="shipping country"
                     value={address.country}
                     onChange={(e) => setAddress((prev) => ({ ...prev, country: e.target.value }))}
                   >
