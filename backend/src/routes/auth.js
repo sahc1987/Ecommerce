@@ -57,11 +57,11 @@ router.post('/register', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'All fields required' });
   if (name.trim().length > 100)
     return res.status(400).json({ error: 'Name is too long' });
-  if (email.length > 255 || !isEmail(email))
+  const normEmail = email.trim().toLowerCase();
+  if (normEmail.length > 255 || !isEmail(normEmail))
     return res.status(400).json({ error: 'Enter a valid email address' });
   if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD)
     return res.status(400).json({ error: `Password must be ${MIN_PASSWORD}-${MAX_PASSWORD} characters` });
-  const normEmail = email.trim().toLowerCase();
   try {
     const existing = await db.query('SELECT id FROM users WHERE lower(email) = $1', [normEmail]);
     if (existing.rows.length) return res.status(400).json({ error: 'Email already in use' });
