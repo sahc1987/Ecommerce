@@ -9,7 +9,10 @@ const CART_KEY = '@ecommerce/cart';
  * plain-text on a rooted device.
  */
 export const saveToken = async (token: string) => {
-  await Keychain.setGenericPassword('token', token, {service: TOKEN_SERVICE});
+  await Keychain.setGenericPassword('token', token, {
+    service: TOKEN_SERVICE,
+    accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  });
 };
 
 export const loadToken = async (): Promise<string | null> => {

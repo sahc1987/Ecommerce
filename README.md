@@ -210,7 +210,8 @@ flowchart TB
 | --- | --- |
 | 🔑 Passwords | Stored only as bcrypt hashes |
 | 🍪 Web sign-in | Token in an httpOnly cookie that page scripts can't read, valid 7 days |
-| 📱 Phone sign-in | Token kept in the iOS or Android keychain |
+| 📱 Phone sign-in | Token kept in the iOS or Android keychain, only while the phone is unlocked and never copied to device backups |
+| 🕵️ Account privacy | Sign-in takes the same time whether or not the email exists, so it can't be used to find registered emails. Emails are matched ignoring upper/lower case |
 | 🚦 Rate limits | Sign-in: 10 tries per 15 minutes. Place order: 10 per minute. Cart sync: 120 per minute. |
 | 🖼️ Uploads | Files are checked by their real content, not just their name, before they're accepted |
 | 🪖 Headers | Helmet security headers and CORS limited to the store's own site |

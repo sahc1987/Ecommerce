@@ -49,6 +49,7 @@ const isEmail = (s) => {
 };
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 72; // bcrypt silently truncates beyond this
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
 router.post('/register', authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
@@ -60,15 +61,16 @@ router.post('/register', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Enter a valid email address' });
   if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD)
     return res.status(400).json({ error: `Password must be ${MIN_PASSWORD}-${MAX_PASSWORD} characters` });
+  const normEmail = email.trim().toLowerCase();
   try {
-    const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    const existing = await db.query('SELECT id FROM users WHERE lower(email) = $1', [normEmail]);
     if (existing.rows.length) return res.status(400).json({ error: 'Email already in use' });
     const hash = await bcrypt.hash(password, 10);
     const countRes = await db.query('SELECT COUNT(*) FROM users');
     const role = Number.parseInt(countRes.rows[0].count) === 0 ? 'admin' : 'customer';
     const result = await db.query(
       'INSERT INTO users (name, email, password_hash, role) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role',
-      [name, email, hash, role]
+      [name, normEmail, hash, role]
     );
     const user = result.rows[0];
     await cache.invalidateDashboard();
@@ -82,12 +84,17 @@ router.post('/register', authLimiter, async (req, res) => {
 
 router.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password)
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password)
     return res.status(400).json({ error: 'Email and password required' });
   try {
-    const result = await db.query('SELECT * FROM users WHERE email = $1 AND is_active = TRUE', [email]);
+    const result = await db.query(
+      'SELECT * FROM users WHERE lower(email) = $1 AND is_active = TRUE',
+      [email.trim().toLowerCase()]
+    );
     const user = result.rows[0];
-    if (!user || !(await bcrypt.compare(password, user.password_hash)))
+    // Always run bcrypt so response time doesn't reveal whether the email exists.
+    const ok = await bcrypt.compare(password, user?.password_hash ?? DUMMY_HASH);
+    if (!user || !ok)
       return res.status(401).json({ error: 'Invalid credentials' });
     const { password_hash, ...userData } = user;
     const token = generateToken(user.id);
