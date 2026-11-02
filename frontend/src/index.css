@@ -45,6 +45,17 @@
   }
 }
 
+/* Modal dialogs (Modal, CartDrawer): scrolling over the backdrop or inside a
+   dialog that doesn't overflow must not scroll the page behind. ::backdrop
+   needs overflow: hidden to count as a scroll container. */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 /* High Contrast mode drops background colours, so a pressed filter chip would
    look like the others; outline it with the system highlight colour instead. */
 @media (forced-colors: active) {
