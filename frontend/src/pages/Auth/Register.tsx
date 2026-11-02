@@ -6,8 +6,10 @@ import { Eye, EyeOff } from 'lucide-react';
 import api, { errorMessage } from '../../api';
 import { setCredentials } from '../../store/slices/authSlice';
 import { AuthBrandMark, AuthBrandPanel } from '../../components/AuthBrand';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export default function Register() {
+  useDocumentTitle('Create account');
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });

@@ -9,6 +9,7 @@ import { Product, hasActiveDiscount } from '../../utils/pricing';
 import { categoryIcon } from '../../utils/categoryIcon';
 import { textOr } from '../../utils/text';
 import { useAddToCart } from '../../hooks/useAddToCart';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import LeftSidebar from '../../components/Shop/LeftSidebar';
 import ProductCard from '../../components/Shop/ProductCard';
 import type { ShopOutletContext } from '../../components/Layout/ShopLayout';
@@ -29,7 +30,7 @@ function SectionHeader({
       <div className="flex items-center gap-4">
         {right}
         {to && (
-          <Link to={to} className="text-xs font-semibold text-primary-600 hover:text-primary-700 whitespace-nowrap">
+          <Link to={to} className="text-xs font-semibold text-primary-600 hover:text-primary-700 whitespace-nowrap py-1">
             View All
           </Link>
         )}
@@ -104,7 +105,7 @@ function Hero({ products }: Readonly<{ products: Product[] }>) {
   return (
     <section className="relative rounded-2xl overflow-hidden bg-linear-to-r from-[#0b1a3d] via-[#0f2c6b] to-primary-600 text-white min-h-70 shadow-lg shadow-primary-900/20">
       <div className="absolute -right-16 -top-16 w-72 h-72 rounded-full bg-primary-400/20 blur-3xl" />
-      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 p-7 md:p-9 items-center min-h-70">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 py-7 px-11 md:py-9 md:px-14 items-center min-h-70">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-primary-200 flex items-center gap-1.5">
             <Zap size={12} /> {textOr(p?.category_name, 'Next-Gen Performance')}
@@ -297,6 +298,7 @@ export default function HomePage() {
     if (urlSort === 'popular') return 'Best Sellers';
     return 'All Products';
   })();
+  useDocumentTitle(isFiltered ? filteredTitle : '');
 
   const renderFiltered = () => (
     <>

@@ -25,7 +25,8 @@ export default function ProductCard({ product: p, onAddToCart }: Readonly<Props>
         </span>
       )}
 
-      <Link to={`/products/${p.slug}`} className="block">
+      {/* The title below is the keyboard/screen-reader link; this one is for the mouse. */}
+      <Link to={`/products/${p.slug}`} className="block" tabIndex={-1} aria-hidden="true">
         <ProductImage
           src={p.primary_image}
           alt={p.name}
@@ -37,7 +38,7 @@ export default function ProductCard({ product: p, onAddToCart }: Readonly<Props>
 
       <div className="pt-3 flex-1 flex flex-col">
         <Link to={`/products/${p.slug}`}>
-          <h3 className="font-semibold text-slate-900 text-sm leading-snug line-clamp-2 hover:text-primary-600 transition-colors">
+          <h3 className="font-semibold text-slate-900 text-sm leading-snug line-clamp-2 py-1 hover:text-primary-600 transition-colors">
             {p.name}
           </h3>
         </Link>

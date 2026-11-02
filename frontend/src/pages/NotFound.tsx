@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SearchX } from 'lucide-react';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function NotFound() {
   const { pathname } = useLocation();
+  useDocumentTitle('Page not found');
 
   // The SPA answers every path with 200, so tell crawlers not to index this one.
   useEffect(() => {

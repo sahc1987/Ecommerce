@@ -176,7 +176,7 @@ export default function ProductDetailPage() {
       />
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-primary-600 transition-colors mb-6 group"
+        className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-primary-600 transition-colors py-1 mb-5 group"
       >
         <ArrowLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
         Back
